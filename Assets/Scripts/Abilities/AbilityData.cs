@@ -73,4 +73,44 @@ public class AbilityData : ScriptableObject
     // own position, affecting every player (caster included) within
     // GroundEffectRadius. RequiresTarget should be false for these.
     public bool AreaAroundCaster = false;
+
+    // Like AreaAroundCaster, but the opposite audience: every enemy (a
+    // Targetable that is NOT a player, i.e. has no PlayerMovement) within
+    // GroundEffectRadius of the caster's own position, in a full circle.
+    // RequiresTarget should be false for these (e.g. Reaper's Wheel,
+    // Seismic Slam).
+    public bool EnemiesAroundCaster = false;
+
+    // Like EnemiesAroundCaster, but only enemies within ConeAngle degrees
+    // of the caster's facing (see FacingCone), not a full circle. Also
+    // uses GroundEffectRadius for its reach. RequiresTarget should be
+    // false for these (e.g. Cleave).
+    public bool ConeAroundCaster = false;
+    public float ConeAngle = 90f;
+
+    // Casting requires an equipped MainHand weapon (CharacterEquipment.
+    // MainHandWeapon != null) - fists don't count. Checked both client-side
+    // (precheck) and server-side (authoritative).
+    public bool RequiresMeleeWeapon = false;
+
+    // Damage is the caster's currently equipped weapon's Damage (or the
+    // unarmed fallback) instead of this asset's own Damage field - for
+    // melee abilities meant to scale with your weapon (e.g. Reaper's
+    // Wheel, Cleave).
+    public bool UseWeaponDamage = false;
+
+    // Self-movement, no targeting: on resolve the caster charges straight
+    // forward (their own current facing) for this many units, hitting
+    // (Damage + Effect) every enemy near the path along the way. 0 = not
+    // a charge ability. RequiresTarget should be false (e.g. Trample).
+    public float ChargeForwardDistance = 0f;
+
+    // Self-movement toward a unit target: on resolve the caster charges to
+    // just short of the target's position (a gap-closer), then Effect is
+    // applied to the TARGET (not the caster) - for support "peel" style
+    // abilities (e.g. Team Up). RequiresTarget should be true.
+    public bool ChargeToTarget = false;
+
+    // Shared speed (units/sec) for ChargeForwardDistance and ChargeToTarget.
+    public float ChargeSpeed = 20f;
 }

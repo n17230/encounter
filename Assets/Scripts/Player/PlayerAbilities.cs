@@ -7,6 +7,9 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerTargeting))]
 [RequireComponent(typeof(PlayerCamera))]
 [RequireComponent(typeof(CharacterStats))]
+[RequireComponent(typeof(CharacterEquipment))]
+[RequireComponent(typeof(PlayerAutoAttack))]
+[RequireComponent(typeof(PlayerMovement))]
 public class PlayerAbilities : NetworkBehaviour
 {
     [SerializeField] private float facingConeAngle = 120f;
@@ -16,6 +19,9 @@ public class PlayerAbilities : NetworkBehaviour
     private PlayerTargeting targeting;
     private PlayerCamera playerCameraComponent;
     private CharacterStats stats;
+    private CharacterEquipment equipment;
+    private PlayerAutoAttack autoAttack;
+    private PlayerMovement movement;
 
     // Owner-local aiming state for a ground-targeted ability (see
     // AbilityData.IsGroundTargeted). Exposed so PlayerTargeting can ignore
@@ -63,6 +69,9 @@ public class PlayerAbilities : NetworkBehaviour
         targeting = GetComponent<PlayerTargeting>();
         playerCameraComponent = GetComponent<PlayerCamera>();
         stats = GetComponent<CharacterStats>();
+        equipment = GetComponent<CharacterEquipment>();
+        autoAttack = GetComponent<PlayerAutoAttack>();
+        movement = GetComponent<PlayerMovement>();
     }
 
     public override void OnNetworkSpawn()
@@ -248,6 +257,16 @@ public class PlayerAbilities : NetworkBehaviour
         if (predictedCooldownReady.TryGetValue(ability, out float ready) && Time.time < ready) return "Not ready";
         if (stats.CurrentMana.Value < ability.ManaCost * stats.SyncedManaCostMultiplier.Value) return "Not enough mana";
 
+        // Client-side mirror of the server's authoritative equipment (see
+        // CastAbilityServerRpc) - CharacterEquipment.MainHandWeapon is only
+        // ever populated on the server, so the owner checks its own known
+        // loadout instead.
+        if (ability.RequiresMeleeWeapon)
+        {
+            ItemData mainHand = ProfileStore.Current.GetGear(GearSlot.MainHand);
+            if (mainHand == null || mainHand.Weapon == null) return "Requires a melee weapon";
+        }
+
         if (!ability.RequiresTarget) return null;
 
         Targetable target = targeting.CurrentTarget;
@@ -412,6 +431,12 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
+        if (ability.RequiresMeleeWeapon && equipment.MainHandWeapon == null)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Requires a melee weapon");
+            return;
+        }
+
         // Mana is only actually spent once the cast succeeds - see
         // ResolveAbility - not here at cast start. This check just stops an
         // unaffordable cast from starting in the first place.
@@ -451,6 +476,21 @@ public class PlayerAbilities : NetworkBehaviour
 
     private void ResolveAbility(AbilityData ability, ulong targetNetworkObjectId)
     {
+        if (ability.EnemiesAroundCaster)
+        {
+            ResolveEnemiesAroundCaster(ability);
+            return;
+        }
+        if (ability.ConeAroundCaster)
+        {
+            ResolveConeAroundCaster(ability);
+            return;
+        }
+        if (ability.ChargeForwardDistance > 0f)
+        {
+            ResolveChargeForward(ability);
+            return;
+        }
         if (ability.AreaAroundCaster)
         {
             ResolveAreaAroundCaster(ability);
@@ -493,6 +533,12 @@ public class PlayerAbilities : NetworkBehaviour
         if (!stats.TrySpendMana(ability.ManaCost))
         {
             NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        if (ability.ChargeToTarget)
+        {
+            ResolveChargeToTarget(ability, target, targetObject);
             return;
         }
 
@@ -573,6 +619,159 @@ public class PlayerAbilities : NetworkBehaviour
                 EffectDuration = ability.DirectHitEffectDuration,
             });
         }
+    }
+
+    // What this caster actually swings with right now (equipped main hand,
+    // or fists) - for UseWeaponDamage abilities.
+    private float ResolveWeaponDamage()
+    {
+        WeaponData weapon = autoAttack.ResolvedWeapon;
+        return weapon != null ? weapon.Damage : 0f;
+    }
+
+    // Full circle around the caster's own position, hitting every enemy
+    // (a Targetable with no PlayerMovement - i.e. not a player) within
+    // GroundEffectRadius. No targeting at all - mirrors ResolveAreaAroundCaster
+    // but with the opposite audience. E.g. Reaper's Wheel, Seismic Slam.
+    private void ResolveEnemiesAroundCaster(AbilityData ability)
+    {
+        if (ability.RequiresMeleeWeapon && equipment.MainHandWeapon == null)
+        {
+            NotifyCastFizzledClientRpc("Requires a melee weapon");
+            return;
+        }
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        float damage = ability.UseWeaponDamage ? ResolveWeaponDamage() : ability.Damage;
+
+        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        {
+            if (candidate == null || candidate.Stats == null) continue;
+            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
+            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
+
+            candidate.Stats.ReceiveHit(new HitInfo
+            {
+                Damage = damage,
+                AttackerClientId = OwnerClientId,
+                Source = HitSource.Ability,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
+        }
+    }
+
+    // Same as ResolveEnemiesAroundCaster, but only enemies within ConeAngle
+    // degrees of the caster's current facing. E.g. Cleave.
+    private void ResolveConeAroundCaster(AbilityData ability)
+    {
+        if (ability.RequiresMeleeWeapon && equipment.MainHandWeapon == null)
+        {
+            NotifyCastFizzledClientRpc("Requires a melee weapon");
+            return;
+        }
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        float damage = ability.UseWeaponDamage ? ResolveWeaponDamage() : ability.Damage;
+
+        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        {
+            if (candidate == null || candidate.Stats == null) continue;
+            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
+            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
+            if (!FacingCone.IsWithin(transform, candidate.transform.position, ability.ConeAngle)) continue;
+
+            candidate.Stats.ReceiveHit(new HitInfo
+            {
+                Damage = damage,
+                AttackerClientId = OwnerClientId,
+                Source = HitSource.Ability,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
+        }
+    }
+
+    // No targeting: the caster charges straight forward (their own current
+    // facing) for ChargeForwardDistance units, hitting every enemy near
+    // the path along the way, then rides the same ServerBeginPull rail the
+    // ground-targeted abilities use for the actual movement. E.g. Trample.
+    private void ResolveChargeForward(AbilityData ability)
+    {
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        Vector3 start = transform.position;
+        Vector3 flatForward = transform.forward;
+        flatForward.y = 0f;
+        flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
+        Vector3 end = start + flatForward * ability.ChargeForwardDistance;
+
+        const float pathHitRadius = 2.5f; // how close to the charge line an enemy needs to be to get hit
+        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        {
+            if (candidate == null || candidate.Stats == null) continue;
+            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
+
+            Vector3 flatPos = candidate.transform.position;
+            flatPos.y = start.y;
+            if (Vector3.Distance(flatPos, ClosestPointOnSegment(start, end, flatPos)) > pathHitRadius) continue;
+
+            candidate.Stats.ReceiveHit(new HitInfo
+            {
+                Damage = ability.Damage,
+                AttackerClientId = OwnerClientId,
+                Source = HitSource.Ability,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
+        }
+
+        float duration = ability.ChargeForwardDistance / Mathf.Max(0.01f, ability.ChargeSpeed) + 0.5f;
+        movement.ServerBeginPull(end, ability.ChargeSpeed, duration);
+    }
+
+    // Unit-targeted gap-closer: the caster charges to just short of the
+    // target's position, then Effect is applied to the TARGET (not the
+    // caster) - for support "peel" abilities. E.g. Team Up. All the usual
+    // range/facing/LoS/mana checks already happened in ResolveAbility
+    // before this is called.
+    private void ResolveChargeToTarget(AbilityData ability, Targetable target, NetworkObject targetObject)
+    {
+        const float meleeClearance = 2f; // stop just short of the target instead of overlapping them
+        Vector3 toTarget = targetObject.transform.position - transform.position;
+        toTarget.y = 0f;
+        Vector3 end = toTarget.magnitude > meleeClearance
+            ? targetObject.transform.position - toTarget.normalized * meleeClearance
+            : transform.position;
+
+        float duration = Vector3.Distance(transform.position, end) / Mathf.Max(0.01f, ability.ChargeSpeed) + 0.5f;
+        movement.ServerBeginPull(end, ability.ChargeSpeed, duration);
+
+        target.Stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
+    }
+
+    private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 point)
+    {
+        Vector3 ab = b - a;
+        float sqrLen = ab.sqrMagnitude;
+        if (sqrLen < 0.0001f) return a;
+        float t = Mathf.Clamp01(Vector3.Dot(point - a, ab) / sqrLen);
+        return a + ab * t;
     }
 
     [ServerRpc]

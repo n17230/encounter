@@ -1,5 +1,18 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+
+// A pair of alternate stat-bonus sets a wearer flips between depending on
+// their current health percentage - e.g. Barbarian's Mantle. Handled by
+// CharacterEquipment, not the plain always-on Bonuses list, since which
+// set is active changes dynamically as health changes.
+[Serializable]
+public class HpThresholdEffect
+{
+    [Range(0f, 1f)] public float HealthPercentThreshold = 0.5f;
+    public List<StatBonus> AboveThresholdBonuses = new List<StatBonus>();
+    public List<StatBonus> BelowThresholdBonuses = new List<StatBonus>();
+}
 
 [CreateAssetMenu(fileName = "NewItem", menuName = "Encounter/Item")]
 public class ItemData : ScriptableObject
@@ -9,6 +22,9 @@ public class ItemData : ScriptableObject
     public string ItemName;
     public GearSlot Slot;
     public List<StatBonus> Bonuses = new List<StatBonus>();
+    // Empty for every item except ones with health-percentage-conditional
+    // bonuses (currently just Barbarian's Mantle) - see HpThresholdEffect.
+    public List<HpThresholdEffect> HpThresholdEffects = new List<HpThresholdEffect>();
     public List<EffectImmunity> Immunities = new List<EffectImmunity>();
     public List<ItemAura> Auras = new List<ItemAura>();
     public MinimapReveal Reveals = MinimapReveal.None;

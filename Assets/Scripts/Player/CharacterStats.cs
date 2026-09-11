@@ -31,6 +31,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat ThreatMultiplier { get; private set; }
     public Stat DamageMultiplier { get; private set; }
     public Stat HealingMultiplier { get; private set; }
+    public Stat DamageTakenMultiplier { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -79,6 +80,7 @@ public class CharacterStats : NetworkBehaviour
         ThreatMultiplier = new Stat(1f);
         DamageMultiplier = new Stat(1f);
         HealingMultiplier = new Stat(1f);
+        DamageTakenMultiplier = new Stat(1f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -100,6 +102,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.ThreatMultiplier: return ThreatMultiplier;
             case StatType.DamageMultiplier: return DamageMultiplier;
             case StatType.HealingMultiplier: return HealingMultiplier;
+            case StatType.DamageTakenMultiplier: return DamageTakenMultiplier;
             default: return null;
         }
     }
@@ -199,12 +202,28 @@ public class CharacterStats : NetworkBehaviour
         effects.Remove(effect);
     }
 
+    // True while any active effect (e.g. Trample, Seismic Slam) has
+    // IsStun set - movement/casting/attacking should all be blocked. Only
+    // EnemyAI currently checks this; no ability stuns a player yet.
+    public bool IsStunned
+    {
+        get
+        {
+            foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+            {
+                if (active.Data.IsStun) return true;
+            }
+            return false;
+        }
+    }
+
     private void DealDamage(float rawDamage, ulong attackerClientId)
     {
         CharacterStats attacker = AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
 
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
+        mitigated *= DamageTakenMultiplier.Value;
 
         // An absorb shield (e.g. Aegis of Arcane) intercepts damage before
         // it can be redirected or reduce health - "the next N damage" is

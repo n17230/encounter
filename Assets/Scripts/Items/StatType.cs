@@ -15,5 +15,8 @@ public enum StatType
     DamageMultiplier,
     // Multiplier on all healing this character deals, instant or over
     // time (base 1.0).
-    HealingMultiplier
+    HealingMultiplier,
+    // Multiplier on all damage this character TAKES, applied after armor
+    // mitigation (base 1.0; e.g. Team Up, Barbarian's Mantle).
+    DamageTakenMultiplier
 }

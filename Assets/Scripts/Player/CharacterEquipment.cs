@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -16,6 +17,11 @@ public class CharacterEquipment : NetworkBehaviour
     private readonly ItemData[] equippedItems = new ItemData[SlotCount];
     private bool initialGearApplied;
     private float nextAuraPulse;
+
+    // Which side (above/below) of each equipped item's HP-threshold
+    // effect(s) is currently applied - see UpdateHpThresholds. Keyed by
+    // (physical slot, index into that item's HpThresholdEffects).
+    private readonly Dictionary<(int slot, int index), bool> thresholdAboveState = new Dictionary<(int, int), bool>();
 
     // True while any worn item broadcasts the wearer's position to allies'
     // minimaps. Server-written so every client can read it off the wearer.
@@ -94,6 +100,54 @@ public class CharacterEquipment : NetworkBehaviour
             if (item == null || item.Auras.Count == 0) continue;
             foreach (ItemAura aura in item.Auras) PulseAura(aura);
         }
+
+        UpdateHpThresholds();
+    }
+
+    // Checked on the same once-a-second cadence as auras - plenty
+    // responsive for a defensive/offensive stance swap, and avoids a
+    // second per-frame loop. E.g. Barbarian's Mantle.
+    private void UpdateHpThresholds()
+    {
+        if (stats.MaxHealth.Value <= 0f) return;
+        float healthFraction = stats.CurrentHealth.Value / stats.MaxHealth.Value;
+
+        for (int slot = 0; slot < SlotCount; slot++)
+        {
+            ItemData item = equippedItems[slot];
+            if (item == null || item.HpThresholdEffects.Count == 0) continue;
+
+            for (int i = 0; i < item.HpThresholdEffects.Count; i++)
+            {
+                HpThresholdEffect threshold = item.HpThresholdEffects[i];
+                bool isAbove = healthFraction > threshold.HealthPercentThreshold;
+
+                var key = (slot, i);
+                if (thresholdAboveState.TryGetValue(key, out bool previouslyAbove) && previouslyAbove == isAbove) continue;
+                thresholdAboveState[key] = isAbove;
+
+                ApplyThresholdBonuses(item, i, threshold, isAbove);
+            }
+        }
+    }
+
+    private void ApplyThresholdBonuses(ItemData item, int index, HpThresholdEffect threshold, bool isAbove)
+    {
+        object aboveSource = (item, index, true);
+        object belowSource = (item, index, false);
+
+        foreach (StatType type in Enum.GetValues(typeof(StatType)))
+        {
+            stats.GetStat(type)?.RemoveAllModifiersFromSource(aboveSource);
+            stats.GetStat(type)?.RemoveAllModifiersFromSource(belowSource);
+        }
+
+        List<StatBonus> activeBonuses = isAbove ? threshold.AboveThresholdBonuses : threshold.BelowThresholdBonuses;
+        object activeSource = isAbove ? aboveSource : belowSource;
+        foreach (StatBonus bonus in activeBonuses)
+        {
+            stats.GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, activeSource));
+        }
     }
 
     private void PulseAura(ItemAura aura)
@@ -124,6 +178,16 @@ public class CharacterEquipment : NetworkBehaviour
                 stats.GetStat(type)?.RemoveAllModifiersFromSource(previous);
             }
             stats.RemoveImmunitiesFromSource(previous);
+
+            for (int i = 0; i < previous.HpThresholdEffects.Count; i++)
+            {
+                foreach (StatType type in Enum.GetValues(typeof(StatType)))
+                {
+                    stats.GetStat(type)?.RemoveAllModifiersFromSource((previous, i, true));
+                    stats.GetStat(type)?.RemoveAllModifiersFromSource((previous, i, false));
+                }
+                thresholdAboveState.Remove((index, i));
+            }
         }
 
         equippedItems[index] = item;

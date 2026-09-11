@@ -52,4 +52,9 @@ public class StatusEffectData : ScriptableObject
     // instead (see CharacterStats.DealDamage) - e.g. One For All. 0 (the
     // default) means no redirect.
     public float DamageRedirectPercent = 0f;
+
+    // While active, the holder can't move, cast, or auto-attack - see
+    // CharacterStats.IsStunned and its consumers (currently just EnemyAI;
+    // no ability stuns a player yet).
+    public bool IsStun = false;
 }

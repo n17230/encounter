@@ -102,6 +102,13 @@ public class EnemyAI : NetworkBehaviour
     {
         if (!IsServer || isDead) return;
 
+        if (stats.IsStunned)
+        {
+            MoveWithGravity(Vector3.zero);
+            if (animator != null) animator.SetFloat("speed", 0f);
+            return;
+        }
+
         if (IsPulling)
         {
             Vector3 toPullTarget = pullTargetPosition - transform.position;

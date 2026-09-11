@@ -7,7 +7,86 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 0. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
+## 0. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
+   Up, Crippling Blow, Seismic Slam, Barbarian's Mantle) — biggest and
+   most novel batch yet, several brand-new mechanics
+
+This batch introduced multiple mechanics that never existed before, so
+treat all of it as unverified:
+
+- **Stun (new mechanic)**: `StatusEffectData.IsStun`, checked via
+  `CharacterStats.IsStunned`. Currently only `EnemyAI` obeys it (mobs
+  hit by Trample/Seismic Slam freeze in place, no movement/attacks, for
+  the effect's duration). **Players are NOT gated by stun** - nothing in
+  this batch stuns a player, so `PlayerMovement`/`PlayerAbilities` were
+  deliberately left unchanged. If a future ability stuns a player, this
+  will need adding there too.
+- **"Enemies" = anything without a `PlayerMovement` component** (mirrors
+  the existing "allies" = has `PlayerMovement` filter `AreaAroundCaster`
+  already used, just inverted). Reaper's Wheel/Seismic Slam
+  (`EnemiesAroundCaster`) and Cleave (`ConeAroundCaster`) all use this.
+  Confirm they hit mobs but never other players.
+- **Assumed AoE radius: 8 units** for Reaper's Wheel, Cleave, and Seismic
+  Slam's "around you" reach - not specified in the request. Also assumed
+  **Cleave's cone angle: 90°** (narrower than the 120° facing cone
+  abilities already use, since a "cleave" reads as tighter). Both are
+  just `AbilityData` fields (`GroundEffectRadius`, `ConeAngle`) - trivial
+  to retune.
+- **"[require melee weapon]" was interpreted as a hard cast-blocking
+  gate**: `AbilityData.RequiresMeleeWeapon` fizzles/rejects the cast if
+  `CharacterEquipment.MainHandWeapon` is null (fists don't count),
+  independent of whether the ability also scales off weapon damage.
+  Applied to Reaper's Wheel, Cleave, Crippling Blow, Seismic Slam (all 4
+  tagged abilities) - NOT to Trample or Team Up (untagged). Confirm
+  casting any of the 4 unarmed shows "Requires a melee weapon" and does
+  nothing.
+- **"Weapon damage" scaling** (Reaper's Wheel, Cleave): reads whatever
+  the caster's auto-attack would currently swing with
+  (`PlayerAutoAttack.ResolvedWeapon` - equipped main hand, or Fists) at
+  the moment the ability resolves. Confirm swapping weapons changes the
+  ability's damage accordingly.
+- **Trample (new self-charge mechanic)**: caster dashes forward 10 units
+  in whatever direction they're currently facing (no target needed),
+  hitting/stunning any enemy within 2.5 units of that straight-line path
+  (a one-time resolve-time check, not continuous collision - an enemy
+  that darts into the path mid-charge won't be caught). Charge speed
+  assumed **20 units/sec** (not specified) - reuses the existing
+  Vacuum/Force-pull rail (`PlayerMovement.ServerBeginPull`) under the
+  hood, so it should feel like getting pulled, just self-initiated.
+  Confirm: no target required, moves the caster (not the mobs), damage +
+  3s stun lands on everything roughly in the path, and it doesn't let
+  you charge through walls/off the map (no obstruction check exists -
+  flag if that matters).
+- **Team Up (new gap-closer + ally buff)**: interpreted as a *support*
+  ability - `RequiresTarget` (an ally, like the healing spells), the
+  caster charges to just short of the target (2-unit clearance) using
+  the same charge rail as Trample, then the target (not the caster)
+  gets "reduced damage taken" for 15s. This needed a brand new stat,
+  `StatType.DamageTakenMultiplier` (applied in `CharacterStats.DealDamage`
+  right after armor mitigation) - also reused by Barbarian's Mantle
+  below. Assumed **cast range 25** (how far away you can initiate the
+  charge) - not specified. Confirm: charging to a full-health ally
+  actually reduces damage they take by 10% for 15s, and the caster
+  visibly moves to them.
+- **Crippling Blow**: no new mechanic - same pattern as Icebolt's Slow
+  (a `RunSpeed` `PercentAdditive` -50% modifier, 10s), just standalone
+  and melee-gated. Lowest-risk item in this batch.
+- **Barbarian's Mantle (new HP-threshold-conditional item mechanic)**:
+  new `ItemData.HpThresholdEffects` list, evaluated once/sec in
+  `CharacterEquipment` (same cadence as auras) - above 50% HP applies
+  -15% `DamageTakenMultiplier`, below 50% applies +15% `DamageMultiplier`,
+  swapping automatically as health crosses the line (only re-applies
+  modifiers on an actual crossing, not every tick). **Assumed slot:
+  Chest** ("(armor)" read as body armor, not the `Cape` slot despite the
+  "mantle" name) - easy one-line change if you want it in `Cape`
+  instead. Confirm: damage taken/dealt actually changes right as you
+  cross 50% HP in either direction, and unequipping it cleanly removes
+  whichever side was active.
+- None of these 7 have `CastVfxPrefab`/`ProjectilePrefab` assigned (no
+  visual assets were provided) - they'll cast with no cast-bar VFX,
+  matching how earlier spells started out.
+
+## 1. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
 
 - **Radiant Embrace**: cast on a hurt ally, confirm exactly 350 healing
   lands (or 385 with Holy Scepter's +10%).
@@ -43,7 +122,7 @@ whole file once it's empty.
 - All 5 abilities' `Range: 30` (where applicable) was never specified —
   only the numbers listed above came from you.
 
-## 1. Player 2 falling through the map on spawn — fix applied, needs confirming
+## 2. Player 2 falling through the map on spawn — fix applied, needs confirming
 
 - This was diagnosed from reading the code, not from being able to
   reproduce it — the movement validator had no grace period after spawn,
@@ -60,7 +139,7 @@ whole file once it's empty.
   that would mean the fix didn't fully close the window (e.g.
   `spawnGraceSeconds` isn't long enough over real network latency).
 
-## 2. Mana-on-successful-cast, and mob dots always red
+## 3. Mana-on-successful-cast, and mob dots always red
 
 - Both were straightforward, targeted changes — lower risk than the rest
   of this list, but still never actually run.
@@ -72,7 +151,7 @@ whole file once it's empty.
   pulsed dot should stay plain red like every other mob, never turning
   yellow the way it used to.
 
-## 3. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
+## 4. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
 - Press either spell's hotkey: does a ring reticle appear and follow the
   mouse across the terrain? Does it correctly ignore player/mob
@@ -102,7 +181,7 @@ whole file once it's empty.
   Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
   cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
-## 4. Recall
+## 5. Recall
 
 - Target a player or a mob and cast Recall — does it teleport instantly
   to right where you're standing?
@@ -118,7 +197,7 @@ whole file once it's empty.
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 5. One For All (damage redirect) — genuinely new mechanic, unrun
+## 6. One For All (damage redirect) — genuinely new mechanic, unrun
 
 - Cast it on an ally, have a mob hit *them*, and confirm 10% of that
   damage lands on *you* (the caster) instead — watch both health bars.
@@ -158,7 +237,7 @@ whole file once it's empty.
   min), redirect (10%), mana cost (50), and instant cast all came from
   you.
 
-## 6. Auto-attack
+## 7. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -167,7 +246,7 @@ whole file once it's empty.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 7. Party frames + F1–F5 targeting + minimap compass
+## 8. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -195,7 +274,7 @@ whole file once it's empty.
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 8. Minimap / Echolocator
+## 9. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -204,7 +283,7 @@ whole file once it's empty.
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 9. Gear — ring slots and the recent renumbering
+## 10. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -217,7 +296,7 @@ whole file once it's empty.
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 10. General combat/economy numbers worth a sanity pass
+## 11. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool (1250 with Staff's new +250 max mana),
   regen in 5s ticks — does an actual fight feel like mana is a real
@@ -230,7 +309,7 @@ whole file once it's empty.
   names ("Regeneration" grants the "Rejuvenation" buff — the underlying
   effect wasn't renamed, only the item).
 
-## 11. Reported by the user, not yet looked into
+## 12. Reported by the user, not yet looked into
 
 - Firebolt/Icebolt's VFX does not home in on the target — it flies
   straight rather than tracking. The crude tracer (`Projectile`'s actual
@@ -239,7 +318,7 @@ whole file once it's empty.
   how the visual effect is attached to or driven by the projectile is
   the mismatch. Not investigated yet.
 
-## 12. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 13. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect

@@ -51,6 +51,11 @@ public class PlayerAutoAttack : NetworkBehaviour
         }
     }
 
+    // Server-authoritative equivalent of LocalWeapon - what this character
+    // actually swings with right now (equipped main hand, or fists). Used
+    // by weapon-scaling abilities (e.g. Reaper's Wheel, Cleave).
+    public WeaponData ResolvedWeapon => equipment.MainHandWeapon != null ? equipment.MainHandWeapon : unarmedWeapon;
+
     private void Arm(Targetable target)
     {
         IsArmed = true;

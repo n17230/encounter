@@ -272,6 +272,64 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **Holy Scepter** (`GearHolyScepter`, Id `holy_scepter`, MainHand, no
     `Weapon` — a caster stat-stick, not something that swings): +10%
     `HealingMultiplier`.
+  - **Seven warrior spells/item** (added 2026-09-11 — untested, see
+    `review_with_fable.md` §0 for the full assumption list):
+    **Stun** (new mechanic): `StatusEffectData.IsStun`, read via
+    `CharacterStats.IsStunned`; only `EnemyAI` obeys it so far (freezes
+    movement/attacks) — no ability stuns a player yet, so
+    `PlayerMovement`/`PlayerAbilities` aren't gated by it.
+    `AbilityData.EnemiesAroundCaster` / `ConeAroundCaster` (new): same
+    shape as `AreaAroundCaster` but the opposite audience — every
+    Targetable *without* `PlayerMovement` (i.e. a mob) within
+    `GroundEffectRadius`, the cone variant additionally filtered by a new
+    per-ability `ConeAngle` via `FacingCone.IsWithin`.
+    `AbilityData.RequiresMeleeWeapon` (new): hard-blocks casting unless
+    `CharacterEquipment.MainHandWeapon` is non-null (fists don't count) —
+    checked client-side (via the profile's own gear) and
+    server-authoritatively.
+    `AbilityData.UseWeaponDamage` (new): ability's dealt damage is
+    `PlayerAutoAttack.ResolvedWeapon.Damage` (new public property —
+    equipped main hand, or the unarmed fallback) instead of the asset's
+    own `Damage`.
+    `AbilityData.ChargeForwardDistance` / `ChargeToTarget` (new, both
+    self-movement via the existing `PlayerMovement.ServerBeginPull` rail
+    — no new movement code): the former drives the caster straight
+    forward by a fixed distance with no target, hitting every enemy
+    within 2.5 units of that line (one-shot resolve-time check, not
+    continuous); the latter drives the caster to just short of a unit
+    target (2-unit clearance) and then applies `Effect` to the *target*,
+    not the caster — for support "peel" abilities.
+    `StatType.DamageTakenMultiplier` (new stat, base 1.0): multiplies
+    damage in `CharacterStats.DealDamage` right after armor mitigation —
+    needed for "reduce damage this character takes", which nothing
+    existing expressed (the existing `DamageMultiplier` is attacker-side,
+    outgoing).
+    `ItemData.HpThresholdEffects` (new mechanic): a list of
+    `{HealthPercentThreshold, AboveThresholdBonuses, BelowThresholdBonuses}`
+    — `CharacterEquipment` evaluates it once/sec (same cadence as auras)
+    per equipped item and swaps which side's `StatBonus`es are applied
+    only when the wearer's health fraction actually crosses the
+    threshold, keyed by `(item, index, above/below)` tuples as the
+    modifier source so both sides can be cleanly removed independently.
+    The abilities/item themselves: **Reaper's Wheel** (`reapers_wheel`,
+    melee-required, 8s cd, 50 mana, instant, `EnemiesAroundCaster` radius
+    8, weapon damage, `EffectBleed` — 10 dmg/sec for 5s).
+    **Trample** (`trample`, 15s cd, 75 mana, instant, charges forward 10
+    units at an assumed 20 units/sec, 75 damage + `EffectStun` (3s) to
+    everything near the path). **Cleave** (`cleave`, melee-required, 2s
+    cd, 15 mana, instant, `ConeAroundCaster` radius 8 / assumed 90°,
+    weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
+    assumed range 25, `ChargeToTarget`, applies `EffectTeamUpProtection`
+    — −10% `DamageTakenMultiplier` for 15s — to the target). **Crippling
+    Blow** (`crippling_blow`, melee-required, 0s cd, 15 mana, instant,
+    unit-targeted, `EffectCripplingBlow` — −50% `RunSpeed` for 10s, same
+    pattern as `EffectSlow`). **Seismic Slam** (`seismic_slam`,
+    melee-required, 30s cd, 75 mana, 1s cast, `EnemiesAroundCaster`
+    radius 8, reuses `EffectStun`). **Barbarian's Mantle**
+    (`GearBarbariansMantle`, Id `barbarians_mantle`, assumed **Chest**
+    slot — "(armor)" read as body armor despite the "mantle" name — a
+    `HpThresholdEffects` entry at 50%: above it −15%
+    `DamageTakenMultiplier`, below it +15% `DamageMultiplier`).
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
