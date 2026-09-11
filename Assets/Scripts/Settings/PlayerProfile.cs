@@ -20,6 +20,8 @@ public class PlayerProfile
     public string[] GearIds = new string[GearSlotCount];
     public KeyCode[] MovementKeys = (KeyCode[])MovementInput.Defaults.Clone();
     public float UiScale = 1f;
+    // Last server address joined as a client; empty = NetworkBootstrap's default.
+    public string ServerAddress = "";
 
     public AbilityData GetSlotAbility(int slot) => GameDatabase.GetAbility(SlotAbilityIds[slot]);
 
