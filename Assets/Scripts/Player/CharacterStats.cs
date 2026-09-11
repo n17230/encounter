@@ -172,22 +172,71 @@ public class CharacterStats : NetworkBehaviour
         return false;
     }
 
+    // Ends one specific effect on this character early (e.g. One For All
+    // moving from a previous target to a new one). Server-only.
+    public void RemoveEffect(StatusEffectData effect)
+    {
+        if (!IsServer) return;
+        effects.Remove(effect);
+    }
+
     private void DealDamage(float rawDamage, ulong attackerClientId)
     {
         CharacterStats attacker = AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
 
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
-        CurrentHealth.Value = Mathf.Max(0f, CurrentHealth.Value - mitigated);
+
+        // A redirect (e.g. One For All) siphons part of the already-
+        // mitigated damage straight to another character's health, with
+        // no re-mitigation and no threat of its own - threat below is
+        // still based on the full mitigated amount, unaffected by where
+        // the health loss actually lands.
+        float selfDamage = mitigated;
+        if (TryGetActiveRedirect(out float redirectPercent, out ulong redirectToClientId))
+        {
+            CharacterStats redirectTarget = AttackerStats(redirectToClientId);
+            if (redirectTarget != null && redirectTarget != this)
+            {
+                float redirected = mitigated * redirectPercent;
+                selfDamage = mitigated - redirected;
+                redirectTarget.ApplyRawDamage(redirected);
+            }
+        }
+
+        ApplyRawDamage(selfDamage);
 
         // 1 threat per 1 point of damage actually dealt (post-mitigation).
         AddThreat(mitigated, attackerClientId);
+    }
 
+    // Reduces health and fires OnDeath if needed, with no mitigation,
+    // multipliers or threat - used both for a character's own damage and
+    // for damage a redirect effect hands off to someone else.
+    private void ApplyRawDamage(float amount)
+    {
+        CurrentHealth.Value = Mathf.Max(0f, CurrentHealth.Value - amount);
         if (CurrentHealth.Value <= 0f && !isDead)
         {
             isDead = true;
             OnDeath?.Invoke();
         }
+    }
+
+    // The strongest currently-active redirect on THIS character, if any -
+    // stacking multiple redirect effects wasn't asked for, so only one
+    // applies at a time.
+    private bool TryGetActiveRedirect(out float percent, out ulong redirectToClientId)
+    {
+        percent = 0f;
+        redirectToClientId = NoAttacker;
+        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+        {
+            if (active.Data.DamageRedirectPercent <= percent) continue;
+            percent = active.Data.DamageRedirectPercent;
+            redirectToClientId = active.AttackerClientId;
+        }
+        return percent > 0f;
     }
 
     // Threat is scaled by the attacker's own ThreatMultiplier (gear).

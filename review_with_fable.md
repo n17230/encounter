@@ -82,7 +82,35 @@ whole file once it's empty.
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 5. Auto-attack
+## 5. One For All (damage redirect) — genuinely new mechanic, unrun
+
+- Cast it on an ally, have a mob hit *them*, and confirm 10% of that
+  damage lands on *you* (the caster) instead — watch both health bars.
+  The other 90% should still hit the ally normally.
+- Confirm the redirected 10% doesn't get re-armored on your end (it's a
+  direct siphon of the already-mitigated amount, not a fresh "hit"
+  against your own armor) — the math to check: if the ally takes X
+  damage after their own armor, you should lose exactly 0.1×X, not
+  something further reduced by your armor too.
+- If the redirect kills *you* (caster) rather than the ally, confirm you
+  actually die (OnDeath fires) — this was implemented via a shared
+  death-check helper but never seen run.
+- Cast it on player A, then recast it on player B (different target) —
+  does A's buff actually go away (check their buff/effects display),
+  and does B now have it instead? Recast on B again (same current
+  holder) — should just refresh/extend, not do anything weird.
+- With two different casters each casting their own One For All on the
+  *same* third player: this is a known, unhandled edge case (see
+  CLAUDE.md) — the underlying effect-tracking system only supports one
+  active instance of a given effect asset per character regardless of
+  who applied it, so the second caster's application will likely
+  silently steal the redirect-target role from the first. Not fixed;
+  flagging in case it comes up.
+- Cooldown (5s) and Range (30) are unconfirmed guesses; duration (30
+  min), redirect (10%), mana cost (50), and instant cast all came from
+  you.
+
+## 6. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -91,7 +119,7 @@ whole file once it's empty.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 6. Party frames + F1–F5 targeting + minimap compass
+## 7. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -119,7 +147,7 @@ whole file once it's empty.
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 7. Minimap / Echolocator
+## 8. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -128,7 +156,7 @@ whole file once it's empty.
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 8. Gear — ring slots and the recent renumbering
+## 9. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -141,7 +169,7 @@ whole file once it's empty.
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 9. General combat/economy numbers worth a sanity pass
+## 10. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool (1250 with Staff's new +250 max mana),
   regen in 5s ticks — does an actual fight feel like mana is a real
@@ -154,7 +182,7 @@ whole file once it's empty.
   names ("Regeneration" grants the "Rejuvenation" buff — the underlying
   effect wasn't renamed, only the item).
 
-## 10. Reported by the user, not yet looked into
+## 11. Reported by the user, not yet looked into
 
 - Firebolt/Icebolt's VFX does not home in on the target — it flies
   straight rather than tracking. The crude tracer (`Projectile`'s actual
@@ -163,7 +191,7 @@ whole file once it's empty.
   how the visual effect is attached to or driven by the projectile is
   the mismatch. Not investigated yet.
 
-## 11. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 12. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect

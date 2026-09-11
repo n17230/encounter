@@ -46,6 +46,11 @@ public class PlayerAbilities : NetworkBehaviour
     private readonly AbilityData[] serverSlotAbilities = new AbilityData[PlayerProfile.AbilitySlots];
     private readonly Dictionary<AbilityData, float> cooldownReadyTime = new Dictionary<AbilityData, float>();
 
+    // Server-authoritative: for an AbilityData.ExclusiveSingleTarget
+    // ability, who currently holds the effect from THIS caster's casts of
+    // it (see ResolveAbility). Per-caster, not global.
+    private readonly Dictionary<AbilityData, Targetable> exclusiveTargets = new Dictionary<AbilityData, Targetable>();
+
     // Server-authoritative cast lock - while Time.time is before this, no
     // new cast (instant or otherwise) can start, regardless of which
     // ability/slot. Client-side isCasting only gates the local UI/input;
@@ -506,6 +511,18 @@ public class PlayerAbilities : NetworkBehaviour
         }
         else
         {
+            if (ability.ExclusiveSingleTarget && ability.Effect != null)
+            {
+                // Strip it from whoever held it before, if that's someone
+                // else - recasting on the same person just refreshes below.
+                if (exclusiveTargets.TryGetValue(ability, out Targetable previous)
+                    && previous != null && previous != target)
+                {
+                    previous.Stats?.RemoveEffect(ability.Effect);
+                }
+                exclusiveTargets[ability] = target;
+            }
+
             target.Stats.ReceiveHit(new HitInfo
             {
                 Damage = ability.Damage,

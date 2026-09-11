@@ -56,4 +56,11 @@ public class AbilityData : ScriptableObject
     // caster's position on resolve, instead of dealing damage - takes
     // priority over ProjectilePrefab if both are somehow set.
     public bool RecallTarget = false;
+
+    // At most one currently-affected target across all of THIS caster's
+    // casts of this ability (not a global limit - two different casters
+    // can each have their own target). Casting it on someone new strips
+    // Effect from whoever had it (see PlayerAbilities.ResolveAbility).
+    // For abilities whose point is a single ongoing bond, e.g. One For All.
+    public bool ExclusiveSingleTarget = false;
 }

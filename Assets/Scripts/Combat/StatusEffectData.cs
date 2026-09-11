@@ -22,4 +22,10 @@ public class StatusEffectData : ScriptableObject
 
     // Stat modifiers held for as long as the effect is active.
     public List<StatBonus> Modifiers = new List<StatBonus>();
+
+    // If > 0, while this effect is active this fraction of damage the
+    // wearer takes is dealt directly to whoever applied the effect
+    // instead (see CharacterStats.DealDamage) - e.g. One For All. 0 (the
+    // default) means no redirect.
+    public float DamageRedirectPercent = 0f;
 }

@@ -258,6 +258,7 @@ public class MainMenu : MonoBehaviour
         sb.Append(effect.DisplayName).Append(':');
         if (effect.TickDamage > 0f) sb.Append($" {effect.TickDamage} dmg/{effect.TickInterval}s");
         if (effect.TickHeal > 0f) sb.Append($" +{effect.TickHeal} hp/{effect.TickInterval}s");
+        if (effect.DamageRedirectPercent > 0f) sb.Append($" redirects {effect.DamageRedirectPercent * 100f:0}% of damage taken to the caster");
         foreach (StatBonus bonus in effect.Modifiers) sb.Append(' ').Append(DescribeBonus(bonus));
         sb.Append($" for {duration}s");
         return sb.ToString();

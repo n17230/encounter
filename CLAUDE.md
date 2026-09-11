@@ -188,6 +188,34 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     no clipping/pushing. Cooldown 30s and mana cost 200 were set explicitly by the
     user (2026-09-11), and so was Range 40; instant cast and no threat
     generated are still unspecified placeholders.
+  - **Damage redirect + One For All** (added 2026-09-11):
+    `StatusEffectData.DamageRedirectPercent` (0 = none, the default) — if
+    the *victim* has an active effect with this set, `DealDamage` peels
+    that fraction off the already-armor-mitigated damage and hands it
+    straight to whoever *applied* the effect (`ActiveEffect
+    .AttackerClientId`, resolved via the existing `AttackerStats`
+    lookup), with no re-mitigation, no multipliers, and no threat of its
+    own — only the strongest single active redirect applies, stacking
+    multiple wasn't asked for. The redirected chunk goes through the new
+    `CharacterStats.ApplyRawDamage` (health loss + death-check only,
+    factored out of `DealDamage` so both the victim's own share and the
+    redirected share use identical death handling). Threat is still
+    calculated from the *full* mitigated amount against the original
+    victim, unaffected by where the HP loss actually lands. `AbilityData
+    .ExclusiveSingleTarget` (also new) enforces "only one target at a
+    time" **per caster** (not global — two different casters can each
+    have their own): `PlayerAbilities.exclusiveTargets`
+    (`Dictionary<AbilityData, Targetable>`) remembers who last received
+    it from *this* caster, and casting it on someone new calls the new
+    `StatusEffectTracker.Remove` / `CharacterStats.RemoveEffect` on the
+    old holder before applying to the new one — recasting on the same
+    current holder just refreshes via the tracker's existing extend-only
+    rule, no strip happens. `AbilityOneForAll` (Id `one_for_all`, its
+    `EffectOneForAll` also Id `one_for_all` — no collision, abilities
+    and effects are separate `GameDatabase` namespaces): 10% redirect,
+    1800 s (30 min) duration, instant cast, 50 mana, all set explicitly
+    by the user; **Cooldown 5s and Range 30 are unconfirmed
+    placeholders** — nothing was specified for either.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from

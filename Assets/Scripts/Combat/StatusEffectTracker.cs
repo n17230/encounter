@@ -90,6 +90,17 @@ public class StatusEffectTracker
         expiredScratch.Clear();
     }
 
+    // Ends one specific effect early (e.g. One For All moving to a new
+    // target) rather than waiting for it to expire on its own. No-op if
+    // it isn't active - safe to call on a stale reference.
+    public bool Remove(StatusEffectData data)
+    {
+        if (data == null || !active.TryGetValue(data, out ActiveEffect effect)) return false;
+        active.Remove(data);
+        Expired?.Invoke(effect);
+        return true;
+    }
+
     public void ClearAll()
     {
         if (active.Count == 0) return;
