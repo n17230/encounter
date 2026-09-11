@@ -172,7 +172,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   left-click / Tab targets, Escape clears the target first and opens the
   menu only when nothing is targeted.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
-  **auto-attack** (`PlayerAutoAttack`): the server swings the equipped
+  **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
+  current target too — `MovementAction.AutoAttack`, rebindable on the
+  Options page): the server swings the equipped
   MainHand item's `WeaponData` (or the `Fists` fallback wired on the
   prefab) every `SwingInterval` while the target is within `Range` and
   inside the facing cone, stays armed while closing distance, follows
