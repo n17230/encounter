@@ -10,5 +10,7 @@ public enum StatType
     // Multiplier on every ability's mana cost (base 1.0; -10% = PercentAdditive -0.1).
     ManaCostMultiplier,
     // Multiplier on all threat this character generates (base 1.0).
-    ThreatMultiplier
+    ThreatMultiplier,
+    // Multiplier on all damage this character deals (base 1.0).
+    DamageMultiplier
 }

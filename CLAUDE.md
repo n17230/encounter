@@ -141,7 +141,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   (+1.5 mana/s) at 40 range. **`StatType.ManaCostMultiplier`** (base 1,
   synced as `SyncedManaCostMultiplier`) is applied in
   `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
-  basic attack) gives −10%. Put new combat
+  basic attack) gives −10%. **`StatType.DamageMultiplier`** scales all
+  damage a player deals (applied in `DealDamage` via the attacker's
+  stats, so DoT ticks count too). `GearFireTrinket` (Trinket, Id
+  `fire_trinket`): +10% damage dealt, and a Range-0 aura of `burn` —
+  i.e. the wearer is permanently Burning at the fire-patch rate (self-
+  inflicted, no threat). Put new combat
   features (combat log, downed state, damage numbers) here, not at
   call sites.
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,

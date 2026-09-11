@@ -29,6 +29,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat Armor { get; private set; }
     public Stat ManaCostMultiplier { get; private set; }
     public Stat ThreatMultiplier { get; private set; }
+    public Stat DamageMultiplier { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -70,6 +71,7 @@ public class CharacterStats : NetworkBehaviour
         Armor = new Stat(baseArmor);
         ManaCostMultiplier = new Stat(1f);
         ThreatMultiplier = new Stat(1f);
+        DamageMultiplier = new Stat(1f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -89,6 +91,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.Armor: return Armor;
             case StatType.ManaCostMultiplier: return ManaCostMultiplier;
             case StatType.ThreatMultiplier: return ThreatMultiplier;
+            case StatType.DamageMultiplier: return DamageMultiplier;
             default: return null;
         }
     }
@@ -171,6 +174,9 @@ public class CharacterStats : NetworkBehaviour
 
     private void DealDamage(float rawDamage, ulong attackerClientId)
     {
+        CharacterStats attacker = AttackerStats(attackerClientId);
+        if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
+
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
         CurrentHealth.Value = Mathf.Max(0f, CurrentHealth.Value - mitigated);
 
@@ -189,15 +195,19 @@ public class CharacterStats : NetworkBehaviour
     {
         if (attackerClientId == NoAttacker || threatTable == null) return;
 
-        float multiplier = 1f;
-        if (NetworkManager.ConnectedClients.TryGetValue(attackerClientId, out NetworkClient attacker)
-            && attacker.PlayerObject != null
-            && attacker.PlayerObject.TryGetComponent(out CharacterStats attackerStats))
-        {
-            multiplier = attackerStats.ThreatMultiplier.Value;
-        }
-
+        CharacterStats attacker = AttackerStats(attackerClientId);
+        float multiplier = attacker != null ? attacker.ThreatMultiplier.Value : 1f;
         threatTable.AddThreat(attackerClientId, amount * multiplier);
+    }
+
+    // The attacking player's stats, for outgoing multipliers (null for mobs
+    // and environmental damage).
+    private CharacterStats AttackerStats(ulong attackerClientId)
+    {
+        if (attackerClientId == NoAttacker) return null;
+        if (!NetworkManager.ConnectedClients.TryGetValue(attackerClientId, out NetworkClient client)) return null;
+        if (client.PlayerObject == null) return null;
+        return client.PlayerObject.TryGetComponent(out CharacterStats attacker) ? attacker : null;
     }
 
     private void TickEffect(StatusEffectTracker.ActiveEffect effect)

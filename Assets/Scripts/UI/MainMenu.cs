@@ -268,7 +268,8 @@ public class MainMenu : MonoBehaviour
         foreach (ItemAura aura in item.Auras)
         {
             if (aura.Effect == null) continue;
-            sb.Append($"Aura ({aura.Range} range): {aura.Effect.DisplayName}");
+            sb.Append(aura.Range > 0f ? $"Aura ({aura.Range} range): " : "While worn: ").Append(aura.Effect.DisplayName);
+            if (aura.Effect.TickDamage > 0f) sb.Append($", {aura.Effect.TickDamage} dmg/{aura.Effect.TickInterval}s");
             foreach (StatBonus bonus in aura.Effect.Modifiers) sb.Append(", ").Append(DescribeBonus(bonus));
             sb.AppendLine();
         }
@@ -290,6 +291,10 @@ public class MainMenu : MonoBehaviour
         if (bonus.Stat == StatType.ThreatMultiplier)
         {
             return $"Threat generated {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
+        if (bonus.Stat == StatType.DamageMultiplier)
+        {
+            return $"Damage dealt {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
         }
         string sign = displayValue >= 0f ? "+" : "";
         return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";
