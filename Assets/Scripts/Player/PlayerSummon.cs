@@ -12,7 +12,10 @@ public class PlayerSummon : NetworkBehaviour
 
     private bool panelOpen;
     private int selectedMobIndex;
-    private string countInput = "1";
+    // Buttons rather than a text field on purpose: IMGUI's native Tab focus
+    // traversal grabs any keyboard-focusable control on screen, and Tab is
+    // the tab-targeting key. Keep in-game panels free of text fields.
+    private int count = 1;
 
     private void OnGUI()
     {
@@ -42,10 +45,15 @@ public class PlayerSummon : NetworkBehaviour
             }
         }
 
-        GUILayout.Label("Count:");
-        countInput = GUILayout.TextField(countInput);
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Count:", GUILayout.Width(50));
+        if (GUILayout.Button("-", GUILayout.Width(30))) count = Mathf.Max(1, count - 1);
+        GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
+        GUILayout.Label(count.ToString(), centered, GUILayout.Width(40));
+        if (GUILayout.Button("+", GUILayout.Width(30))) count = Mathf.Min(maxSummonCount, count + 1);
+        GUILayout.EndHorizontal();
 
-        if (GUILayout.Button("Summon") && int.TryParse(countInput, out int count))
+        if (GUILayout.Button("Summon"))
         {
             RequestSummonServerRpc(selectedMobIndex, count);
         }
