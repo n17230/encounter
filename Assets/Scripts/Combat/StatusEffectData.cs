@@ -4,7 +4,7 @@ using UnityEngine;
 // A buff/debuff authored as data. Keyed by asset at runtime: reapplying
 // the same effect refreshes it (see StatusEffectTracker), different
 // effects stack independently even if they touch the same stat.
-[CreateAssetMenu(menuName = "Game/Status Effect", fileName = "NewStatusEffect")]
+[CreateAssetMenu(menuName = "Encounter/Status Effect", fileName = "NewStatusEffect")]
 public class StatusEffectData : ScriptableObject
 {
     // Stable identity used over the network (synced effect list) and in

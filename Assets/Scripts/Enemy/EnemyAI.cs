@@ -8,23 +8,6 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterStats))]
 public class EnemyAI : NetworkBehaviour
 {
-    // Proximity: ignore threat entirely, always chase the nearest player -
-    //   goblins use this (deliberately threat-blind).
-    // HighestThreat: standard aggro - most damage dealt, tie-break nearest.
-    //   Default for most mobs.
-    // LowestThreat: inverse aggro, to confuse players - targets whoever has
-    //   contributed LEAST (an untouched player counts as 0), tie-break
-    //   nearest.
-    // FarthestPlayer: always goes after whichever player is farthest away,
-    //   ignoring threat entirely.
-    private enum TargetingMode
-    {
-        Proximity,
-        HighestThreat,
-        LowestThreat,
-        FarthestPlayer
-    }
-
     [SerializeField] private TargetingMode targetingMode = TargetingMode.HighestThreat;
     [SerializeField] private float attackRange = 2f;
     [SerializeField] private WeaponData mainHandWeapon;
@@ -43,6 +26,7 @@ public class EnemyAI : NetworkBehaviour
     private float nextAttackTime;
     private bool nextAttackIsOffHand;
     private bool isDead;
+    private readonly List<TargetCandidate<CharacterStats>> candidates = new List<TargetCandidate<CharacterStats>>();
 
     private void Awake()
     {
@@ -149,34 +133,12 @@ public class EnemyAI : NetworkBehaviour
         }
     }
 
+    // Every connected, alive player is a candidate - including ones with no
+    // threat entry yet (counted as 0), which is what lets LowestThreat single
+    // out someone who hasn't engaged at all.
     private CharacterStats FindTarget()
     {
-        switch (targetingMode)
-        {
-            case TargetingMode.HighestThreat:
-                return FindByThreat(highest: true);
-            case TargetingMode.LowestThreat:
-                return FindByThreat(highest: false);
-            case TargetingMode.FarthestPlayer:
-                return FindByDistance(nearest: false);
-            case TargetingMode.Proximity:
-            default:
-                return FindByDistance(nearest: true);
-        }
-    }
-
-    // Ranks connected, alive players by threat (every valid player is
-    // considered, even ones with no ThreatTable entry yet, which count as 0
-    // - that's what lets LowestThreat single out someone who hasn't engaged
-    // at all). Ties are broken by nearest distance. Falls back to nearest
-    // player entirely if this mob has no ThreatTable.
-    private CharacterStats FindByThreat(bool highest)
-    {
-        if (threatTable == null) return FindByDistance(nearest: true);
-
-        List<CharacterStats> candidates = null;
-        float bestThreat = 0f;
-
+        candidates.Clear();
         foreach (NetworkClient client in NetworkManager.ConnectedClientsList)
         {
             if (client.PlayerObject == null) continue;
@@ -184,64 +146,18 @@ public class EnemyAI : NetworkBehaviour
             CharacterStats candidateStats = client.PlayerObject.GetComponent<CharacterStats>();
             if (candidateStats == null || candidateStats.CurrentHealth.Value <= 0f) continue;
 
-            threatTable.ThreatByClientId.TryGetValue(client.ClientId, out float threat);
+            float threat = 0f;
+            threatTable?.ThreatByClientId.TryGetValue(client.ClientId, out threat);
 
-            bool better = highest ? threat > bestThreat : threat < bestThreat;
-            if (candidates == null || better)
+            candidates.Add(new TargetCandidate<CharacterStats>
             {
-                bestThreat = threat;
-                candidates = new List<CharacterStats> { candidateStats };
-            }
-            else if (threat == bestThreat)
-            {
-                candidates.Add(candidateStats);
-            }
+                Subject = candidateStats,
+                Threat = threat,
+                Distance = Vector3.Distance(transform.position, candidateStats.transform.position),
+            });
         }
 
-        if (candidates == null || candidates.Count == 0) return FindByDistance(nearest: true);
-        if (candidates.Count == 1) return candidates[0];
-
-        return NearestOf(candidates);
-    }
-
-    private CharacterStats FindByDistance(bool nearest)
-    {
-        CharacterStats best = null;
-        float bestDistance = nearest ? float.MaxValue : float.MinValue;
-
-        foreach (NetworkClient client in NetworkManager.ConnectedClientsList)
-        {
-            if (client.PlayerObject == null) continue;
-
-            CharacterStats candidateStats = client.PlayerObject.GetComponent<CharacterStats>();
-            if (candidateStats == null || candidateStats.CurrentHealth.Value <= 0f) continue;
-
-            float distance = Vector3.Distance(transform.position, client.PlayerObject.transform.position);
-            bool better = nearest ? distance < bestDistance : distance > bestDistance;
-            if (best == null || better)
-            {
-                bestDistance = distance;
-                best = candidateStats;
-            }
-        }
-
-        return best;
-    }
-
-    private CharacterStats NearestOf(List<CharacterStats> candidates)
-    {
-        CharacterStats nearest = null;
-        float nearestDistance = float.MaxValue;
-        foreach (CharacterStats candidate in candidates)
-        {
-            float distance = Vector3.Distance(transform.position, candidate.transform.position);
-            if (distance < nearestDistance)
-            {
-                nearestDistance = distance;
-                nearest = candidate;
-            }
-        }
-        return nearest;
+        return TargetSelector.Select(candidates, targetingMode, threatTable != null);
     }
 
     private void MoveWithGravity(Vector3 horizontalVelocity)

@@ -4,7 +4,7 @@ using UnityEngine;
 // natural weapons (claws). EnemyAI reads Damage/Effect off whichever hand's
 // weapon is swinging; a null OffHandWeapon means the mob only attacks with
 // MainHandWeapon.
-[CreateAssetMenu(menuName = "reallyfungame/Weapon", fileName = "NewWeapon")]
+[CreateAssetMenu(menuName = "Encounter/Weapon", fileName = "NewWeapon")]
 public class WeaponData : ScriptableObject
 {
     public string WeaponName = "New Weapon";

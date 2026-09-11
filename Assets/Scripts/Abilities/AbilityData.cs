@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "reallyfungame/Ability", fileName = "NewAbility")]
+[CreateAssetMenu(menuName = "Encounter/Ability", fileName = "NewAbility")]
 public class AbilityData : ScriptableObject
 {
     // Stable identity used over the network and in saved profiles. Never
