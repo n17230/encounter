@@ -5,14 +5,26 @@ using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(PlayerTargeting))]
+[RequireComponent(typeof(PlayerCamera))]
 [RequireComponent(typeof(CharacterStats))]
 public class PlayerAbilities : NetworkBehaviour
 {
     [SerializeField] private float facingConeAngle = 120f;
+    [SerializeField] private Color groundReticleColor = new Color(0.4f, 0.8f, 1f, 0.6f);
     public float FacingConeAngle => facingConeAngle;
 
     private PlayerTargeting targeting;
+    private PlayerCamera playerCameraComponent;
     private CharacterStats stats;
+
+    // Owner-local aiming state for a ground-targeted ability (see
+    // AbilityData.IsGroundTargeted). Exposed so PlayerTargeting can ignore
+    // clicks meant for placement, not targeting.
+    public bool IsAimingGroundTarget { get; private set; }
+    private int aimingSlot = -1;
+    private AbilityData aimingAbility;
+    private GroundTargetReticle reticle;
+    private Vector3? aimedGroundPoint;
 
     private bool isCasting;
     private float castStartTime;
@@ -44,6 +56,7 @@ public class PlayerAbilities : NetworkBehaviour
     private void Awake()
     {
         targeting = GetComponent<PlayerTargeting>();
+        playerCameraComponent = GetComponent<PlayerCamera>();
         stats = GetComponent<CharacterStats>();
     }
 
@@ -59,6 +72,7 @@ public class PlayerAbilities : NetworkBehaviour
     {
         if (!IsOwner) return;
         MainMenu.Closed -= SyncLoadoutToServer;
+        reticle?.Destroy();
     }
 
     private void SyncLoadoutToServer()
@@ -79,7 +93,25 @@ public class PlayerAbilities : NetworkBehaviour
     private void Update()
     {
         if (!IsOwner) return;
-        if (MainMenu.IsOpen) return;
+
+        if (MainMenu.IsOpen)
+        {
+            // Opening the menu (whatever triggered it) abandons any in-progress
+            // aim rather than leaving a stuck reticle up behind it.
+            if (IsAimingGroundTarget) CancelGroundTargeting();
+            return;
+        }
+
+        if (IsAimingGroundTarget)
+        {
+            UpdateGroundAiming();
+            if (Input.GetMouseButtonDown(0))
+            {
+                ConfirmGroundTarget();
+                return;
+            }
+        }
+
         if (isCasting) return; // can't start a new cast until the current one finishes
 
         PlayerProfile profile = ProfileStore.Current;
@@ -89,6 +121,27 @@ public class PlayerAbilities : NetworkBehaviour
             KeyBindingOption? key = profile.GetSlotKey(slot);
             if (ability == null || !key.HasValue) continue;
             if (!key.Value.WasPressedThisFrame()) continue;
+
+            if (ability.IsGroundTargeted)
+            {
+                if (IsAimingGroundTarget)
+                {
+                    // Only the aiming ability's own key does anything (cancels);
+                    // other hotkeys are inert while aiming.
+                    if (aimingSlot == slot) CancelGroundTargeting();
+                    continue;
+                }
+
+                string groundRejection = ClientPrecheck(ability, out _);
+                if (groundRejection != null)
+                {
+                    ShowNotice(groundRejection);
+                    continue;
+                }
+
+                BeginGroundTargeting(slot, ability);
+                continue;
+            }
 
             string rejection = ClientPrecheck(ability, out NetworkObject targetNetworkObject);
             if (rejection != null)
@@ -107,6 +160,77 @@ public class PlayerAbilities : NetworkBehaviour
                 castDuration = ability.CastTime;
                 castingAbilityName = ability.AbilityName;
             }
+        }
+    }
+
+    private void BeginGroundTargeting(int slot, AbilityData ability)
+    {
+        IsAimingGroundTarget = true;
+        aimingSlot = slot;
+        aimingAbility = ability;
+        aimedGroundPoint = null;
+
+        reticle?.Destroy();
+        reticle = new GroundTargetReticle(ability.GroundEffectRadius, groundReticleColor);
+    }
+
+    private void CancelGroundTargeting()
+    {
+        IsAimingGroundTarget = false;
+        aimingSlot = -1;
+        aimingAbility = null;
+        aimedGroundPoint = null;
+        reticle?.Destroy();
+        reticle = null;
+    }
+
+    // Raycasts the mouse against the world (ignoring characters, so you can
+    // aim through a mob standing in front of the spot) and moves the
+    // reticle there; no hit just hides it until the mouse finds ground.
+    private void UpdateGroundAiming()
+    {
+        Camera cam = playerCameraComponent.Camera;
+        if (cam == null) return;
+
+        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        int ignoreCharacters = ~LayerMask.GetMask("Characters");
+        if (Physics.Raycast(ray, out RaycastHit hit, 200f, ignoreCharacters))
+        {
+            aimedGroundPoint = hit.point;
+            reticle.SetPosition(hit.point);
+            reticle.SetVisible(true);
+        }
+        else
+        {
+            aimedGroundPoint = null;
+            reticle.SetVisible(false);
+        }
+    }
+
+    private void ConfirmGroundTarget()
+    {
+        if (!aimedGroundPoint.HasValue) return; // nothing under the cursor yet - stay aiming
+
+        Vector3 point = aimedGroundPoint.Value;
+        if (Vector3.Distance(transform.position, point) > aimingAbility.Range)
+        {
+            ShowNotice("Out of range");
+            return; // stay aiming - move closer and click again
+        }
+
+        AbilityData ability = aimingAbility;
+        int slot = aimingSlot;
+        CancelGroundTargeting();
+
+        CastGroundTargetedAbilityServerRpc(slot, point);
+        predictedCooldownReady[ability] = Time.time + ability.Cooldown;
+
+        if (ability.CastTime > 0f)
+        {
+            isCasting = true;
+            castStartTime = Time.time;
+            castDuration = ability.CastTime;
+            castingAbilityName = ability.AbilityName;
         }
     }
 
@@ -367,6 +491,86 @@ public class PlayerAbilities : NetworkBehaviour
                 Effect = ability.Effect,
                 EffectDuration = ability.DirectHitEffectDuration,
             });
+        }
+    }
+
+    [ServerRpc]
+    private void CastGroundTargetedAbilityServerRpc(int slotIndex, Vector3 groundPosition)
+    {
+        if (slotIndex < 0 || slotIndex >= serverSlotAbilities.Length) return;
+
+        AbilityData ability = serverSlotAbilities[slotIndex];
+        if (ability == null || !ability.IsGroundTargeted) return;
+
+        if (Time.time < serverCastEndTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Already casting");
+            return;
+        }
+        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Not ready");
+            return;
+        }
+        if (Vector3.Distance(transform.position, groundPosition) > ability.Range)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Out of range");
+            return;
+        }
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Not enough mana");
+            return;
+        }
+
+        cooldownReadyTime[ability] = Time.time + ability.Cooldown;
+
+        if (ability.CastTime > 0f)
+        {
+            serverCastEndTime = Time.time + ability.CastTime;
+            PlayCastVfxClientRpc(ability.Id, ability.CastTime);
+            StartCoroutine(ResolveGroundAbilityAfterCastTime(ability, groundPosition, ability.CastTime));
+        }
+        else
+        {
+            ResolveGroundAbility(ability, groundPosition);
+        }
+    }
+
+    private IEnumerator ResolveGroundAbilityAfterCastTime(AbilityData ability, Vector3 groundPosition, float castTime)
+    {
+        yield return new WaitForSeconds(castTime);
+        ResolveGroundAbility(ability, groundPosition);
+    }
+
+    // No range/facing/LoS re-check at resolve time (unlike unit-targeted
+    // abilities) - the point was already fixed and validated at cast start,
+    // and a ground AoE has no single thing to lose sight of.
+    private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition)
+    {
+        if (ability.PullSpeed <= 0f || ability.GroundEffectRadius <= 0f) return;
+
+        // Generous cap in case something never quite reaches the exact
+        // centre (e.g. blocked by terrain) - it simply regains control then.
+        float pullDuration = ability.GroundEffectRadius / ability.PullSpeed + 0.5f;
+
+        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        {
+            if (candidate == null) continue;
+            if (candidate.Stats != null && candidate.Stats.CurrentHealth.Value <= 0f) continue;
+
+            Vector3 offset = candidate.transform.position - groundPosition;
+            offset.y = 0f;
+            if (offset.magnitude > ability.GroundEffectRadius) continue;
+
+            if (candidate.TryGetComponent(out PlayerMovement playerMovement))
+            {
+                playerMovement.ServerBeginPull(groundPosition, ability.PullSpeed, pullDuration);
+            }
+            else if (candidate.TryGetComponent(out EnemyAI enemyAi))
+            {
+                enemyAi.ServerBeginPull(groundPosition, ability.PullSpeed, pullDuration);
+            }
         }
     }
 

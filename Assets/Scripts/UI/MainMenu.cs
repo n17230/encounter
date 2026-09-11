@@ -232,6 +232,11 @@ public class MainMenu : MonoBehaviour
         sb.AppendLine($"Cooldown: {ability.Cooldown}s");
         if (ability.CastTime > 0f) sb.AppendLine($"Cast Time: {ability.CastTime}s");
         sb.AppendLine($"Range: {ability.Range}");
+        if (ability.IsGroundTargeted)
+        {
+            sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area");
+            if (ability.PullSpeed > 0f) sb.AppendLine($"Pulls everyone in the area inward at {ability.PullSpeed}/s");
+        }
 
         if (ability.Effect != null)
         {

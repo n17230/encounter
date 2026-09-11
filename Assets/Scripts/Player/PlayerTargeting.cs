@@ -20,6 +20,7 @@ public class PlayerTargeting : NetworkBehaviour
     public event Action<Targetable> AttackRequested;
 
     private PlayerCamera playerCameraComponent;
+    private PlayerAbilities abilities;
     private Targetable self;
     private Vector3 rightDownPosition;
     private float rightDownTime;
@@ -27,6 +28,7 @@ public class PlayerTargeting : NetworkBehaviour
     private void Awake()
     {
         playerCameraComponent = GetComponent<PlayerCamera>();
+        abilities = GetComponent<PlayerAbilities>();
         self = GetComponent<Targetable>();
     }
 
@@ -39,6 +41,9 @@ public class PlayerTargeting : NetworkBehaviour
     {
         if (!IsOwner) return;
         if (MainMenu.IsOpen) return;
+        // While aiming a ground-targeted ability (see PlayerAbilities), the
+        // same clicks confirm/relate to placement, not targeting.
+        if (abilities != null && abilities.IsAimingGroundTarget) return;
 
         if (Input.GetKeyDown(KeyCode.Tab))
         {

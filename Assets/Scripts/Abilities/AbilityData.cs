@@ -39,4 +39,13 @@ public class AbilityData : ScriptableObject
     // target on impact - ground patches always use Effect.Duration.
     // 0 means "no override, use Effect.Duration for the primary target too".
     public float DirectHitEffectDuration = 0f;
+
+    // Ground-targeted (WoW "Blizzard"-style) casting: instead of selecting a
+    // unit, the player aims a reticle and clicks to confirm a point on the
+    // ground within Range of the caster; RequiresTarget is ignored. On
+    // resolve, every player/mob within GroundEffectRadius of that point is
+    // affected - currently only a pull (PullSpeed, 0 = no pull).
+    public bool IsGroundTargeted = false;
+    public float GroundEffectRadius = 0f;
+    public float PullSpeed = 0f;
 }

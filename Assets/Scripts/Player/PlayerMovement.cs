@@ -54,6 +54,16 @@ public class PlayerMovement : NetworkBehaviour
     // auto-run to regain control.
     private bool autoRun;
 
+    // Server-initiated external movement (e.g. Vacuum's pull): while active,
+    // normal input is ignored and the character is driven straight toward
+    // pullTargetPosition instead. Set directly server-side (so the movement
+    // validator can ignore this window - see ValidateReplicatedMovement)
+    // and mirrored to the owner via ClientRpc so it can actually move.
+    private Vector3 pullTargetPosition;
+    private float pullSpeed;
+    private float pullEndTime;
+    private bool IsPulling => Time.time < pullEndTime;
+
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
@@ -118,7 +128,22 @@ public class PlayerMovement : NetworkBehaviour
         }
 
         Vector3 horizontalVelocity;
-        if (grounded)
+        if (IsPulling)
+        {
+            Vector3 toPullTarget = pullTargetPosition - transform.position;
+            toPullTarget.y = 0f;
+            if (toPullTarget.magnitude < 0.3f)
+            {
+                horizontalVelocity = Vector3.zero;
+                pullEndTime = Time.time; // arrived - hand control back immediately
+            }
+            else
+            {
+                horizontalVelocity = toPullTarget.normalized * pullSpeed;
+            }
+            airborneVelocity = horizontalVelocity;
+        }
+        else if (grounded)
         {
             Vector3 moveDirection = transform.forward * forwardInput + transform.right * strafeInput;
             if (moveDirection.sqrMagnitude > 1f) moveDirection.Normalize();
@@ -150,9 +175,41 @@ public class PlayerMovement : NetworkBehaviour
         controller.Move(motion * Time.fixedDeltaTime);
     }
 
+    // Called server-side (e.g. by a resolving Vacuum cast) to drag this
+    // player toward towardPosition for up to duration seconds, or until
+    // they arrive. Overrides normal input for that window.
+    public void ServerBeginPull(Vector3 towardPosition, float speed, float duration)
+    {
+        if (!IsServer) return;
+
+        // Harmless for the host's own player (validation never runs for
+        // it); for a remote owner this is what stops the pull itself from
+        // being flagged as a speed/teleport violation.
+        pullEndTime = Time.time + duration;
+        BeginPullClientRpc(towardPosition, speed, duration);
+    }
+
+    [ClientRpc]
+    private void BeginPullClientRpc(Vector3 towardPosition, float speed, float duration)
+    {
+        if (!IsOwner) return;
+        pullTargetPosition = towardPosition;
+        pullSpeed = speed;
+        pullEndTime = Time.time + duration;
+    }
+
     private void ValidateReplicatedMovement()
     {
         if (Time.time < validationResumeTime) return;
+
+        if (Time.time < pullEndTime)
+        {
+            // Being pulled - keep re-baselining so the check window starts
+            // fresh (from wherever the pull leaves them) once it ends,
+            // instead of reading the pull itself as a violation.
+            validator.Reset(transform.position, Time.time, stats.RunSpeed.Value);
+            return;
+        }
 
         Vector3 position = transform.position;
         float feetY = position.y + controller.center.y - controller.height * 0.5f;

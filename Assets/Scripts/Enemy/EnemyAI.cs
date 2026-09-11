@@ -27,6 +27,14 @@ public class EnemyAI : NetworkBehaviour
     private bool isDead;
     private readonly List<TargetCandidate<CharacterStats>> candidates = new List<TargetCandidate<CharacterStats>>();
 
+    // Server-initiated external movement (e.g. Vacuum's pull) - overrides
+    // normal targeting/movement for the window. Mobs are fully
+    // server-driven already, so no client notification is needed.
+    private Vector3 pullTargetPosition;
+    private float pullSpeed;
+    private float pullEndTime;
+    private bool IsPulling => Time.time < pullEndTime;
+
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
@@ -69,9 +77,31 @@ public class EnemyAI : NetworkBehaviour
         NetworkObject.Despawn();
     }
 
+    // See PlayerMovement.ServerBeginPull.
+    public void ServerBeginPull(Vector3 towardPosition, float speed, float duration)
+    {
+        if (!IsServer) return;
+        pullTargetPosition = towardPosition;
+        pullSpeed = speed;
+        pullEndTime = Time.time + duration;
+    }
+
     private void FixedUpdate()
     {
         if (!IsServer || isDead) return;
+
+        if (IsPulling)
+        {
+            Vector3 toPullTarget = pullTargetPosition - transform.position;
+            toPullTarget.y = 0f;
+            bool arrived = toPullTarget.magnitude < 0.3f;
+            if (arrived) pullEndTime = Time.time;
+
+            Vector3 pullVelocity = arrived ? Vector3.zero : toPullTarget.normalized * pullSpeed;
+            MoveWithGravity(pullVelocity);
+            if (animator != null) animator.SetFloat("speed", arrived ? 0f : 1f);
+            return;
+        }
 
         CharacterStats target = FindTarget();
         if (target == null)
