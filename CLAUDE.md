@@ -1,5 +1,19 @@
 # encounter
 
+## Core rules — never break these, no exceptions
+
+1. **Never invent items, abilities, mobs, effects, or game mechanics.**
+   Only execute what the user explicitly asks for. No "sample" content,
+   no "while I'm here" mechanics, no filling in numbers or names the
+   user didn't give (ask instead).
+2. **Never edit code that is tangential to the thing currently being
+   worked on.** If something out of scope looks like it needs changing
+   (a bug, a refactor, a cleanup), write it down and ask the user; do not
+   touch it unless they say so.
+
+These come from the user directly (2026-09-11) after unrequested sample
+items were added. They override any general helpfulness instinct.
+
 A 3D multiplayer game (working title "encounter"; the working directory is
 still named `reallyfungame`), built in Unity, hosted on a VPS the user
 controls so they and friends can play together. Git: `github.com/n17230/encounter`
