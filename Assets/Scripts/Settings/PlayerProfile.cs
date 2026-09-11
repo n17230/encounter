@@ -65,9 +65,14 @@ public class PlayerProfile
         Array.Resize(ref SlotKeys, AbilitySlots);
         Array.Resize(ref SlotKeyShift, AbilitySlots);
         Array.Resize(ref GearIds, GearSlotCount);
-        if (MovementKeys == null || MovementKeys.Length != MovementActionCount)
+        // A profile saved before an action was added keeps its existing
+        // bindings and takes the default for the new ones.
+        if (MovementKeys == null) MovementKeys = new KeyCode[0];
+        if (MovementKeys.Length != MovementActionCount)
         {
-            MovementKeys = (KeyCode[])MovementInput.Defaults.Clone();
+            KeyCode[] merged = (KeyCode[])MovementInput.Defaults.Clone();
+            Array.Copy(MovementKeys, merged, Math.Min(MovementKeys.Length, merged.Length));
+            MovementKeys = merged;
         }
         UiScale = Mathf.Clamp(UiScale <= 0f ? 1f : UiScale, UIScale.Min, UIScale.Max);
     }

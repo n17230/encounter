@@ -2,7 +2,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 // MMO-style auto-attack: right-clicking a mob targets it and arms the
-// attack; from then on the server swings the equipped main-hand weapon
+// attack (the AutoAttack key toggles it too); from then on the server swings the equipped main-hand weapon
 // (or Fists) every SwingInterval whenever the target is in range and in
 // front of the player. It stays armed while closing distance and follows
 // target changes (Tab), and disarms when the target is dropped or dies.
@@ -60,7 +60,15 @@ public class PlayerAutoAttack : NetworkBehaviour
 
     private void Update()
     {
-        if (!IsOwner || !IsArmed) return;
+        if (!IsOwner) return;
+
+        if (!MainMenu.IsOpen && MovementInput.WasPressed(MovementAction.AutoAttack))
+        {
+            if (IsArmed) Disarm();
+            else if (targeting.CurrentTarget != null) Arm(targeting.CurrentTarget);
+        }
+
+        if (!IsArmed) return;
 
         Targetable target = targeting.CurrentTarget;
         if (target == null || target.Stats == null || target.Stats.CurrentHealth.Value <= 0f)

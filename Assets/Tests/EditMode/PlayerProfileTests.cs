@@ -40,6 +40,18 @@ public class PlayerProfileTests
     }
 
     [Test]
+    public void NormalizeKeepsOldBindingsWhenActionsAreAdded()
+    {
+        PlayerProfile profile = new PlayerProfile { MovementKeys = new[] { KeyCode.UpArrow, KeyCode.DownArrow } };
+        profile.Normalize();
+
+        Assert.AreEqual(PlayerProfile.MovementActionCount, profile.MovementKeys.Length);
+        Assert.AreEqual(KeyCode.UpArrow, profile.MovementKeys[(int)MovementAction.Forward]);
+        Assert.AreEqual(KeyCode.DownArrow, profile.MovementKeys[(int)MovementAction.Backward]);
+        Assert.AreEqual(MovementInput.Defaults[(int)MovementAction.AutoAttack], profile.MovementKeys[(int)MovementAction.AutoAttack]);
+    }
+
+    [Test]
     public void JsonRoundTripPreservesChoices()
     {
         PlayerProfile profile = new PlayerProfile();

@@ -467,7 +467,7 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
-        GUILayout.Label("Movement Keybindings");
+        GUILayout.Label("Keybindings");
 
         KeyCode[] keys = Profile.MovementKeys;
         for (int i = 0; i < keys.Length; i++)
