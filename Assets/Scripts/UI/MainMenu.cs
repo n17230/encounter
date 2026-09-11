@@ -241,6 +241,7 @@ public class MainMenu : MonoBehaviour
                 sb.AppendLine($"Blasts everyone in the area {direction} the center at {ability.ForceSpeed}/s");
             }
         }
+        if (ability.RecallTarget) sb.AppendLine("Teleports the target to your location");
 
         if (ability.Effect != null)
         {

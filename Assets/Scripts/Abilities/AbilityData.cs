@@ -51,4 +51,9 @@ public class AbilityData : ScriptableObject
     public float GroundEffectRadius = 0f;
     public float ForceSpeed = 0f;
     public bool PushAway = false;
+
+    // Unit-targeted (RequiresTarget) instant teleport of the target to the
+    // caster's position on resolve, instead of dealing damage - takes
+    // priority over ProjectilePrefab if both are somehow set.
+    public bool RecallTarget = false;
 }

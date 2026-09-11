@@ -201,6 +201,27 @@ public class PlayerMovement : NetworkBehaviour
         pullEndTime = Time.time + duration;
     }
 
+    // Called server-side (e.g. by a resolving Recall cast) to instantly
+    // move this player to position, bypassing normal movement entirely.
+    public void ServerTeleportTo(Vector3 position)
+    {
+        if (!IsServer) return;
+
+        // Same safety as a validation correction (see below): re-baseline
+        // immediately and pause checks briefly, so this server-initiated
+        // jump isn't itself read as a teleport violation and undone.
+        validator.Reset(position, Time.time, stats.RunSpeed.Value);
+        validationResumeTime = Time.time + correctionGraceSeconds;
+        TeleportToClientRpc(position);
+    }
+
+    [ClientRpc]
+    private void TeleportToClientRpc(Vector3 position)
+    {
+        if (!IsOwner) return;
+        TeleportTo(position);
+    }
+
     private void ValidateReplicatedMovement()
     {
         if (Time.time < validationResumeTime) return;

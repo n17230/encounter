@@ -86,6 +86,18 @@ public class EnemyAI : NetworkBehaviour
         pullEndTime = Time.time + duration;
     }
 
+    // Called server-side (e.g. by a resolving Recall cast) to instantly
+    // move this mob to position. No validator/RPC concerns here - mobs are
+    // fully server-driven, so this just relocates them like a respawn would.
+    public void ServerTeleportTo(Vector3 position)
+    {
+        if (!IsServer) return;
+        controller.enabled = false;
+        transform.position = position;
+        controller.enabled = true;
+        verticalVelocity = 0f;
+    }
+
     private void FixedUpdate()
     {
         if (!IsServer || isDead) return;

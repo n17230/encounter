@@ -133,6 +133,27 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     no damage/effect — differing only in `PushAway`. Range 30 and the
     force speed are still placeholder numbers, never specified beyond
     the diameter — flagged for tuning.
+  - **Recall** (Id `recall`, added 2026-09-11): a plain unit-targeted
+    spell (`RequiresTarget`, same click/Tab selection and range/facing/
+    LoS checks as Firebolt/Icebolt) whose resolve does
+    `AbilityData.RecallTarget` instead of damage — instantly teleports
+    the *target* to the *caster's* position via the new
+    `PlayerMovement.ServerTeleportTo` / `EnemyAI.ServerTeleportTo`
+    (checked in that priority order ahead of `ProjectilePrefab` in
+    `ResolveAbility`). For a player target this needed the same
+    validator safety as a pull: `ServerTeleportTo` re-baselines
+    `MovementValidator` and sets `validationResumeTime` *before* sending
+    the `ClientRpc`, exactly like an existing movement-violation
+    correction does — otherwise the server would read its own recall as
+    a teleport-cheat and try to snap the player back. Mobs need no such
+    care (server-driven already) — `EnemyAI.ServerTeleportTo` just
+    disables/repositions/re-enables the `CharacterController` directly.
+    Since players/mobs no longer collide with each other (see Character
+    collision below), teleporting the target onto the caster is safe —
+    no clipping/pushing. All of Recall's numbers (Range 30, Cooldown
+    20s, instant cast, 150 mana, no threat) are unspecified placeholders
+    — the mechanic (teleport target → caster) is what was actually
+    asked for.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from

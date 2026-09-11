@@ -473,7 +473,19 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        if (ability.ProjectilePrefab != null)
+        if (ability.RecallTarget)
+        {
+            Vector3 recallPosition = transform.position;
+            if (targetObject.TryGetComponent(out PlayerMovement targetMovement))
+            {
+                targetMovement.ServerTeleportTo(recallPosition);
+            }
+            else if (targetObject.TryGetComponent(out EnemyAI targetEnemyAi))
+            {
+                targetEnemyAi.ServerTeleportTo(recallPosition);
+            }
+        }
+        else if (ability.ProjectilePrefab != null)
         {
             Vector3 spawnPosition = transform.position + Vector3.up * 1.5f + transform.forward * 0.5f;
             GameObject projectileInstance = Instantiate(ability.ProjectilePrefab, spawnPosition, Quaternion.identity);
