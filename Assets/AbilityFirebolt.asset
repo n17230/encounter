@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
+  m_Name: AbilityFirebolt
+  m_EditorClassIdentifier: 
+  AbilityName: Firebolt
+  RequiresTarget: 1
+  Range: 50
+  Cooldown: 3
+  CastTime: 2
+  ManaCost: 20
+  ThreatValue: 10
+  Damage: 250
+  MissileSpeed: 30
+  ProjectilePrefab: {fileID: 2881004069007213672, guid: 7c1e5b3b690a9434fa78e51eab315aaa,
+    type: 3}
+  CastVfxPrefab: {fileID: 100100000, guid: a178aad92fd4bd245ba584e291fd6cf2, type: 3}
+  GroundPatchPrefab: {fileID: 6179438977361036716, guid: bf2a6adae0edadb488e49fcd1b2d1597,
+    type: 3}
+  MinPatchCount: 5
+  MaxPatchCount: 5
+  PatchScatterRadius: 6
+  PatchRadius: 1.5
+  PatchDuration: 6
+  Debuff: 1
+  DebuffMagnitude: 50
+  DebuffTickInterval: 1
+  DebuffDuration: 3

@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
+  m_Name: AbilityIcebolt
+  m_EditorClassIdentifier: 
+  AbilityName: Icebolt
+  RequiresTarget: 1
+  Range: 50
+  Cooldown: 3
+  CastTime: 2
+  ManaCost: 20
+  ThreatValue: 10
+  Damage: 100
+  MissileSpeed: 30
+  ProjectilePrefab: {fileID: 2881004069007213672, guid: 157a86356e801c947a7ae56e6cc193e4,
+    type: 3}
+  CastVfxPrefab: {fileID: 100100000, guid: 75134cf30eb81694b8369220ab1023ca, type: 3}
+  GroundPatchPrefab: {fileID: 6179438977361036716, guid: dbdc657f76b119141a7e11ae95b13691,
+    type: 3}
+  MinPatchCount: 5
+  MaxPatchCount: 5
+  PatchScatterRadius: 6
+  PatchRadius: 1.5
+  PatchDuration: 6
+  Debuff: 2
+  DebuffMagnitude: 0.66
+  DebuffTickInterval: 1
+  DebuffDuration: 3
+  DirectHitDebuffDuration: 5
