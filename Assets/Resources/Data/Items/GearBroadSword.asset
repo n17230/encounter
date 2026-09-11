@@ -19,4 +19,7 @@ MonoBehaviour:
   - Stat: 7
     ModifierType: 1
     Value: 0.2
+  - Stat: 0
+    ModifierType: 0
+    Value: 100
   Weapon: {fileID: 11400000, guid: 9509a205fc4d68e98996ae002c0db0e3, type: 2}
