@@ -15,7 +15,7 @@ MonoBehaviour:
   Id: recall
   AbilityName: Recall
   RequiresTarget: 1
-  Range: 30
+  Range: 40
   Cooldown: 30
   CastTime: 0
   ManaCost: 200

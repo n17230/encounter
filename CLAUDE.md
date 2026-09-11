@@ -151,8 +151,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     Since players/mobs no longer collide with each other (see Character
     collision below), teleporting the target onto the caster is safe —
     no clipping/pushing. Cooldown 30s and mana cost 200 were set explicitly by the
-    user (2026-09-11); Range 30, instant cast, and no threat generated
-    are still unspecified placeholders.
+    user (2026-09-11), and so was Range 40; instant cast and no threat
+    generated are still unspecified placeholders.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
@@ -284,6 +284,19 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   and Tab is the tab-targeting key — the summon count is −/+ buttons
   for exactly that reason. The only text field is the server-address
   box, which is gone once connected.
+- **Party frames** (`Scripts/UI/PartyFrames.cs`, drawn from `PlayerHUD`,
+  top-right, added 2026-09-11): a health+mana row for every *other*
+  connected player, WoW-party-style. No party system exists — this
+  simply lists every player with a `PlayerMovement` (all of them, since
+  it's a shared open lobby). Ordering is identical on every client with
+  no synced state at all: sort by `OwnerClientId` (server-assigned,
+  already known identically everywhere via each `CharacterStats`'
+  `NetworkBehaviour.OwnerClientId`), label by that sorted position
+  ("Player 1", "Player 2", …). Each viewer's own entry is skipped — not
+  left as a blank row — so the remaining rows stack up from the top
+  with no gap. `CurrentHealth`/`CurrentMana`/`SyncedMaxHealth`/
+  `SyncedMaxMana` were already `NetworkVariable`s readable by everyone,
+  so this is pure client-side rendering — no new syncing needed.
 - **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
   radar bottom-right, north-up, player at centre with a heading tick.
   **Blank by default**: blips only draw for what the local player's
