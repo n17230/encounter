@@ -17,10 +17,21 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float gravity = -20f;
     [SerializeField] private float jumpSpeed = 8f;
 
+    // Server-side policing of the replicated transform (see MovementValidator).
+    // A violation snaps the client back; repeated ones get it disconnected.
+    [SerializeField] private int maxStrikes = 5;
+    [SerializeField] private float strikeForgetSeconds = 30f;
+    [SerializeField] private float correctionGraceSeconds = 1f;
+
     private CharacterController controller;
     private CharacterStats stats;
     private NetworkTransform networkTransform;
     private float verticalVelocity;
+
+    private readonly MovementValidator validator = new MovementValidator();
+    private int strikes;
+    private float lastStrikeTime;
+    private float validationResumeTime;
 
     // Input is gathered every rendered frame and consumed once per physics
     // step. Mouse deltas are summed and the jump is latched so nothing is
@@ -92,6 +103,9 @@ public class PlayerMovement : NetworkBehaviour
 
     private void FixedUpdate()
     {
+        // The host's own player is trusted; every remote owner is policed.
+        if (IsServer && !IsOwner) ValidateReplicatedMovement();
+
         if (!IsOwner) return;
 
         bool grounded = controller.isGrounded;
@@ -136,8 +150,44 @@ public class PlayerMovement : NetworkBehaviour
         controller.Move(motion * Time.fixedDeltaTime);
     }
 
+    private void ValidateReplicatedMovement()
+    {
+        if (Time.time < validationResumeTime) return;
+
+        Vector3 position = transform.position;
+        float feetY = position.y + controller.center.y - controller.height * 0.5f;
+        Terrain terrain = Terrain.activeTerrain;
+        float groundY = terrain != null ? terrain.SampleHeight(position) + terrain.transform.position.y : float.NaN;
+
+        MovementValidator.Verdict verdict = validator.Check(position, feetY, groundY, Time.time, stats.RunSpeed.Value);
+        if (verdict == MovementValidator.Verdict.Ok) return;
+
+        if (Time.time - lastStrikeTime > strikeForgetSeconds) strikes = 0;
+        strikes++;
+        lastStrikeTime = Time.time;
+        Debug.LogWarning($"[PlayerMovement] client {OwnerClientId} movement rejected ({verdict}), strike {strikes}/{maxStrikes}");
+
+        if (strikes >= maxStrikes)
+        {
+            NetworkManager.DisconnectClient(OwnerClientId, "Movement validation failed repeatedly");
+            return;
+        }
+
+        // Skip checks until the correction has had time to round-trip, so
+        // the states still in flight from before it don't count as strikes.
+        validationResumeTime = Time.time + correctionGraceSeconds;
+        CorrectPositionClientRpc(validator.LastAcceptedPosition);
+    }
+
+    [ClientRpc]
+    private void CorrectPositionClientRpc(Vector3 position)
+    {
+        if (!IsOwner) return;
+        TeleportTo(position);
+    }
+
     // Only the transform authority (the owner) may teleport; the server
-    // asks for it via PlayerRespawn's ClientRpc.
+    // asks for it via PlayerRespawn's ClientRpc or a validation correction.
     public void TeleportTo(Vector3 position)
     {
         if (!IsOwner) return;

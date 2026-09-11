@@ -19,8 +19,14 @@ public class PlayerAbilities : NetworkBehaviour
     private float castDuration;
     private string castingAbilityName;
 
-    private string fizzleMessage;
-    private float fizzleMessageEndTime;
+    private string noticeMessage;
+    private float noticeEndTime;
+
+    // Owner-side prediction, MMO style: the client pre-checks what it can
+    // (target, range, facing, mana, cooldown) and starts the cooldown the
+    // instant the key is pressed, so casting feels immediate. The server
+    // still decides; a rejection rolls the predicted cooldown back.
+    private readonly Dictionary<AbilityData, float> predictedCooldownReady = new Dictionary<AbilityData, float>();
 
     // Server-authoritative: which ability (or null) the owning player has in
     // each loadout slot. Clients only ever send slot indices to cast, and
@@ -84,14 +90,15 @@ public class PlayerAbilities : NetworkBehaviour
             if (ability == null || !key.HasValue) continue;
             if (!key.Value.WasPressedThisFrame()) continue;
 
-            Targetable target = targeting.CurrentTarget;
-            if (ability.RequiresTarget && target == null) continue;
-
-            NetworkObject targetNetworkObject = target != null ? target.GetComponent<NetworkObject>() : null;
-            if (ability.RequiresTarget && targetNetworkObject == null) continue;
-            if (ability.RequiresTarget && !IsWithinFacingCone(targetNetworkObject)) continue;
+            string rejection = ClientPrecheck(ability, out NetworkObject targetNetworkObject);
+            if (rejection != null)
+            {
+                ShowNotice(rejection);
+                continue;
+            }
 
             CastAbilityServerRpc(slot, targetNetworkObject != null ? targetNetworkObject.NetworkObjectId : 0);
+            predictedCooldownReady[ability] = Time.time + ability.Cooldown;
 
             if (ability.CastTime > 0f)
             {
@@ -103,6 +110,37 @@ public class PlayerAbilities : NetworkBehaviour
         }
     }
 
+    // Mirrors the server's start-of-cast checks using replicated state, so
+    // the common failures are reported instantly without a round trip.
+    private string ClientPrecheck(AbilityData ability, out NetworkObject targetNetworkObject)
+    {
+        targetNetworkObject = null;
+
+        if (predictedCooldownReady.TryGetValue(ability, out float ready) && Time.time < ready) return "Not ready";
+        if (stats.CurrentMana.Value < ability.ManaCost) return "Not enough mana";
+
+        if (!ability.RequiresTarget) return null;
+
+        Targetable target = targeting.CurrentTarget;
+        if (target == null) return "No target";
+        targetNetworkObject = target.GetComponent<NetworkObject>();
+        if (targetNetworkObject == null) return "Invalid target";
+        if (Vector3.Distance(transform.position, target.transform.position) > ability.Range) return "Out of range";
+        if (!IsWithinFacingCone(targetNetworkObject)) return "Target not in front of you";
+        return null;
+    }
+
+    private void ShowNotice(string message)
+    {
+        noticeMessage = message;
+        noticeEndTime = Time.time + 2f;
+    }
+
+    private float PredictedCooldownRemaining(AbilityData ability)
+    {
+        return predictedCooldownReady.TryGetValue(ability, out float ready) ? Mathf.Max(0f, ready - Time.time) : 0f;
+    }
+
     private void OnGUI()
     {
         if (!IsOwner) return;
@@ -112,6 +150,8 @@ public class PlayerAbilities : NetworkBehaviour
         const float barHeight = 24f;
         float x = (UIScale.Width - barWidth) * 0.5f;
         float y = UIScale.Height - 80f;
+
+        DrawAbilityBar(UIScale.Height - 56f);
 
         if (isCasting)
         {
@@ -136,14 +176,53 @@ public class PlayerAbilities : NetworkBehaviour
             }
         }
 
-        // Fizzle notice fires after the bar is already gone (the failure is
-        // only known once the server tries to resolve at the end of the
-        // cast), so it's drawn independently, right above the bar's spot.
-        if (Time.time < fizzleMessageEndTime)
+        // Notices (local pre-check failures, server rejections, and fizzles
+        // that are only known once a cast resolves) share one spot above
+        // the cast bar.
+        if (Time.time < noticeEndTime)
         {
-            GUIStyle fizzleStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-            fizzleStyle.normal.textColor = Color.red;
-            GUI.Label(new Rect(x, y - 22f, barWidth, 20f), fizzleMessage, fizzleStyle);
+            GUIStyle noticeStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
+            noticeStyle.normal.textColor = Color.red;
+            GUI.Label(new Rect(x, y - 22f, barWidth, 20f), noticeMessage, noticeStyle);
+        }
+    }
+
+    // Bottom-centre row of the 8 loadout slots: key, name, and a cooldown
+    // sweep driven by the predicted cooldowns (so it starts on key press).
+    private void DrawAbilityBar(float bottomY)
+    {
+        const float slotSize = 56f;
+        const float gap = 4f;
+        int slotCount = PlayerProfile.AbilitySlots;
+        float totalWidth = slotCount * slotSize + (slotCount - 1) * gap;
+        float x0 = (UIScale.Width - totalWidth) * 0.5f;
+        float y0 = bottomY - slotSize;
+
+        GUIStyle small = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10, wordWrap = true };
+        GUIStyle timer = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 14, fontStyle = FontStyle.Bold };
+        PlayerProfile profile = ProfileStore.Current;
+
+        for (int i = 0; i < slotCount; i++)
+        {
+            Rect rect = new Rect(x0 + i * (slotSize + gap), y0, slotSize, slotSize);
+            GUI.Box(rect, GUIContent.none);
+
+            AbilityData ability = profile.GetSlotAbility(i);
+            if (ability == null) continue;
+
+            GUI.Label(new Rect(rect.x, rect.y + 4f, rect.width, 28f), ability.AbilityName, small);
+            KeyBindingOption? key = profile.GetSlotKey(i);
+            GUI.Label(new Rect(rect.x, rect.yMax - 16f, rect.width, 14f), key.HasValue ? key.Value.DisplayName : "-", small);
+
+            float remaining = PredictedCooldownRemaining(ability);
+            if (remaining <= 0f) continue;
+
+            float fraction = Mathf.Clamp01(remaining / Mathf.Max(0.01f, ability.Cooldown));
+            Color previous = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.6f);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - rect.height * fraction, rect.width, rect.height * fraction), Texture2D.whiteTexture);
+            GUI.color = previous;
+            GUI.Label(rect, remaining.ToString("0.0"), timer);
         }
     }
 
@@ -151,28 +230,58 @@ public class PlayerAbilities : NetworkBehaviour
     private void NotifyCastFizzledClientRpc(string reason)
     {
         if (!IsOwner) return;
-        fizzleMessage = reason;
-        fizzleMessageEndTime = Time.time + 2f;
+        ShowNotice(reason);
+    }
+
+    // Start-of-cast rejection: undo the optimistic cooldown and cast bar.
+    [ClientRpc]
+    private void NotifyCastRejectedClientRpc(string abilityId, string reason)
+    {
+        if (!IsOwner) return;
+        AbilityData ability = GameDatabase.GetAbility(abilityId);
+        if (ability != null) predictedCooldownReady.Remove(ability);
+        if (isCasting && castingAbilityName == ability?.AbilityName) isCasting = false;
+        ShowNotice(reason);
     }
 
     [ServerRpc]
     private void CastAbilityServerRpc(int slotIndex, ulong targetNetworkObjectId)
     {
-        if (Time.time < serverCastEndTime) return; // still resolving a previous cast
-
         if (slotIndex < 0 || slotIndex >= serverSlotAbilities.Length) return;
 
         AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null) return;
-        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime) return;
+
+        if (Time.time < serverCastEndTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Already casting");
+            return;
+        }
+        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Not ready");
+            return;
+        }
 
         if (ability.RequiresTarget)
         {
-            if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject startTargetObject)) return;
-            if (!IsWithinFacingCone(startTargetObject)) return;
+            if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject startTargetObject))
+            {
+                NotifyCastRejectedClientRpc(ability.Id, "Target lost");
+                return;
+            }
+            if (!IsWithinFacingCone(startTargetObject))
+            {
+                NotifyCastRejectedClientRpc(ability.Id, "Target not in front of you");
+                return;
+            }
         }
 
-        if (!stats.TrySpendMana(ability.ManaCost)) return;
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Not enough mana");
+            return;
+        }
 
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
 

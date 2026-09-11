@@ -60,6 +60,27 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `RespawnClientRpc`), the owner executes via
   `PlayerMovement.TeleportTo` → `NetworkTransform.Teleport` (only the
   authority may teleport). Mobs (`EnemyAI`) stay fully server-driven.
+  - **Server-side movement validation** ("the MMO way" — decided
+    2026-09-11 with going public in mind): `MovementValidator` (pure C#,
+    tested) watches each *remote* owner's replicated transform in
+    windows of 0.5 s — horizontal distance vs. `RunSpeed × elapsed × 1.3
+    + 1 m` (using the max of the window's start/end speed so a fresh
+    slow the client hasn't received yet can't trip it), ×3 that =
+    teleport, feet more than 1 m under the terrain = below ground. A
+    violation snaps the owner back (`CorrectPositionClientRpc` →
+    `TeleportTo`), pauses checks for 1 s so in-flight states don't
+    double-count, and 5 strikes within 30 s → `DisconnectClient`. The
+    host's own player is exempt. Tunables are `[SerializeField]`s on
+    `PlayerMovement`.
+  - **Client-side cast prediction**: `PlayerAbilities` pre-checks
+    cooldown / mana (`CurrentMana` NetworkVariable) / target / range /
+    facing locally and shows the reason instantly ("Out of range", …),
+    starts the cooldown on key press (`predictedCooldownReady`, drives
+    the new bottom-centre 8-slot ability bar with a cooldown sweep), and
+    the server's start-of-cast rejections come back as
+    `NotifyCastRejectedClientRpc(abilityId, reason)` which rolls the
+    predicted cooldown/cast bar back. Cooldowns are otherwise never
+    synced — the prediction is the client's only view of them.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
