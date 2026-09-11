@@ -138,7 +138,14 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   entry) onto every alive player within Range, self included, every 1 s
   with a 2.5 s duration, so it lapses on leaving range and same-asset
   auras don't stack. `GearManaAmulet` (Necklace) radiates `mana_aura`
-  (+1.5 mana/s) at 40 range. **`StatType.ManaCostMultiplier`** (base 1,
+  (+1.5 mana/s) at 40 range; `GearAmuletOfRejuvenation` (Necklace, Id
+  `amulet_of_rejuvenation`) radiates `rejuvenation` (a periodic heal, not
+  a regen-rate modifier) at 40 range. **Periodic healing**:
+  `StatusEffectData.TickHeal` is the heal-side counterpart to
+  `TickDamage` (either or both can be set; `StatusEffectTracker.Tick`
+  schedules a tick if either is > 0) — `rejuvenation` is 10 hp every 5 s,
+  applied via `CharacterStats.Heal` in `TickEffect`.
+  **`StatType.ManaCostMultiplier`** (base 1,
   synced as `SyncedManaCostMultiplier`) is applied in
   `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
   basic attack) gives −10%. **`StatType.DamageMultiplier`** scales all
