@@ -28,9 +28,9 @@ whole file once it's empty.
 - Does a pulled player regain normal WASD control immediately once they
   reach the center (not stuck, not a weird pause)?
 - Placeholder numbers on `AbilityVacuum` that were never specified,
-  only guessed — reconsider all of these: Range 30, Mana cost 120, Pull
-  speed 15/s. The 30-unit diameter (→ 15-unit radius), instant cast
-  (0s), and 25s cooldown all came from you.
+  only guessed — reconsider these two: Range 30, Pull speed 15/s. The
+  30-unit diameter (→ 15-unit radius), instant cast (0s), 25s cooldown,
+  and 240 mana cost all came from you.
 
 ## 2. Auto-attack
 

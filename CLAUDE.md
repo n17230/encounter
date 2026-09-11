@@ -123,9 +123,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `RunSpeed` and would otherwise itself get read as a speed violation
     and snapped back. `AbilityVacuum` (Id `vacuum`): 15-unit radius (the
     requested 30-unit diameter), 15/s pull speed, no damage/effect.
-    CastTime is 0 (instant cast) and Cooldown is 25s, both set
-    explicitly by the user (2026-09-11). Range 30, ManaCost 120, and
-    the pull speed are still placeholder numbers — flagged for tuning.
+    CastTime 0 (instant), Cooldown 25s, and ManaCost 240 were all set
+    explicitly by the user (2026-09-11). Range 30 and the pull speed
+    are still placeholder numbers — flagged for tuning.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
