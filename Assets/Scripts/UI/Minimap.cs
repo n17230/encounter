@@ -20,9 +20,23 @@ public static class Minimap
     private static Texture2D discTexture;
     private static Texture2D blipTexture;
 
-    // reveals: which kinds of blip the wearer's gear lets them see. With
-    // MinimapReveal.None only the player's own marker draws.
-    public static void Draw(Transform self, Targetable currentTarget, IReadOnlyList<Targetable> blips, MinimapReveal reveals)
+    // A mob position captured at the moment of an echolocation-style pulse.
+    // Subject is kept only to preserve the current-target highlight; the
+    // dot itself is drawn at the frozen Position, not the subject's live one.
+    public struct Ping
+    {
+        public Targetable Subject;
+        public Vector3 Position;
+    }
+
+    // reveals: which kinds of blip the wearer's gear lets them see (Players
+    // draws live; Mobs are shown only via mobPings - see below). With
+    // MinimapReveal.None and no pings, only the player's own marker draws.
+    // mobPings/mobPingAlpha: a snapshot of mob positions from the most
+    // recent pulse, faded out by the caller over its cooldown - the dots
+    // don't track the mobs' current positions, by design.
+    public static void Draw(Transform self, Targetable currentTarget, IReadOnlyList<Targetable> blips, MinimapReveal reveals,
+        IReadOnlyList<Ping> mobPings, float mobPingAlpha)
     {
         EnsureTextures();
 
@@ -35,18 +49,31 @@ public static class Minimap
         foreach (Targetable blip in blips)
         {
             if (blip == null || blip.transform == self) continue;
+            if (blip.GetComponent<PlayerMovement>() == null) continue; // mobs draw via mobPings instead
 
-            bool isPlayer = blip.GetComponent<PlayerMovement>() != null;
-            MinimapReveal needed = isPlayer ? MinimapReveal.Players : MinimapReveal.Mobs;
-            bool broadcasting = isPlayer && blip.TryGetComponent(out CharacterEquipment gear) && gear.BroadcastsLocation.Value;
-            if ((reveals & needed) == 0 && !broadcasting) continue;
+            bool broadcasting = blip.TryGetComponent(out CharacterEquipment gear) && gear.BroadcastsLocation.Value;
+            if ((reveals & MinimapReveal.Players) == 0 && !broadcasting) continue;
 
             Vector3 offset = blip.transform.position - self.position;
             Vector2 flat = new Vector2(offset.x, offset.z);
             if (flat.magnitude > WorldRadius) continue;
 
-            Color color = blip == currentTarget ? TargetColor : (isPlayer ? PlayerColor : MobColor);
+            Color color = blip == currentTarget ? TargetColor : PlayerColor;
             DrawBlip(centre + WorldToMap(flat), 6f, color);
+        }
+
+        if (mobPingAlpha > 0f && mobPings != null)
+        {
+            foreach (Ping ping in mobPings)
+            {
+                Vector3 offset = ping.Position - self.position;
+                Vector2 flat = new Vector2(offset.x, offset.z);
+                if (flat.magnitude > WorldRadius) continue;
+
+                Color color = ReferenceEquals(ping.Subject, currentTarget) ? TargetColor : MobColor;
+                color.a *= mobPingAlpha;
+                DrawBlip(centre + WorldToMap(flat), 6f, color);
+            }
         }
 
         // Heading: a short tick from the centre toward where the player faces.

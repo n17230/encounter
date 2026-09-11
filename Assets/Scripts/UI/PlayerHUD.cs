@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using Unity.Netcode;
 using UnityEngine;
@@ -6,6 +7,13 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerTargeting))]
 public class PlayerHUD : NetworkBehaviour
 {
+    // Mob reveal is an echolocation-style pulse, not a live tracker: every
+    // MobPingInterval seconds it snapshots every mob's position, the dots
+    // sit frozen where they were captured, and fade out over
+    // MobPingFadeDuration (leaving a blind gap before the next pulse).
+    private const float MobPingInterval = 5f;
+    private const float MobPingFadeDuration = 4f;
+
     private CharacterStats stats;
     private PlayerTargeting targeting;
     private PlayerAutoAttack autoAttack;
@@ -13,6 +21,10 @@ public class PlayerHUD : NetworkBehaviour
     // Refreshed once per frame in Update rather than per OnGUI pass.
     private Targetable[] minimapBlips = new Targetable[0];
     private MinimapReveal minimapReveals;
+    private readonly List<Minimap.Ping> mobPings = new List<Minimap.Ping>();
+    private float nextMobPing;
+    private float lastMobPingTime = float.NegativeInfinity;
+    private float mobPingAlpha;
 
     private void Awake()
     {
@@ -34,6 +46,37 @@ public class PlayerHUD : NetworkBehaviour
 
         // Always gathered: a broadcasting ally draws even with no reveals.
         minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
+
+        UpdateMobPings();
+    }
+
+    private void UpdateMobPings()
+    {
+        if ((minimapReveals & MinimapReveal.Mobs) == 0)
+        {
+            // Reset so re-equipping starts a fresh cycle rather than resuming
+            // a stale timer.
+            nextMobPing = 0f;
+            mobPings.Clear();
+            mobPingAlpha = 0f;
+            return;
+        }
+
+        if (Time.time >= nextMobPing)
+        {
+            nextMobPing = Time.time + MobPingInterval;
+            lastMobPingTime = Time.time;
+            mobPings.Clear();
+            foreach (Targetable blip in minimapBlips)
+            {
+                if (blip == null || blip.transform == transform) continue;
+                if (blip.GetComponent<PlayerMovement>() != null) continue; // mobs only
+                mobPings.Add(new Minimap.Ping { Subject = blip, Position = blip.transform.position });
+            }
+        }
+
+        float elapsed = Time.time - lastMobPingTime;
+        mobPingAlpha = elapsed < MobPingFadeDuration ? 1f - elapsed / MobPingFadeDuration : 0f;
     }
 
     private void OnGUI()
@@ -41,7 +84,7 @@ public class PlayerHUD : NetworkBehaviour
         if (!IsOwner) return;
 
         DevGui.Begin();
-        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips, minimapReveals);
+        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips, minimapReveals, mobPings, mobPingAlpha);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
         GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));

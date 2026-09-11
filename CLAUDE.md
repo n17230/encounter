@@ -232,8 +232,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   equipped gear reveals (`ItemData.Reveals`, `MinimapReveal` flags
   Players/Mobs, unioned across worn items, read client-side from the
   profile). Revealed `Targetable`s within 50 world units draw as blips
-  (players green, mobs red, current target yellow). `GearEcholocator`
-  (Trinket, Id `echolocator`) reveals mobs. The reverse direction is
+  (players green, mobs red, current target yellow) - **Players reveal is
+  live**, but **Mobs reveal is a pulse, not a tracker**: `PlayerHUD`
+  snapshots every mob's position every `MobPingInterval` (5s) into
+  `mobPings` (`Minimap.Ping{Subject, Position}`, frozen - not the mob's
+  live transform), fading the dots out over `MobPingFadeDuration` (4s)
+  before the next pulse, so there's a ~1s blind gap each cycle;
+  `Minimap.Draw` takes `mobPings`/`mobPingAlpha` alongside the live
+  `blips`/`reveals`. `GearEcholocator` (Trinket, Id `echolocator`)
+  grants the Mobs reveal. The reverse direction is
   `ItemData.BroadcastsLocation` → server-written
   `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
   allies' minimaps draw a broadcasting player regardless of their own
