@@ -201,21 +201,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     factored out of `DealDamage` so both the victim's own share and the
     redirected share use identical death handling). Threat is still
     calculated from the *full* mitigated amount against the original
-    victim, unaffected by where the HP loss actually lands. `AbilityData
+    victim, unaffected by where the HP loss actually lands.
+    `EffectOneForAll` uses `EffectStackingMode.Override` (see Status
+    effects below) so a *different* caster casting it on someone already
+    bonded takes the bond over outright, rather than the two casters'
+    applications racing on remaining duration. `AbilityData
     .ExclusiveSingleTarget` (also new) enforces "only one target at a
-    time" **per caster** (not global — two different casters can each
-    have their own): `PlayerAbilities.exclusiveTargets`
+    time" **per caster** on top of that (not global — two different
+    casters can each have their own): `PlayerAbilities.exclusiveTargets`
     (`Dictionary<AbilityData, Targetable>`) remembers who last received
     it from *this* caster, and casting it on someone new calls the new
     `StatusEffectTracker.Remove` / `CharacterStats.RemoveEffect` on the
     old holder before applying to the new one — recasting on the same
-    current holder just refreshes via the tracker's existing extend-only
-    rule, no strip happens. `AbilityOneForAll` (Id `one_for_all`, its
-    `EffectOneForAll` also Id `one_for_all` — no collision, abilities
-    and effects are separate `GameDatabase` namespaces): 10% redirect,
-    1800 s (30 min) duration, instant cast, 50 mana, all set explicitly
-    by the user; **Cooldown 5s and Range 30 are unconfirmed
-    placeholders** — nothing was specified for either.
+    current holder just refreshes, no strip happens. `AbilityOneForAll`
+    (Id `one_for_all`, its `EffectOneForAll` also Id `one_for_all` — no
+    collision, abilities and effects are separate `GameDatabase`
+    namespaces): 10% redirect, 1800 s (30 min) duration, instant cast,
+    50 mana, all set explicitly by the user; **Cooldown 5s and Range 30
+    are unconfirmed placeholders** — nothing was specified for either.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
@@ -284,15 +287,46 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   features (combat log, downed state, damage numbers) here, not at
   call sites.
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,
-  `Duration`, `TickDamage`/`TickInterval` (0 = no DoT), `List<StatBonus>`
-  modifiers (same `StatBonus` struct gear uses; applied as `StatModifier`s
-  with the asset as source). Runtime rules are in the pure-C#
-  `StatusEffectTracker` (time passed in): same asset reapplied → **only
-  ever extends** expiry (never shortens, never touches the tick schedule,
-  so a due tick still fires); different assets stack independently; ticks
-  catch up after a stall; callbacks run outside the dictionary walk so a
-  tick that kills the target (→ `RestoreFull` → `ClearAll`) is safe.
-  `CharacterStats` mirrors active effects into a
+  `Duration`, `StackingMode`, `TickDamage`/`TickInterval` (0 = no DoT),
+  `List<StatBonus>` modifiers (same `StatBonus` struct gear uses;
+  applied as `StatModifier`s with the asset as source). Runtime rules
+  are in the pure-C# `StatusEffectTracker` (time passed in; tested).
+  Different assets always stack independently; ticks catch up after a
+  stall; callbacks run outside the dictionary walk so a tick that kills
+  the target (→ `RestoreFull` → `ClearAll`) is safe.
+  **`EffectStackingMode`** (added 2026-09-11, generalized from what was
+  originally just "reapply extends") governs what happens when the
+  *same* effect asset is reapplied, keyed internally by a `(data,
+  casterId)` struct rather than the asset alone — for two of the three
+  modes `casterId` is pinned to 0 so every caster collides on one shared
+  slot, which is what makes them "one instance" at all:
+  - `RefreshExtendOnly` (default, unchanged behavior — Burn/Slow/the
+    aura effects): one shared instance; reapplying only ever **extends**
+    expiry, never shortens it, and never touches the tick schedule (a
+    due tick still fires even at the exact moment of a refresh).
+  - `Override` (`EffectOneForAll`): also one shared instance, but a
+    reapplication **always wins outright** — new duration, new caster
+    attribution — regardless of what was left on the old one. For a
+    buff that represents a single exclusive bond: if caster B casts
+    something Override-mode onto a target caster A already has it on,
+    B simply takes over (`AttackerClientId` flips to B), rather than
+    the two casters' applications silently fighting over whichever
+    happens to have the longer remaining duration.
+  - `StackPerCaster` (`EffectRejuvenation`): each caster's application
+    is a genuinely separate `ActiveEffect` (distinct dictionary key), so
+    two different players' heal-over-times on the same target both tick
+    independently — recasting by the *same* caster still just extends
+    their own instance, per the `RefreshExtendOnly` rule.
+  **Known, deliberate limitation, not fixed**: `CharacterStats
+  .ActiveEffects` (the client-visible `NetworkList` used for the HUD)
+  and `HandleEffectExpired`'s `RemoveAllModifiersFromSource` both still
+  key by `Data`/`Id` alone, so two simultaneous `StackPerCaster`
+  instances of the same effect only ever show **one** HUD entry, and if
+  a `StackPerCaster` effect ever carried `Modifiers` too, one instance
+  expiring would wrongly strip the other's stat bonus — inert today
+  since `EffectRejuvenation` (the only `StackPerCaster` effect) has no
+  `Modifiers`, but would need fixing before a future `StackPerCaster`
+  effect used them. `CharacterStats` mirrors active effects into a
   `NetworkList<ActiveEffectNet>` (`Id` + expiry in `ServerTime`) purely
   for UI; `PlayerHUD` shows "Burning 2.3s" under own bars and the target
   frame. `DebuffType` enum is gone. Icebolt's direct hit uses

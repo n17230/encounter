@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: one_for_all
   DisplayName: One For All
   Duration: 1800
+  StackingMode: 1
   TickDamage: 0
   TickHeal: 0
   TickInterval: 1

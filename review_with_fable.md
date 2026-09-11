@@ -99,13 +99,25 @@ whole file once it's empty.
   does A's buff actually go away (check their buff/effects display),
   and does B now have it instead? Recast on B again (same current
   holder) — should just refresh/extend, not do anything weird.
-- With two different casters each casting their own One For All on the
-  *same* third player: this is a known, unhandled edge case (see
-  CLAUDE.md) — the underlying effect-tracking system only supports one
-  active instance of a given effect asset per character regardless of
-  who applied it, so the second caster's application will likely
-  silently steal the redirect-target role from the first. Not fixed;
-  flagging in case it comes up.
+- **Now handled deliberately** (was an unhandled edge case, fixed the
+  same day): two different casters each casting their own One For All
+  on the *same* third player. Caster A bonds the target first; caster B
+  then casts it on the same target — B should cleanly take over the
+  bond (target's redirect now points to B, not A), not conflict or
+  silently corrupt state. This is the new `EffectStackingMode.Override`
+  behavior (see CLAUDE.md) — covered by EditMode tests
+  (`OverrideModeAlwaysWinsEvenWhenShorterAndReattributes`) but never
+  seen running against a real second player.
+- Separately, confirm a **heal-over-time actually stacks** when two
+  different players each apply one to the same target — e.g. two people
+  wearing Amulet of Regeneration standing near the same ally should both
+  tick their own heal independently (double healing), not fight over a
+  single shared instance. This is `EffectStackingMode.StackPerCaster`
+  (`EffectRejuvenation`), also covered by tests
+  (`StackPerCasterGivesEachCasterTheirOwnInstance`) but never run live.
+  Known cosmetic gap either way: the on-screen buff timer only ever
+  shows **one** entry even when two instances are ticking (see CLAUDE.md
+  "Known, deliberate limitation").
 - Cooldown (5s) and Range (30) are unconfirmed guesses; duration (30
   min), redirect (10%), mana cost (50), and instant cast all came from
   you.

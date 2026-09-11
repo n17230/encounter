@@ -15,6 +15,7 @@ MonoBehaviour:
   Id: rejuvenation
   DisplayName: Rejuvenation
   Duration: 2.5
+  StackingMode: 2
   TickDamage: 0
   TickHeal: 10
   TickInterval: 5

@@ -1,9 +1,32 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// How reapplying this effect (from any caster) interacts with an
+// already-active instance of it - see StatusEffectTracker for the actual
+// rules:
+//  - RefreshExtendOnly (default): one shared instance regardless of who
+//    applied it; a reapplication only ever extends the remaining
+//    duration, never shortens it (a weaker/shorter reapplication never
+//    dilutes a stronger one already running).
+//  - Override: also one shared instance regardless of caster, but a
+//    reapplication always wins outright - for buffs that represent a
+//    single exclusive bond, where only one caster's version should ever
+//    be active on a given player at a time (e.g. One For All).
+//  - StackPerCaster: each caster gets their own independent instance,
+//    ticking/expiring separately - for effects that SHOULD stack when
+//    multiple different players apply them (e.g. two healers each
+//    running their own heal-over-time on the same target).
+public enum EffectStackingMode
+{
+    RefreshExtendOnly,
+    Override,
+    StackPerCaster,
+}
+
 // A buff/debuff authored as data. Keyed by asset at runtime: reapplying
-// the same effect refreshes it (see StatusEffectTracker), different
-// effects stack independently even if they touch the same stat.
+// the same effect refreshes/stacks/overrides it per StackingMode below;
+// different effects always stack independently even if they touch the
+// same stat.
 [CreateAssetMenu(menuName = "Encounter/Status Effect", fileName = "NewStatusEffect")]
 public class StatusEffectData : ScriptableObject
 {
@@ -12,6 +35,7 @@ public class StatusEffectData : ScriptableObject
     public string Id;
     public string DisplayName = "New Effect";
     public float Duration = 3f;
+    public EffectStackingMode StackingMode = EffectStackingMode.RefreshExtendOnly;
 
     // Periodic damage and/or periodic healing; 0 = none, both can be set.
     // Ticks on its own schedule from first application - a refresh extends
