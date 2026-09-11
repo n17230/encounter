@@ -540,8 +540,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TargetRingIndicator
   ShowTopMostFoldoutHeaderGroup: 1
-  innerRadius: 0.6
-  outerRadius: 0.8
+  innerRadius: 0.5
+  outerRadius: 0.95
   segments: 32
   ringColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
 --- !u!114 &3390821744671205318

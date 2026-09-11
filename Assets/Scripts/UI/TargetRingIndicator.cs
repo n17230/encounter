@@ -4,8 +4,8 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerTargeting))]
 public class TargetRingIndicator : NetworkBehaviour
 {
-    [SerializeField] private float innerRadius = 0.6f;
-    [SerializeField] private float outerRadius = 0.8f;
+    [SerializeField] private float innerRadius = 0.5f;
+    [SerializeField] private float outerRadius = 0.95f;
     [SerializeField] private int segments = 32;
     [SerializeField] private Color ringColor = Color.yellow;
 
