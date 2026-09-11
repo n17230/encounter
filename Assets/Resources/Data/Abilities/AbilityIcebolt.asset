@@ -16,7 +16,7 @@ MonoBehaviour:
   AbilityName: Icebolt
   RequiresTarget: 1
   Range: 50
-  Cooldown: 3
+  Cooldown: 0
   CastTime: 2
   ManaCost: 20
   ThreatValue: 10
