@@ -164,6 +164,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   frame. `DebuffType` enum is gone. Icebolt's direct hit uses
   `AbilityData.DirectHitEffectDuration` (5s) vs. the patch's
   `Effect.Duration` (3s).
+- **Character collision**: players and mobs live on physics layer 8
+  **Characters** (`TagManager.asset`), and Characters↔Characters is off in
+  the Physics collision matrix (`DynamicsManager.asset`), so characters
+  walk through each other while still colliding with everything on
+  Default (terrain, props). `Player.prefab` and `MobNPC.prefab` roots
+  carry the layer; mob variants inherit it. New character prefabs must
+  be put on Characters too.
 - **Resource numbers** (`Player.prefab`): 1000 health / 1000 mana. Regen
   is **discrete**: every `regenTickInterval` (5 s) the character gains
   rate × 5 — base mana regen 1/s → **5 mana per 5 s**, base health regen
