@@ -17,6 +17,11 @@ public class CharacterEquipment : NetworkBehaviour
     private bool initialGearApplied;
     private float nextAuraPulse;
 
+    // True while any worn item broadcasts the wearer's position to allies'
+    // minimaps. Server-written so every client can read it off the wearer.
+    public readonly NetworkVariable<bool> BroadcastsLocation =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     // Server-side view of what the main hand swings with (null = unarmed).
     public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
 
@@ -54,6 +59,10 @@ public class CharacterEquipment : NetworkBehaviour
             if (item != null && (int)item.Slot != slot) item = null; // wrong-slot items are rejected
             Equip((GearSlot)slot, item);
         }
+
+        bool broadcasts = false;
+        foreach (ItemData equipped in equippedItems) broadcasts |= equipped != null && equipped.BroadcastsLocation;
+        BroadcastsLocation.Value = broadcasts;
 
         // Only the spawn-time application tops the player off; a mid-fight
         // gear swap from the menu must not double as a free full heal.

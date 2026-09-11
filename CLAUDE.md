@@ -200,7 +200,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   Players/Mobs, unioned across worn items, read client-side from the
   profile). Revealed `Targetable`s within 50 world units draw as blips
   (players green, mobs red, current target yellow). `GearHuntersCharm`
-  (Trinket, Id `hunters_charm`) reveals mobs. No terrain by design.
+  (Trinket, Id `hunters_charm`) reveals mobs. The reverse direction is
+  `ItemData.BroadcastsLocation` → server-written
+  `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
+  allies' minimaps draw a broadcasting player regardless of their own
+  reveals (`GearTransmittingBeacon`, Ring1, Id `transmitting_beacon`).
+  No terrain by design.
   Disc/blip textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the

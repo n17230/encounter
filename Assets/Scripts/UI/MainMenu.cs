@@ -274,6 +274,7 @@ public class MainMenu : MonoBehaviour
         }
         if ((item.Reveals & MinimapReveal.Players) != 0) sb.AppendLine("Reveals players on the minimap");
         if ((item.Reveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Reveals monsters on the minimap");
+        if (item.BroadcastsLocation) sb.AppendLine("Broadcasts your location to allies' minimaps");
 
         return sb.ToString().TrimEnd();
     }

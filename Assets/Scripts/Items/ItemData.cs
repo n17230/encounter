@@ -13,6 +13,9 @@ public class ItemData : ScriptableObject
     public List<ItemAura> Auras = new List<ItemAura>();
     public MinimapReveal Reveals = MinimapReveal.None;
 
+    // The wearer shows up on every ally's minimap, whatever they can see.
+    public bool BroadcastsLocation;
+
     // For MainHand items: what the player's auto-attack swings with. Null on
     // anything that isn't a weapon (the unarmed Fists profile is used then).
     public WeaponData Weapon;

@@ -38,7 +38,8 @@ public static class Minimap
 
             bool isPlayer = blip.GetComponent<PlayerMovement>() != null;
             MinimapReveal needed = isPlayer ? MinimapReveal.Players : MinimapReveal.Mobs;
-            if ((reveals & needed) == 0) continue;
+            bool broadcasting = isPlayer && blip.TryGetComponent(out CharacterEquipment gear) && gear.BroadcastsLocation.Value;
+            if ((reveals & needed) == 0 && !broadcasting) continue;
 
             Vector3 offset = blip.transform.position - self.position;
             Vector2 flat = new Vector2(offset.x, offset.z);

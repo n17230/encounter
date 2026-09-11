@@ -32,9 +32,8 @@ public class PlayerHUD : NetworkBehaviour
             if (item != null) minimapReveals |= item.Reveals;
         }
 
-        minimapBlips = minimapReveals == MinimapReveal.None
-            ? System.Array.Empty<Targetable>()
-            : FindObjectsByType<Targetable>(FindObjectsSortMode.None);
+        // Always gathered: a broadcasting ally draws even with no reveals.
+        minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
     }
 
     private void OnGUI()
