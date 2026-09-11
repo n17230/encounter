@@ -294,6 +294,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
    machine, taunt/threat reset on combat end, two-handed weapons.
 4. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
+5. **Mob pathfinding via NavMesh** — `EnemyAI` currently steers straight
+   at its target and runs into walls. Plan: add `com.unity.ai.navigation`
+   to the manifest, rewrite mob steering to follow `NavMesh.CalculatePath`
+   corners with the existing `CharacterController` (straight-line chase
+   as fallback when no path exists); the user adds a `NavMeshSurface` to
+   the terrain and bakes in the Editor (rebake after terrain/prop
+   changes). Decided 2026-09-11, not started.
 
 ## Notes for future sessions
 
