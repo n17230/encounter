@@ -9,7 +9,6 @@ using UnityEngine;
 public class EnemyAI : NetworkBehaviour
 {
     [SerializeField] private TargetingMode targetingMode = TargetingMode.HighestThreat;
-    [SerializeField] private float attackRange = 2f;
     [SerializeField] private WeaponData mainHandWeapon;
     [SerializeField] private WeaponData offHandWeapon;
     [SerializeField] private float mainHandDamageModifier = 1f;
@@ -86,12 +85,11 @@ public class EnemyAI : NetworkBehaviour
         toTarget.y = 0f;
         float distance = toTarget.magnitude;
 
-        // Reach and cadence come from the main-hand weapon when there is one;
-        // the serialized fields are the fallback for unarmed mobs.
-        float reach = mainHandWeapon != null ? mainHandWeapon.Range : attackRange;
+        // Cadence comes from the main-hand weapon when there is one; the
+        // serialized interval is the fallback for unarmed mobs.
         float cadence = mainHandWeapon != null ? mainHandWeapon.SwingInterval : attackInterval;
 
-        if (distance > reach)
+        if (distance > WeaponData.MeleeRange)
         {
             Vector3 moveDirection = toTarget.normalized;
             transform.rotation = Quaternion.LookRotation(moveDirection);

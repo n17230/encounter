@@ -7,11 +7,12 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "Encounter/Weapon", fileName = "NewWeapon")]
 public class WeaponData : ScriptableObject
 {
+    // Every melee attack reaches this far (horizontal centre-to-centre),
+    // mob or player, armed or unarmed.
+    public const float MeleeRange = 2f;
+
     public string WeaponName = "New Weapon";
     public float Damage = 10f;
-
-    // Reach, horizontal centre-to-centre distance to the target.
-    public float Range = 2f;
 
     // Seconds between swings.
     public float SwingInterval = 1.5f;

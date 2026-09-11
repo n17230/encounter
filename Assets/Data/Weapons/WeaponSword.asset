@@ -14,6 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   WeaponName: Sword
   Damage: 40
-  Range: 2
   SwingInterval: 2
   Effect: {fileID: 0}
