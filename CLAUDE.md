@@ -112,8 +112,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   Effect, EffectDuration}`. Damage is armor-mitigated (`1 - Armor/100`),
   1 threat per point of mitigated damage goes to the target's optional
   `ThreatTable`, `ExtraThreat` is added on top (taunts), then the effect
-  is applied. Put new combat features (combat log, immunities, downed
-  state, damage numbers) here, not at call sites.
+  is applied. `HitInfo.Source` (`Melee`/`Ability`/`GroundPatch`) says
+  where a hit came from. **Effect immunities**: `ItemData.Immunities`
+  (`EffectImmunity {Effect, GroundOnly}`) are registered on
+  `CharacterStats` by source (the item) on equip, like stat modifiers,
+  and checked in `ReceiveHit` before an effect is applied —
+  `GearIceCleats` (Id `ice_cleats`, Boots) is immune to `slow` from
+  ground patches only; a direct Icebolt still slows. Put new combat
+  features (combat log, downed state, damage numbers) here, not at
+  call sites.
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,
   `Duration`, `TickDamage`/`TickInterval` (0 = no DoT), `List<StatBonus>`
   modifiers (same `StatBonus` struct gear uses; applied as `StatModifier`s
