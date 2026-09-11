@@ -247,6 +247,7 @@ public class MainMenu : MonoBehaviour
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append(effect.DisplayName).Append(':');
         if (effect.TickDamage > 0f) sb.Append($" {effect.TickDamage} dmg/{effect.TickInterval}s");
+        if (effect.TickHeal > 0f) sb.Append($" +{effect.TickHeal} hp/{effect.TickInterval}s");
         foreach (StatBonus bonus in effect.Modifiers) sb.Append(' ').Append(DescribeBonus(bonus));
         sb.Append($" for {duration}s");
         return sb.ToString();
@@ -270,6 +271,7 @@ public class MainMenu : MonoBehaviour
             if (aura.Effect == null) continue;
             sb.Append(aura.Range > 0f ? $"Aura ({aura.Range} range): " : "While worn: ").Append(aura.Effect.DisplayName);
             if (aura.Effect.TickDamage > 0f) sb.Append($", {aura.Effect.TickDamage} dmg/{aura.Effect.TickInterval}s");
+            if (aura.Effect.TickHeal > 0f) sb.Append($", +{aura.Effect.TickHeal} hp/{aura.Effect.TickInterval}s");
             foreach (StatBonus bonus in aura.Effect.Modifiers) sb.Append(", ").Append(DescribeBonus(bonus));
             sb.AppendLine();
         }

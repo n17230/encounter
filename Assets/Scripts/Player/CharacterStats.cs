@@ -212,7 +212,8 @@ public class CharacterStats : NetworkBehaviour
 
     private void TickEffect(StatusEffectTracker.ActiveEffect effect)
     {
-        DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+        if (effect.Data.TickDamage > 0f) DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+        if (effect.Data.TickHeal > 0f) Heal(effect.Data.TickHeal);
     }
 
     private void HandleEffectApplied(StatusEffectTracker.ActiveEffect effect)

@@ -65,7 +65,8 @@ public class StatusEffectTracker
 
         foreach (ActiveEffect effect in active.Values)
         {
-            if (effect.Data.TickDamage > 0f && effect.Data.TickInterval > 0f && now >= effect.NextTickTime)
+            bool ticks = (effect.Data.TickDamage > 0f || effect.Data.TickHeal > 0f) && effect.Data.TickInterval > 0f;
+            if (ticks && now >= effect.NextTickTime)
             {
                 tickScratch.Add(effect);
             }

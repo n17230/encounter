@@ -6,12 +6,13 @@ public class StatusEffectTrackerTests
 {
     private readonly List<StatusEffectData> created = new List<StatusEffectData>();
 
-    private StatusEffectData Effect(string id, float duration = 3f, float tickDamage = 0f, float tickInterval = 1f)
+    private StatusEffectData Effect(string id, float duration = 3f, float tickDamage = 0f, float tickInterval = 1f, float tickHeal = 0f)
     {
         StatusEffectData effect = ScriptableObject.CreateInstance<StatusEffectData>();
         effect.Id = id;
         effect.Duration = duration;
         effect.TickDamage = tickDamage;
+        effect.TickHeal = tickHeal;
         effect.TickInterval = tickInterval;
         created.Add(effect);
         return effect;
@@ -91,6 +92,20 @@ public class StatusEffectTrackerTests
         Assert.AreEqual(1, ticks);
         tracker.Tick(1.0f, _ => ticks++);
         Assert.AreEqual(2, ticks);
+    }
+
+    [Test]
+    public void TickHealOnlyEffectStillSchedulesTicks()
+    {
+        StatusEffectTracker tracker = new StatusEffectTracker();
+        StatusEffectData rejuvenation = Effect("rejuv", duration: 10f, tickInterval: 5f, tickHeal: 10f);
+        int ticks = 0;
+
+        tracker.Apply(rejuvenation, 10f, 1, now: 0f);
+        tracker.Tick(4.9f, _ => ticks++);
+        Assert.AreEqual(0, ticks);
+        tracker.Tick(5f, _ => ticks++);
+        Assert.AreEqual(1, ticks);
     }
 
     [Test]

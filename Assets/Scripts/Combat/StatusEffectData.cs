@@ -13,9 +13,11 @@ public class StatusEffectData : ScriptableObject
     public string DisplayName = "New Effect";
     public float Duration = 3f;
 
-    // Periodic damage; 0 = none. Ticks on its own schedule from first
-    // application - a refresh extends the effect but never resets ticks.
+    // Periodic damage and/or periodic healing; 0 = none, both can be set.
+    // Ticks on its own schedule from first application - a refresh extends
+    // the effect but never resets ticks.
     public float TickDamage = 0f;
+    public float TickHeal = 0f;
     public float TickInterval = 1f;
 
     // Stat modifiers held for as long as the effect is active.
