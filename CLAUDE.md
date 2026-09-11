@@ -240,7 +240,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `WeaponData` owns `SwingInterval`, and `EnemyAI` reads it from its
   main-hand weapon (its own `attackInterval` is only the unarmed
   fallback). `ItemData.Weapon` links a MainHand item to its weapon
-  (`GearSword` → `WeaponSword`, 40 dmg / 2 s; Fists are 15 dmg / 1.5 s).
+  (`GearBroadSword` → `WeaponBroadSword`, 40 dmg / 2 s, +20% threat
+  generated via `StatType.ThreatMultiplier`, applied to the attacker's
+  threat in `CharacterStats.AddThreat`; Fists are 15 dmg / 1.5 s).
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no

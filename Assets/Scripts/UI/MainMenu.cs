@@ -287,6 +287,10 @@ public class MainMenu : MonoBehaviour
         {
             return $"Mana cost {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
         }
+        if (bonus.Stat == StatType.ThreatMultiplier)
+        {
+            return $"Threat generated {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
         string sign = displayValue >= 0f ? "+" : "";
         return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";
     }

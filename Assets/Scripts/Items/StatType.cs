@@ -8,5 +8,7 @@ public enum StatType
     RunSpeed,
     Armor,
     // Multiplier on every ability's mana cost (base 1.0; -10% = PercentAdditive -0.1).
-    ManaCostMultiplier
+    ManaCostMultiplier,
+    // Multiplier on all threat this character generates (base 1.0).
+    ThreatMultiplier
 }

@@ -28,6 +28,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat RunSpeed { get; private set; }
     public Stat Armor { get; private set; }
     public Stat ManaCostMultiplier { get; private set; }
+    public Stat ThreatMultiplier { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -68,6 +69,7 @@ public class CharacterStats : NetworkBehaviour
         RunSpeed = new Stat(baseRunSpeed);
         Armor = new Stat(baseArmor);
         ManaCostMultiplier = new Stat(1f);
+        ThreatMultiplier = new Stat(1f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -86,6 +88,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.RunSpeed: return RunSpeed;
             case StatType.Armor: return Armor;
             case StatType.ManaCostMultiplier: return ManaCostMultiplier;
+            case StatType.ThreatMultiplier: return ThreatMultiplier;
             default: return null;
         }
     }
@@ -181,10 +184,20 @@ public class CharacterStats : NetworkBehaviour
         }
     }
 
+    // Threat is scaled by the attacker's own ThreatMultiplier (gear).
     private void AddThreat(float amount, ulong attackerClientId)
     {
-        if (attackerClientId == NoAttacker) return;
-        threatTable?.AddThreat(attackerClientId, amount);
+        if (attackerClientId == NoAttacker || threatTable == null) return;
+
+        float multiplier = 1f;
+        if (NetworkManager.ConnectedClients.TryGetValue(attackerClientId, out NetworkClient attacker)
+            && attacker.PlayerObject != null
+            && attacker.PlayerObject.TryGetComponent(out CharacterStats attackerStats))
+        {
+            multiplier = attackerStats.ThreatMultiplier.Value;
+        }
+
+        threatTable.AddThreat(attackerClientId, amount * multiplier);
     }
 
     private void TickEffect(StatusEffectTracker.ActiveEffect effect)
