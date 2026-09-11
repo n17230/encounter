@@ -38,6 +38,17 @@ public class CharacterStats : NetworkBehaviour
     public readonly NetworkVariable<float> CurrentMana =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // The Stat objects above only carry modifiers on the server (gear and
+    // debuffs are applied there). Clients need the resulting values for the
+    // HUD and, for the owner, for local movement - so the server mirrors
+    // them out here whenever they change.
+    public readonly NetworkVariable<float> SyncedMaxHealth =
+        new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public readonly NetworkVariable<float> SyncedMaxMana =
+        new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public readonly NetworkVariable<float> SyncedRunSpeed =
+        new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     private readonly Dictionary<DebuffType, ActiveDebuff> activeDebuffs = new Dictionary<DebuffType, ActiveDebuff>();
     private bool isDead;
     private ThreatTable threatTable;
@@ -60,11 +71,21 @@ public class CharacterStats : NetworkBehaviour
         if (!IsServer) return;
         CurrentHealth.Value = MaxHealth.Value;
         CurrentMana.Value = MaxMana.Value;
+        SyncDerivedStats();
+    }
+
+    private void SyncDerivedStats()
+    {
+        if (SyncedMaxHealth.Value != MaxHealth.Value) SyncedMaxHealth.Value = MaxHealth.Value;
+        if (SyncedMaxMana.Value != MaxMana.Value) SyncedMaxMana.Value = MaxMana.Value;
+        if (SyncedRunSpeed.Value != RunSpeed.Value) SyncedRunSpeed.Value = RunSpeed.Value;
     }
 
     private void FixedUpdate()
     {
         if (!IsServer) return;
+
+        SyncDerivedStats();
 
         if (CurrentHealth.Value < MaxHealth.Value)
         {

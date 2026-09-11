@@ -19,8 +19,8 @@ public class PlayerHUD : NetworkBehaviour
         if (!IsOwner) return;
 
         UIScale.Apply();
-        DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.MaxHealth.Value, Color.red);
-        DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.MaxMana.Value, Color.blue);
+        DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
+        DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
 
         DrawTargetFrame();
     }
@@ -34,7 +34,7 @@ public class PlayerHUD : NetworkBehaviour
 
         if (target != null && target.Stats != null)
         {
-            DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.MaxHealth.Value, Color.red);
+            DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.SyncedMaxHealth.Value, Color.red);
         }
     }
 

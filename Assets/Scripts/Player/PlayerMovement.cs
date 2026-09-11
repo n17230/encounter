@@ -1,8 +1,16 @@
 using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEngine;
 
+// Owner-authoritative movement: the owning client moves its own
+// CharacterController and NetworkTransform (in Owner authority mode)
+// replicates the result. Combat stays server-authoritative - the server
+// only ever reads the replicated position/rotation for range and facing
+// checks. Chosen over server-authoritative + prediction because this is a
+// friends-only game: instant response matters, position cheating doesn't.
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(CharacterStats))]
+[RequireComponent(typeof(NetworkTransform))]
 public class PlayerMovement : NetworkBehaviour
 {
     [SerializeField] private float lookSensitivity = 30f;
@@ -11,13 +19,17 @@ public class PlayerMovement : NetworkBehaviour
 
     private CharacterController controller;
     private CharacterStats stats;
-    private float pendingLookDeltaYaw;
+    private NetworkTransform networkTransform;
     private float verticalVelocity;
 
-    private float serverForwardInput;
-    private float serverStrafe;
-    private float serverLookDeltaYaw;
-    private bool serverJumpRequested;
+    // Input is gathered every rendered frame and consumed once per physics
+    // step. Mouse deltas are summed and the jump is latched so nothing is
+    // dropped when several frames land between two FixedUpdates; held keys
+    // just keep their latest value, a one-frame tap being imperceptible.
+    private float forwardInput;
+    private float strafeInput;
+    private float pendingLookDeltaYaw;
+    private bool pendingJump;
 
     // Horizontal momentum locked in at the moment of leaving the ground -
     // turning mid-air changes facing, not trajectory, same as real jumping
@@ -35,19 +47,18 @@ public class PlayerMovement : NetworkBehaviour
     {
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
+        networkTransform = GetComponent<NetworkTransform>();
     }
 
     private void Update()
     {
         if (!IsOwner) return;
 
-        // Keep sending (zeroed) input while the menu is up - the server holds
-        // whatever it last received, so going silent would leave the player
-        // running off in whatever direction they were last moving.
         if (MainMenu.IsOpen)
         {
             autoRun = false;
-            SubmitMovementServerRpc(0f, 0f, 0f, false);
+            forwardInput = 0f;
+            strafeInput = 0f;
             return;
         }
 
@@ -63,54 +74,42 @@ public class PlayerMovement : NetworkBehaviour
             autoRun = false;
         }
 
-        float forwardInput = 0f;
+        forwardInput = 0f;
         if (autoRun || forwardHeld) forwardInput = 1f;
         else if (backwardHeld) forwardInput = -1f;
 
-        float strafe = 0f;
-        if (MovementInput.IsHeld(MovementAction.StrafeRight)) strafe += 1f;
-        if (MovementInput.IsHeld(MovementAction.StrafeLeft)) strafe -= 1f;
+        strafeInput = 0f;
+        if (MovementInput.IsHeld(MovementAction.StrafeRight)) strafeInput += 1f;
+        if (MovementInput.IsHeld(MovementAction.StrafeLeft)) strafeInput -= 1f;
 
-        bool jumpRequested = MovementInput.WasPressed(MovementAction.Jump);
+        if (MovementInput.WasPressed(MovementAction.Jump)) pendingJump = true;
 
-        float lookDeltaYaw = 0f;
         if (Input.GetMouseButton(1))
         {
-            lookDeltaYaw = Input.GetAxis("Mouse X") * lookSensitivity;
+            pendingLookDeltaYaw += Input.GetAxis("Mouse X") * lookSensitivity;
         }
-
-        SubmitMovementServerRpc(forwardInput, strafe, lookDeltaYaw, jumpRequested);
-    }
-
-    [ServerRpc]
-    private void SubmitMovementServerRpc(float forwardInput, float strafe, float lookDeltaYaw, bool jumpRequested)
-    {
-        serverForwardInput = forwardInput;
-        serverStrafe = strafe;
-        serverLookDeltaYaw = lookDeltaYaw;
-        if (jumpRequested) serverJumpRequested = true;
     }
 
     private void FixedUpdate()
     {
-        if (!IsServer) return;
+        if (!IsOwner) return;
 
         bool grounded = controller.isGrounded;
 
         // The body always turns with look input, grounded or airborne.
-        if (serverLookDeltaYaw != 0f)
+        if (pendingLookDeltaYaw != 0f)
         {
-            transform.Rotate(Vector3.up, serverLookDeltaYaw);
+            transform.Rotate(Vector3.up, pendingLookDeltaYaw);
+            pendingLookDeltaYaw = 0f;
         }
 
         Vector3 horizontalVelocity;
         if (grounded)
         {
-            Vector3 moveDirection = transform.forward * serverForwardInput;
-            moveDirection += transform.right * serverStrafe;
+            Vector3 moveDirection = transform.forward * forwardInput + transform.right * strafeInput;
             if (moveDirection.sqrMagnitude > 1f) moveDirection.Normalize();
 
-            horizontalVelocity = moveDirection * stats.RunSpeed.Value;
+            horizontalVelocity = moveDirection * stats.SyncedRunSpeed.Value;
             airborneVelocity = horizontalVelocity;
         }
         else
@@ -125,15 +124,30 @@ public class PlayerMovement : NetworkBehaviour
             verticalVelocity = -2f;
         }
 
-        if (serverJumpRequested && grounded)
+        if (pendingJump && grounded)
         {
             verticalVelocity = jumpSpeed;
         }
-        serverJumpRequested = false;
+        pendingJump = false;
 
         verticalVelocity += gravity * Time.fixedDeltaTime;
 
         Vector3 motion = horizontalVelocity + Vector3.up * verticalVelocity;
         controller.Move(motion * Time.fixedDeltaTime);
+    }
+
+    // Only the transform authority (the owner) may teleport; the server
+    // asks for it via PlayerRespawn's ClientRpc.
+    public void TeleportTo(Vector3 position)
+    {
+        if (!IsOwner) return;
+
+        controller.enabled = false;
+        transform.position = position;
+        controller.enabled = true;
+
+        verticalVelocity = 0f;
+        airborneVelocity = Vector3.zero;
+        networkTransform.Teleport(position, transform.rotation, transform.localScale);
     }
 }
