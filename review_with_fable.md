@@ -50,9 +50,8 @@ whole file once it's empty.
 - Since characters pass through each other now, teleporting the target
   onto your exact position shouldn't cause any visible clipping/pushing
   — worth a glance to confirm.
-- All numbers on `AbilityRecall` are unlabeled guesses (only "teleport
-  target to caster" was specified): Range 30, Cooldown 20s, instant
-  cast, 150 mana, no threat generated.
+- Cooldown (30s) and mana cost (200) came from you; Range 30, instant
+  cast, and no threat generated are still unlabeled guesses.
 
 ## 3. Auto-attack
 

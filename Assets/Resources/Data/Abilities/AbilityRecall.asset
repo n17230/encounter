@@ -16,9 +16,9 @@ MonoBehaviour:
   AbilityName: Recall
   RequiresTarget: 1
   Range: 30
-  Cooldown: 20
+  Cooldown: 30
   CastTime: 0
-  ManaCost: 150
+  ManaCost: 200
   ThreatValue: 0
   Damage: 0
   MissileSpeed: 15

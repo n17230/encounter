@@ -150,10 +150,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     disables/repositions/re-enables the `CharacterController` directly.
     Since players/mobs no longer collide with each other (see Character
     collision below), teleporting the target onto the caster is safe —
-    no clipping/pushing. All of Recall's numbers (Range 30, Cooldown
-    20s, instant cast, 150 mana, no threat) are unspecified placeholders
-    — the mechanic (teleport target → caster) is what was actually
-    asked for.
+    no clipping/pushing. Cooldown 30s and mana cost 200 were set explicitly by the
+    user (2026-09-11); Range 30, instant cast, and no threat generated
+    are still unspecified placeholders.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
