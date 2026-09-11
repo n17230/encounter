@@ -292,13 +292,33 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   no synced state at all: sort by `OwnerClientId` (server-assigned,
   already known identically everywhere via each `CharacterStats`'
   `NetworkBehaviour.OwnerClientId`), label by that sorted position
-  ("Player 1", "Player 2", …). Each viewer's own entry is skipped — not
-  left as a blank row — so the remaining rows stack up from the top
+  ("Player 1", "Player 2", …) — that's `Slot.PartyNumber`, a *stable
+  identity* every viewer agrees on. Each viewer's own entry is skipped —
+  not left as a blank row — so the remaining rows stack up from the top
   with no gap. `CurrentHealth`/`CurrentMana`/`SyncedMaxHealth`/
   `SyncedMaxMana` were already `NetworkVariable`s readable by everyone,
   so this is pure client-side rendering — no new syncing needed.
+  - **F1–F5 party targeting** (fixed, not rebindable — added
+    2026-09-11): `PlayerTargeting` targets whoever is drawn in that
+    *row* on the viewer's own screen (F2 = second row), via
+    `PartyFrames.GetDisplayOrder`'s returned order — **not** the same
+    as `PartyNumber`. Row index is viewer-relative (depends on which
+    entry got skipped for being "you"); `PartyNumber` is the same for
+    everyone regardless of who's watching. Example: canonical order
+    P1,P2,P3,P4 — P2's screen shows rows [P1, P3, P4] labeled "Player
+    1"/"Player 3"/"Player 4"; P2's F2 hits row 1 → P3, even though P3's
+    own label says "Player 3", not "Player 2". **Known conflict, not
+    resolved**: F1–F5 are also selectable ability hotkeys in
+    `MainMenu.AllowedKeyBindings` — a player who binds an ability there
+    will trigger both the ability and party-targeting on the same
+    press. Flagged, not fixed.
 - **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
   radar bottom-right, north-up, player at centre with a heading tick.
+  **Compass letters** (added 2026-09-11): N/E/S/W drawn at fixed screen
+  positions just inside the rim, tied to the same fixed world axes the
+  map's north-up orientation already used (+Z = N, +X = E) — since the
+  map never rotates to face the player, these need no per-player state
+  and are identical for everyone by construction.
   **Blank by default**: blips only draw for what the local player's
   equipped gear reveals (`ItemData.Reveals`, `MinimapReveal` flags
   Players/Mobs, unioned across worn items, read client-side from the

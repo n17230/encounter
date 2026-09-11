@@ -62,17 +62,33 @@ whole file once it's empty.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 4. Party frames
+## 4. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
   damage/cast spells?
-- Do all clients agree on the numbering (e.g. does everyone who isn't
-  "Player 1" see the same person labeled "Player 1")? This should hold
-  automatically since it's sorted by `OwnerClientId`, but worth eyeballing
-  with 3+ players.
+- Do all clients agree on each player's label (e.g. does everyone see
+  the same person labeled "Player 3", regardless of whose screen it's
+  on)? This should hold automatically since labels come from the
+  canonical `OwnerClientId` sort, not the viewer-filtered row position —
+  worth eyeballing with 3+ players specifically because those two only
+  diverge once someone in the middle of the order gets skipped.
 - Confirm nobody ever sees a frame for themselves.
 - With only 1 player connected, confirm nothing draws (no empty box).
+- **F1–F5**: with 3+ players connected, confirm each key targets
+  whoever's actually drawn in that row on *your own* screen — per the
+  design this can be a different canonical player than the key number
+  suggests once you've skipped yourself (e.g. your F2 might target
+  "Player 3"). This is the part most likely to be subtly wrong since it
+  was never run.
+- **Known, deliberately unresolved conflict**: F1–F5 are also selectable
+  ability hotkeys in the Options/loadout menu. If you'd bound an ability
+  to F2, pressing it now does both — fires the ability *and* retargets.
+  Worth deciding whether to remove F1–F5 from the ability-keybind pool,
+  or leave it.
+- **Compass**: do N/E/S/W actually line up with real N/E/S/W (i.e. does
+  walking toward the "N" label increase world Z)? The math should be
+  right but was never seen rendered.
 
 ## 5. Minimap / Echolocator
 

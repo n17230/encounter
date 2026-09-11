@@ -16,9 +16,21 @@ public static class Minimap
     private static readonly Color PlayerColor = new Color(0.3f, 1f, 0.3f);
     private static readonly Color MobColor = new Color(1f, 0.35f, 0.3f);
     private static readonly Color TargetColor = Color.yellow;
+    private static readonly Color CompassColor = new Color(1f, 1f, 1f, 0.8f);
+
+    // Fixed world axes, identical for every player: +Z is North, +X is
+    // East. Since the map is north-up (never rotates to face the player),
+    // these labels sit at the same screen positions for everyone -
+    // there's no per-player "which way is forward" involved at all.
+    // Explicit screen-space vectors, not Unity's Vector2.up/down (GUI space
+    // has +y growing downward, so "top of screen" is (0,-1), not (0,1)).
+    private static readonly string[] CompassLabels = { "N", "E", "S", "W" };
+    private static readonly Vector2[] CompassOffsets =
+        { new Vector2(0f, -1f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(-1f, 0f) };
 
     private static Texture2D discTexture;
     private static Texture2D blipTexture;
+    private static GUIStyle compassStyle;
 
     // A mob position captured at the moment of an echolocation-style pulse.
     // Subject is kept only to preserve the current-target highlight; the
@@ -80,6 +92,22 @@ public static class Minimap
         Vector2 forward = new Vector2(self.forward.x, self.forward.z).normalized;
         for (int i = 1; i <= 3; i++) DrawBlip(centre + WorldToMap(forward * (WorldRadius * 0.06f * i)), 3f, SelfColor);
         DrawBlip(centre, 7f, SelfColor);
+
+        DrawCompass(centre);
+    }
+
+    private static void DrawCompass(Vector2 centre)
+    {
+        compassStyle ??= new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = 12 };
+
+        Color previous = GUI.color;
+        GUI.color = CompassColor;
+        for (int i = 0; i < CompassLabels.Length; i++)
+        {
+            Vector2 at = centre + CompassOffsets[i] * (ScreenRadius - 12f);
+            GUI.Label(new Rect(at.x - 10f, at.y - 8f, 20f, 16f), CompassLabels[i], compassStyle);
+        }
+        GUI.color = previous;
     }
 
     private static Vector2 WorldToMap(Vector2 flat)

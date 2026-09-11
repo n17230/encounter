@@ -14,6 +14,13 @@ public class PlayerTargeting : NetworkBehaviour
     [SerializeField] private float clickMaxPixels = 5f;
     [SerializeField] private float clickMaxSeconds = 0.3f;
 
+    // Fixed, not rebindable (asked for as literally F1-F5). F1 targets
+    // whoever is drawn in the first party-frame row on this viewer's own
+    // screen, F2 the second, etc. - see PartyFrames.GetDisplayOrder for
+    // why that's not simply "party member N".
+    private static readonly KeyCode[] PartyTargetKeys =
+        { KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4, KeyCode.F5 };
+
     public Targetable CurrentTarget { get; private set; }
 
     // Raised when the player right-clicks a target: "attack this".
@@ -48,6 +55,13 @@ public class PlayerTargeting : NetworkBehaviour
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             CycleTarget();
+        }
+
+        for (int i = 0; i < PartyTargetKeys.Length; i++)
+        {
+            if (!Input.GetKeyDown(PartyTargetKeys[i])) continue;
+            TargetPartySlot(i);
+            break;
         }
 
         if (Input.GetMouseButtonDown(1))
@@ -86,6 +100,17 @@ public class PlayerTargeting : NetworkBehaviour
         return Physics.Raycast(ray, out RaycastHit hit, maxTargetDistance)
             ? hit.collider.GetComponentInParent<Targetable>()
             : null;
+    }
+
+    // rowIndex 0 = F1's row, 1 = F2's, etc. - the exact same
+    // viewer-relative ordering PartyFrames draws, so a key always targets
+    // whoever is actually sitting in that row on screen. Does nothing if
+    // nobody occupies that row.
+    private void TargetPartySlot(int rowIndex)
+    {
+        Targetable[] all = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
+        IReadOnlyList<PartyFrames.Slot> party = PartyFrames.GetDisplayOrder(all, OwnerClientId);
+        if (rowIndex < party.Count) CurrentTarget = party[rowIndex].Member;
     }
 
     // Alternates through every valid Targetable within range (players and
