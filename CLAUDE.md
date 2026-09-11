@@ -158,13 +158,20 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   binding a key steals it from other movement actions *and* ability
   slots, and vice versa). Ability hotkeys are limited to 1–5, Shift+1–5,
   F1–F5, Q/E/R/T/F/G. `DevGui.Begin()` (UI scale) must be the first line of every
-  `OnGUI`, laying out against `UIScale.Width/Height`.
+  `OnGUI`, laying out against `UIScale.Width/Height`. The Escape menu
+  also has a **Summon Mobs** page (`PlayerSummon` on the local player
+  object does the spawning; the menu just drives it). **No text fields
+  in in-game panels**: IMGUI's native Tab focus traversal moves keyboard
+  focus into any focusable control even when the Tab event is `Use()`d,
+  and Tab is the tab-targeting key — the summon count is −/+ buttons
+  for exactly that reason. The only text field is the server-address
+  box, which is gone once connected.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,
   left-click / Tab targets, Escape menu.
 - **Testing lobby scope** (still placeholders, not the real designs):
-  instant respawn at map centre, `PlayerSummon` (top-right panel spawning
+  instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no
   wipe/reset encounter model, no loot, no unlocks.
 

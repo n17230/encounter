@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 // Pregame menu (skills / gear / options / enter) and, once in the testing
@@ -6,7 +7,7 @@ using UnityEngine;
 // from and written to ProfileStore.Current, which persists across restarts.
 public class MainMenu : MonoBehaviour
 {
-    private enum Panel { None, Skills, Gear, Options }
+    private enum Panel { None, Skills, Gear, Options, Summon }
 
     private static readonly KeyBindingOption[] AllowedKeyBindings = BuildAllowedKeyBindings();
     private static readonly KeyCode[] AllKeyCodes = (KeyCode[])System.Enum.GetValues(typeof(KeyCode));
@@ -26,6 +27,8 @@ public class MainMenu : MonoBehaviour
     private int awaitingKeyForSlot = -1;
     private int awaitingKeyForMovement = -1;
     private Vector2 scrollPosition;
+    private int summonMobIndex;
+    private int summonCount = 1;
 
     private static PlayerProfile Profile => ProfileStore.Current;
 
@@ -181,6 +184,9 @@ public class MainMenu : MonoBehaviour
             case Panel.Options:
                 DrawOptionsPanel();
                 break;
+            case Panel.Summon:
+                DrawSummonPanel();
+                break;
         }
 
         DrawTooltip();
@@ -270,11 +276,59 @@ public class MainMenu : MonoBehaviour
 
     private void DrawInGamePanel()
     {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 110, 200, 220));
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 130, 200, 260));
         if (GUILayout.Button("Skills", GUILayout.Height(40))) OpenPanel(Panel.Skills);
         if (GUILayout.Button("Gear", GUILayout.Height(40))) OpenPanel(Panel.Gear);
+        if (GUILayout.Button("Summon Mobs", GUILayout.Height(40))) OpenPanel(Panel.Summon);
         if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
         if (GUILayout.Button("Resume", GUILayout.Height(40))) CloseInGameMenu();
+        GUILayout.EndArea();
+    }
+
+    private static PlayerSummon LocalPlayerSummon()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager == null || manager.LocalClient == null || manager.LocalClient.PlayerObject == null) return null;
+        return manager.LocalClient.PlayerObject.GetComponent<PlayerSummon>();
+    }
+
+    // Testing-lobby tool: spawn mobs to fight. Buttons rather than a text
+    // field for the count, because IMGUI's native Tab focus traversal grabs
+    // any focusable control and Tab is the tab-targeting key.
+    private void DrawSummonPanel()
+    {
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 120, UIScale.Height / 2f - 150, 240, 300));
+        GUILayout.Label("Summon Mobs");
+
+        PlayerSummon summon = LocalPlayerSummon();
+        if (summon == null || summon.SummonableMobs.Count == 0)
+        {
+            GUILayout.Label("No player spawned yet.");
+        }
+        else
+        {
+            for (int i = 0; i < summon.SummonableMobs.Count; i++)
+            {
+                string label = (i == summonMobIndex ? "> " : "") + PlayerSummon.MobLabel(summon.SummonableMobs[i]);
+                if (GUILayout.Button(label)) summonMobIndex = i;
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Count:", GUILayout.Width(50));
+            if (GUILayout.Button("-", GUILayout.Width(30))) summonCount = Mathf.Max(1, summonCount - 1);
+            GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
+            GUILayout.Label(summonCount.ToString(), centered, GUILayout.Width(40));
+            if (GUILayout.Button("+", GUILayout.Width(30))) summonCount = Mathf.Min(summon.MaxSummonCount, summonCount + 1);
+            GUILayout.EndHorizontal();
+
+            if (GUILayout.Button("Summon", GUILayout.Height(30)))
+            {
+                summon.RequestSummon(summonMobIndex, summonCount);
+                CloseInGameMenu();
+            }
+        }
+
+        if (GUILayout.Button("Back")) LeavePanel();
         GUILayout.EndArea();
     }
 

@@ -1,63 +1,30 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
 // Testing-lobby feature only: lets players spawn extra mobs to fight. Not
 // part of the real game (real content spawns mobs via encounter design,
-// not player choice).
+// not player choice). The UI lives on MainMenu's Escape-menu Summon page;
+// this component owns the mob list and the server-side spawning.
 public class PlayerSummon : NetworkBehaviour
 {
     [SerializeField] private GameObject[] summonableMobs;
     [SerializeField] private float mapHalfExtent = 15f;
     [SerializeField] private int maxSummonCount = 20;
 
-    private bool panelOpen;
-    private int selectedMobIndex;
-    // Buttons rather than a text field on purpose: IMGUI's native Tab focus
-    // traversal grabs any keyboard-focusable control on screen, and Tab is
-    // the tab-targeting key. Keep in-game panels free of text fields.
-    private int count = 1;
+    public IReadOnlyList<GameObject> SummonableMobs => summonableMobs;
+    public int MaxSummonCount => maxSummonCount;
 
-    private void OnGUI()
+    public static string MobLabel(GameObject prefab)
+    {
+        Targetable targetable = prefab.GetComponent<Targetable>();
+        return targetable != null ? targetable.DisplayName : prefab.name;
+    }
+
+    public void RequestSummon(int mobIndex, int count)
     {
         if (!IsOwner) return;
-        if (summonableMobs == null || summonableMobs.Length == 0) return;
-
-        DevGui.Begin();
-        float x = UIScale.Width - 210;
-
-        if (GUI.Button(new Rect(x, 10, 200, 20), panelOpen ? "Close Summon" : "Summon Mob"))
-        {
-            panelOpen = !panelOpen;
-        }
-
-        if (!panelOpen) return;
-
-        GUILayout.BeginArea(new Rect(x, 35, 200, 40 + summonableMobs.Length * 22 + 60));
-        GUILayout.Label("Mob:");
-        for (int i = 0; i < summonableMobs.Length; i++)
-        {
-            Targetable targetable = summonableMobs[i].GetComponent<Targetable>();
-            string mobLabel = targetable != null ? targetable.DisplayName : summonableMobs[i].name;
-            string label = (i == selectedMobIndex ? "> " : "") + mobLabel;
-            if (GUILayout.Button(label))
-            {
-                selectedMobIndex = i;
-            }
-        }
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Count:", GUILayout.Width(50));
-        if (GUILayout.Button("-", GUILayout.Width(30))) count = Mathf.Max(1, count - 1);
-        GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-        GUILayout.Label(count.ToString(), centered, GUILayout.Width(40));
-        if (GUILayout.Button("+", GUILayout.Width(30))) count = Mathf.Min(maxSummonCount, count + 1);
-        GUILayout.EndHorizontal();
-
-        if (GUILayout.Button("Summon"))
-        {
-            RequestSummonServerRpc(selectedMobIndex, count);
-        }
-        GUILayout.EndArea();
+        RequestSummonServerRpc(mobIndex, count);
     }
 
     [ServerRpc]
