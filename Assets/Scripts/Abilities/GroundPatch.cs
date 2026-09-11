@@ -81,7 +81,7 @@ public class GroundPatch : NetworkBehaviour
         {
             if (Time.time < nextRefreshTime[id]) continue;
             nextRefreshTime[id] = Time.time + refreshInterval;
-            occupants[id].ReceiveHit(new HitInfo { AttackerClientId = casterClientId, Effect = effect });
+            occupants[id].ReceiveHit(new HitInfo { AttackerClientId = casterClientId, Source = HitSource.GroundPatch, Effect = effect });
         }
     }
 }

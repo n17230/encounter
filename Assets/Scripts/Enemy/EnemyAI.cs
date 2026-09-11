@@ -129,6 +129,7 @@ public class EnemyAI : NetworkBehaviour
                     {
                         Damage = weapon.Damage * modifier,
                         AttackerClientId = CharacterStats.NoAttacker,
+                        Source = HitSource.Melee,
                         Effect = weapon.Effect,
                     });
                 }

@@ -140,6 +140,7 @@ public class PlayerAutoAttack : NetworkBehaviour
         {
             Damage = weapon.Damage,
             AttackerClientId = OwnerClientId,
+            Source = HitSource.Melee,
             Effect = weapon.Effect,
         });
     }

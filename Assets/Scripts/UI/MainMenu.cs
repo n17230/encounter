@@ -272,6 +272,11 @@ public class MainMenu : MonoBehaviour
             string sign = displayValue >= 0f ? "+" : "";
             sb.AppendLine($"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}");
         }
+        foreach (EffectImmunity immunity in item.Immunities)
+        {
+            if (immunity.Effect == null) continue;
+            sb.AppendLine($"Immune to {immunity.Effect.DisplayName}{(immunity.GroundOnly ? " from ground effects" : "")}");
+        }
 
         return sb.ToString().TrimEnd();
     }

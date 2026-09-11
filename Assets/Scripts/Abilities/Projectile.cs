@@ -57,6 +57,7 @@ public class Projectile : NetworkBehaviour
                 Damage = ability.Damage,
                 ExtraThreat = ability.ThreatValue,
                 AttackerClientId = casterClientId,
+                Source = HitSource.Ability,
                 Effect = ability.Effect,
                 EffectDuration = ability.DirectHitEffectDuration,
             });

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -43,6 +44,7 @@ public class CharacterStats : NetworkBehaviour
     public readonly NetworkList<ActiveEffectNet> ActiveEffects = new NetworkList<ActiveEffectNet>();
 
     private readonly StatusEffectTracker effects = new StatusEffectTracker();
+    private readonly List<(EffectImmunity rule, object source)> immunities = new List<(EffectImmunity, object)>();
     private bool isDead;
     private ThreatTable threatTable;
 
@@ -118,11 +120,32 @@ public class CharacterStats : NetworkBehaviour
         if (hit.Damage > 0f) DealDamage(hit.Damage, hit.AttackerClientId);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
 
-        if (hit.Effect != null)
+        if (hit.Effect != null && !IsImmune(hit.Effect, hit.Source))
         {
             float duration = hit.EffectDuration > 0f ? hit.EffectDuration : hit.Effect.Duration;
             effects.Apply(hit.Effect, duration, hit.AttackerClientId, Time.time);
         }
+    }
+
+    // Immunities are keyed by source the same way modifiers are, so gear
+    // can grant and revoke them cleanly on equip/unequip.
+    public void AddImmunity(EffectImmunity rule, object source)
+    {
+        immunities.Add((rule, source));
+    }
+
+    public void RemoveImmunitiesFromSource(object source)
+    {
+        immunities.RemoveAll(entry => Equals(entry.source, source));
+    }
+
+    public bool IsImmune(StatusEffectData effect, HitSource source)
+    {
+        foreach ((EffectImmunity rule, object _) in immunities)
+        {
+            if (rule.Blocks(effect, source)) return true;
+        }
+        return false;
     }
 
     private void DealDamage(float rawDamage, ulong attackerClientId)

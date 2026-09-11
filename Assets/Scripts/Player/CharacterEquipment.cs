@@ -74,6 +74,7 @@ public class CharacterEquipment : NetworkBehaviour
             {
                 stats.GetStat(type)?.RemoveAllModifiersFromSource(previous);
             }
+            stats.RemoveImmunitiesFromSource(previous);
         }
 
         equippedItems[index] = item;
@@ -82,6 +83,10 @@ public class CharacterEquipment : NetworkBehaviour
         foreach (StatBonus bonus in item.Bonuses)
         {
             stats.GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, item));
+        }
+        foreach (EffectImmunity immunity in item.Immunities)
+        {
+            stats.AddImmunity(immunity, item);
         }
     }
 }

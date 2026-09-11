@@ -363,6 +363,7 @@ public class PlayerAbilities : NetworkBehaviour
                 Damage = ability.Damage,
                 ExtraThreat = ability.ThreatValue,
                 AttackerClientId = OwnerClientId,
+                Source = HitSource.Ability,
                 Effect = ability.Effect,
                 EffectDuration = ability.DirectHitEffectDuration,
             });
