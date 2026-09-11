@@ -232,9 +232,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   equipped gear reveals (`ItemData.Reveals`, `MinimapReveal` flags
   Players/Mobs, unioned across worn items, read client-side from the
   profile). Revealed `Targetable`s within 50 world units draw as blips
-  (players green, mobs red, current target yellow). No item grants a
-  reveal yet - the mechanism is there for when one is designed. The
-  reverse direction is
+  (players green, mobs red, current target yellow). `GearEcholocator`
+  (Trinket, Id `echolocator`) reveals mobs. The reverse direction is
   `ItemData.BroadcastsLocation` → server-written
   `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
   allies' minimaps draw a broadcasting player regardless of their own
