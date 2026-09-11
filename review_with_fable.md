@@ -7,6 +7,42 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
+## 0. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
+
+- **Radiant Embrace**: cast on a hurt ally, confirm exactly 350 healing
+  lands (or 385 with Holy Scepter's +10%).
+- **Blessing of Vitality**: confirm the heal lands AND the target gets
+  "Vitality Ward" for 16s, AND that while it's up they take noticeably
+  less damage (10% less — e.g. a 100-damage hit should land for ~90,
+  modulo their own armor). This is implemented as a flat +10 Armor
+  buff, reusing the same formula Shield the item already uses — should
+  just work, but never seen combined with a target's own existing armor.
+- **Aegis of Arcane**: shield an ally for 350, then have them take
+  damage — confirm damage is absorbed first (health doesn't drop until
+  350 has been eaten), the HUD shows a cyan "Shield: N" number counting
+  down, and once it hits 0 further damage reduces health normally.
+  Confirm a shielded hit does NOT also get redirected if the shielded
+  player also has One For All active on them (shield should apply
+  first, so redirect only sees what's left after the shield). Also
+  confirm shielding someone who already has a shield **replaces** the
+  old amount rather than adding to it (intentional design choice, not
+  a bug).
+- **Everliving Touch**: 600 total healing over 18s in 100/3s ticks.
+  Have two different players cast it on the same target and confirm
+  both HoTs tick independently (600 total heal doubles up), same as
+  Amulet of Regeneration's aura already should.
+- **Seraph's Grace**: stand near 2+ other players, cast it, confirm
+  everyone within 50 units (including yourself) heals for 350
+  simultaneously, and nobody outside 50 units does. This is a brand
+  new "no targeting at all, just hits everyone near you" cast path
+  (`AreaAroundCaster`) — never exercised before.
+- **Holy Scepter**: equip it and confirm ALL of the above heals (and
+  Amulet of Rejuvenation-style ticks) increase by 10% — but confirm the
+  Mana/Regen amulets' *aura* healing does NOT get the bonus (deliberate:
+  the scepter boosts cast spells, not passive gear auras).
+- All 5 abilities' `Range: 30` (where applicable) was never specified —
+  only the numbers listed above came from you.
+
 ## 1. Player 2 falling through the map on spawn — fix applied, needs confirming
 
 - This was diagnosed from reading the code, not from being able to

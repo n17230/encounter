@@ -6,6 +6,10 @@ public enum HitSource { Unknown, Melee, Ability, GroundPatch, Aura }
 public struct HitInfo
 {
     public float Damage;
+    public float Heal;
+    // Replaces any existing shield outright rather than adding to it -
+    // see CharacterStats.GrantShield.
+    public float ShieldAmount;
     public float ExtraThreat;
     public ulong AttackerClientId;
     public HitSource Source;

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
+  m_Name: AbilitySeraphsGrace
+  m_EditorClassIdentifier: 
+  Id: seraphs_grace
+  AbilityName: Seraph's Grace
+  RequiresTarget: 0
+  Range: 0
+  Cooldown: 0
+  CastTime: 3
+  ManaCost: 450
+  ThreatValue: 0
+  Damage: 0
+  HealAmount: 350
+  ShieldAmount: 0
+  MissileSpeed: 15
+  ProjectilePrefab: {fileID: 0}
+  CastVfxPrefab: {fileID: 0}
+  GroundPatchPrefab: {fileID: 0}
+  MinPatchCount: 0
+  MaxPatchCount: 0
+  PatchScatterRadius: 3
+  PatchRadius: 1.5
+  PatchDuration: 6
+  Effect: {fileID: 0}
+  DirectHitEffectDuration: 0
+  IsGroundTargeted: 0
+  GroundEffectRadius: 50
+  ForceSpeed: 0
+  PushAway: 0
+  RecallTarget: 0
+  ExclusiveSingleTarget: 0
+  AreaAroundCaster: 1

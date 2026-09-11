@@ -88,6 +88,7 @@ public class PlayerHUD : NetworkBehaviour
         PartyFrames.Draw(minimapBlips, OwnerClientId);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
+        DrawShieldLabel(stats, 10, UIScale.Height - 92);
         GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));
 
         DrawTargetFrame();
@@ -103,14 +104,22 @@ public class PlayerHUD : NetworkBehaviour
         if (target != null && target.Stats != null)
         {
             DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.SyncedMaxHealth.Value, Color.red);
-            GUI.Label(new Rect(10, 50, 400, 20), DescribeEffects(target.Stats));
+            DrawShieldLabel(target.Stats, 10, 50);
+            GUI.Label(new Rect(10, 68, 400, 20), DescribeEffects(target.Stats));
         }
 
         if (autoAttack != null && autoAttack.IsArmed)
         {
             WeaponData weapon = autoAttack.LocalWeapon;
-            GUI.Label(new Rect(10, 68, 300, 20), $"Auto-attacking ({(weapon != null ? weapon.WeaponName : "unarmed")})");
+            GUI.Label(new Rect(10, 86, 300, 20), $"Auto-attacking ({(weapon != null ? weapon.WeaponName : "unarmed")})");
         }
+    }
+
+    private static void DrawShieldLabel(CharacterStats subject, float x, float y)
+    {
+        if (subject.ShieldAmount.Value <= 0f) return;
+        GUIStyle shieldStyle = new GUIStyle(GUI.skin.label) { normal = { textColor = Color.cyan } };
+        GUI.Label(new Rect(x, y, 200, 18), $"Shield: {subject.ShieldAmount.Value:0}", shieldStyle);
     }
 
     private string DescribeEffects(CharacterStats subject)

@@ -228,10 +228,12 @@ public class MainMenu : MonoBehaviour
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.AppendLine(ability.AbilityName);
         if (ability.Damage > 0f) sb.AppendLine($"Damage: {ability.Damage}");
+        if (ability.HealAmount > 0f) sb.AppendLine($"Heals: {ability.HealAmount}");
+        if (ability.ShieldAmount > 0f) sb.AppendLine($"Shields for: {ability.ShieldAmount}");
         sb.AppendLine($"Mana Cost: {ability.ManaCost}");
         sb.AppendLine($"Cooldown: {ability.Cooldown}s");
         if (ability.CastTime > 0f) sb.AppendLine($"Cast Time: {ability.CastTime}s");
-        sb.AppendLine($"Range: {ability.Range}");
+        if (!ability.AreaAroundCaster) sb.AppendLine($"Range: {ability.Range}");
         if (ability.IsGroundTargeted)
         {
             sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area");
@@ -241,6 +243,7 @@ public class MainMenu : MonoBehaviour
                 sb.AppendLine($"Blasts everyone in the area {direction} the center at {ability.ForceSpeed}/s");
             }
         }
+        if (ability.AreaAroundCaster) sb.AppendLine($"Centered on you: {ability.GroundEffectRadius} radius, affects all players");
         if (ability.RecallTarget) sb.AppendLine("Teleports the target to your location");
 
         if (ability.Effect != null)
@@ -308,6 +311,10 @@ public class MainMenu : MonoBehaviour
         if (bonus.Stat == StatType.DamageMultiplier)
         {
             return $"Damage dealt {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
+        if (bonus.Stat == StatType.HealingMultiplier)
+        {
+            return $"Healing done {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
         }
         string sign = displayValue >= 0f ? "+" : "";
         return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";

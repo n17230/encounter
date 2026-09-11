@@ -451,6 +451,12 @@ public class PlayerAbilities : NetworkBehaviour
 
     private void ResolveAbility(AbilityData ability, ulong targetNetworkObjectId)
     {
+        if (ability.AreaAroundCaster)
+        {
+            ResolveAreaAroundCaster(ability);
+            return;
+        }
+
         if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObject))
         {
             NotifyCastFizzledClientRpc("Target lost");
@@ -526,7 +532,41 @@ public class PlayerAbilities : NetworkBehaviour
             target.Stats.ReceiveHit(new HitInfo
             {
                 Damage = ability.Damage,
+                Heal = ability.HealAmount,
+                ShieldAmount = ability.ShieldAmount,
                 ExtraThreat = ability.ThreatValue,
+                AttackerClientId = OwnerClientId,
+                Source = HitSource.Ability,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
+        }
+    }
+
+    // No unit/ground targeting at all - resolves centered on the caster's
+    // own current position, affecting every player (caster included)
+    // within GroundEffectRadius. Mana is spent here (this ability's
+    // "successful cast" point), not at cast start, same as the other
+    // resolve paths.
+    private void ResolveAreaAroundCaster(AbilityData ability)
+    {
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        {
+            if (candidate == null) continue;
+            if (candidate.GetComponent<PlayerMovement>() == null) continue; // allies only, not mobs
+            if (candidate.Stats == null || candidate.Stats.CurrentHealth.Value <= 0f) continue;
+            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
+
+            candidate.Stats.ReceiveHit(new HitInfo
+            {
+                Heal = ability.HealAmount,
+                ShieldAmount = ability.ShieldAmount,
                 AttackerClientId = OwnerClientId,
                 Source = HitSource.Ability,
                 Effect = ability.Effect,

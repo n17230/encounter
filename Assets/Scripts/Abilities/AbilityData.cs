@@ -14,6 +14,11 @@ public class AbilityData : ScriptableObject
     public float ManaCost = 10f;
     public float ThreatValue = 0f;
     public float Damage = 10f;
+    // Instant heal on resolve. Goes through the same HitInfo as Damage, so
+    // a single ability could carry both (not currently used that way).
+    public float HealAmount = 0f;
+    // Absorb shield granted on resolve - see CharacterStats.ShieldAmount.
+    public float ShieldAmount = 0f;
     public float MissileSpeed = 15f;
     public GameObject ProjectilePrefab;
 
@@ -63,4 +68,9 @@ public class AbilityData : ScriptableObject
     // Effect from whoever had it (see PlayerAbilities.ResolveAbility).
     // For abilities whose point is a single ongoing bond, e.g. One For All.
     public bool ExclusiveSingleTarget = false;
+
+    // No unit/ground targeting at all - resolves centered on the caster's
+    // own position, affecting every player (caster included) within
+    // GroundEffectRadius. RequiresTarget should be false for these.
+    public bool AreaAroundCaster = false;
 }

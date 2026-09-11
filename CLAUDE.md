@@ -219,6 +219,59 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     namespaces): 10% redirect, 1800 s (30 min) duration, instant cast,
     50 mana, all set explicitly by the user; **Cooldown 5s and Range 30
     are unconfirmed placeholders** — nothing was specified for either.
+  - **Healing, shields, and 5 new spells** (added 2026-09-11):
+    `HitInfo` gained `Heal` and `ShieldAmount`, handled in `ReceiveHit`
+    right alongside `Damage` — the single-target resolve path in
+    `ResolveAbility` now always passes all of `Damage`/`Heal`
+    /`ShieldAmount`/`Effect` through one `HitInfo`, so one ability could
+    in principle deal damage, heal, shield *and* apply an effect all at
+    once (none currently do). `CharacterStats.Heal(amount, healerClientId
+    = NoAttacker)` now takes an optional healer id and scales by that
+    healer's new `StatType.HealingMultiplier` stat (base 1, mirrors
+    `DamageMultiplier`) — both `ReceiveHit`'s `hit.Heal` and
+    `TickEffect`'s `TickHeal` pass their real attacker/caster id through,
+    so both instant heals and HoTs benefit; **aura-pulsed heals
+    (`CharacterEquipment.PulseAura`) deliberately still pass
+    `NoAttacker`**, so a healing-multiplier item boosts cast *spells*
+    only, not passive gear auras (a judgment call, not specified either
+    way). **Absorb shields**: `CharacterStats.ShieldAmount`
+    (`NetworkVariable<float>`, visible on the HUD) is granted via
+    `GrantShield` (replaces any remainder outright, doesn't stack — same
+    "override" philosophy as `EffectStackingMode.Override`) and consumed
+    in `DealDamage` *before* armor-mitigated damage can be redirected or
+    reduce health; threat is based on what's left *after* the shield
+    (a judgment call — a fully-absorbed hit generates none). Reset to 0
+    in `RestoreFull`. **No duration cap was specified** — a shield
+    persists until its amount is fully consumed, however long that
+    takes, not on a timer.
+    **`AbilityData.AreaAroundCaster`** (new): no unit/ground targeting at
+    all — resolves centered on the caster's *own* position the instant
+    the cast completes, hitting every player (caster included, mobs
+    excluded) within `GroundEffectRadius`; reuses that field name even
+    though there's no ground-aiming step. `ResolveAbility` branches to
+    the new `ResolveAreaAroundCaster` before its normal target-lookup.
+    The five new abilities: **Blessing of Vitality** (Id
+    `blessing_of_vitality`, 8s cd, 200 mana, 2s cast — cast time was
+    corrected from an initial 1.5s — 350 heal + `EffectVitalityWard`,
+    16s, −10% damage taken via a flat `+10 Armor` modifier, reusing the
+    existing armor-mitigation formula exactly like `GearShield` does,
+    rather than inventing a new "damage taken" stat). **Radiant
+    Embrace** (`radiant_embrace`, 0s cd, 150 mana, 1.5s cast, 350 heal,
+    no effect). **Aegis of Arcane** (`aegis_of_arcane`, 18s cd, 175
+    mana, instant, 350-point shield). **Everliving Touch**
+    (`everliving_touch`, 0s cd, 250 mana, instant, `EffectEverlivingTouch`
+    — 100 hp every 3s for 18s, `StackPerCaster` so two different
+    healers' casts on the same target both tick, per the same "HoTs
+    stack per caster" rule `EffectRejuvenation` already uses). **Seraph's
+    Grace** (`seraphs_grace`, `AreaAroundCaster`, 50 radius, 0s cd, 450
+    mana, 3s cast — corrected from an initial 2.5s — 350 heal to every
+    player in range). `Range` is unused/0 on Seraph's Grace since
+    `AreaAroundCaster` skips all range checking; `Range: 30` on the
+    other four was never specified, only the numbers given above — the
+    usual placeholder, flagged for tuning.
+  - **Holy Scepter** (`GearHolyScepter`, Id `holy_scepter`, MainHand, no
+    `Weapon` — a caster stat-stick, not something that swings): +10%
+    `HealingMultiplier`.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from

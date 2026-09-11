@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
+  m_Name: AbilityEverlivingTouch
+  m_EditorClassIdentifier: 
+  Id: everliving_touch
+  AbilityName: Everliving Touch
+  RequiresTarget: 1
+  Range: 30
+  Cooldown: 0
+  CastTime: 0
+  ManaCost: 250
+  ThreatValue: 0
+  Damage: 0
+  HealAmount: 0
+  ShieldAmount: 0
+  MissileSpeed: 15
+  ProjectilePrefab: {fileID: 0}
+  CastVfxPrefab: {fileID: 0}
+  GroundPatchPrefab: {fileID: 0}
+  MinPatchCount: 0
+  MaxPatchCount: 0
+  PatchScatterRadius: 3
+  PatchRadius: 1.5
+  PatchDuration: 6
+  Effect: {fileID: 11400000, guid: 4c8b3d49e7fa21f7778d75d826d97ba7, type: 2}
+  DirectHitEffectDuration: 0
+  IsGroundTargeted: 0
+  GroundEffectRadius: 0
+  ForceSpeed: 0
+  PushAway: 0
+  RecallTarget: 0
+  ExclusiveSingleTarget: 0
+  AreaAroundCaster: 0

@@ -30,10 +30,16 @@ public class CharacterStats : NetworkBehaviour
     public Stat ManaCostMultiplier { get; private set; }
     public Stat ThreatMultiplier { get; private set; }
     public Stat DamageMultiplier { get; private set; }
+    public Stat HealingMultiplier { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public readonly NetworkVariable<float> CurrentMana =
+        new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    // Absorb shield (e.g. Aegis of Arcane) - consumed in DealDamage before
+    // health is touched. A new grant replaces the remainder rather than
+    // adding to it - see GrantShield.
+    public readonly NetworkVariable<float> ShieldAmount =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     // The Stat objects above only carry modifiers on the server (gear and
@@ -72,6 +78,7 @@ public class CharacterStats : NetworkBehaviour
         ManaCostMultiplier = new Stat(1f);
         ThreatMultiplier = new Stat(1f);
         DamageMultiplier = new Stat(1f);
+        HealingMultiplier = new Stat(1f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -92,6 +99,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.ManaCostMultiplier: return ManaCostMultiplier;
             case StatType.ThreatMultiplier: return ThreatMultiplier;
             case StatType.DamageMultiplier: return DamageMultiplier;
+            case StatType.HealingMultiplier: return HealingMultiplier;
             default: return null;
         }
     }
@@ -136,9 +144,20 @@ public class CharacterStats : NetworkBehaviour
         if (!IsServer) return;
 
         if (hit.Damage > 0f) DealDamage(hit.Damage, hit.AttackerClientId);
+        if (hit.Heal > 0f) Heal(hit.Heal, hit.AttackerClientId);
+        if (hit.ShieldAmount > 0f) GrantShield(hit.ShieldAmount);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
 
         if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
+    }
+
+    // Replaces any existing shield outright - two shields don't stack,
+    // matching the same "buff override" philosophy as
+    // EffectStackingMode.Override. Server-only.
+    public void GrantShield(float amount)
+    {
+        if (!IsServer) return;
+        ShieldAmount.Value = amount;
     }
 
     // Non-hostile application too (auras, buffs). duration <= 0 uses the
@@ -187,11 +206,23 @@ public class CharacterStats : NetworkBehaviour
 
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
 
-        // A redirect (e.g. One For All) siphons part of the already-
-        // mitigated damage straight to another character's health, with
-        // no re-mitigation and no threat of its own - threat below is
-        // still based on the full mitigated amount, unaffected by where
-        // the health loss actually lands.
+        // An absorb shield (e.g. Aegis of Arcane) intercepts damage before
+        // it can be redirected or reduce health - "the next N damage" is
+        // prevented outright, not healed back afterward. Threat below is
+        // based on what's left after this, so a fully-absorbed hit
+        // generates none.
+        if (ShieldAmount.Value > 0f)
+        {
+            float absorbed = Mathf.Min(ShieldAmount.Value, mitigated);
+            ShieldAmount.Value -= absorbed;
+            mitigated -= absorbed;
+        }
+
+        // A redirect (e.g. One For All) siphons part of the remaining
+        // damage straight to another character's health, with no
+        // re-mitigation and no threat of its own - threat below is still
+        // based on the full (post-shield) mitigated amount, unaffected by
+        // where the health loss actually lands.
         float selfDamage = mitigated;
         if (TryGetActiveRedirect(out float redirectPercent, out ulong redirectToClientId))
         {
@@ -262,7 +293,7 @@ public class CharacterStats : NetworkBehaviour
     private void TickEffect(StatusEffectTracker.ActiveEffect effect)
     {
         if (effect.Data.TickDamage > 0f) DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
-        if (effect.Data.TickHeal > 0f) Heal(effect.Data.TickHeal);
+        if (effect.Data.TickHeal > 0f) Heal(effect.Data.TickHeal, effect.AttackerClientId);
     }
 
     private void HandleEffectApplied(StatusEffectTracker.ActiveEffect effect)
@@ -312,6 +343,7 @@ public class CharacterStats : NetworkBehaviour
         effects.ClearAll();
         CurrentHealth.Value = MaxHealth.Value;
         CurrentMana.Value = MaxMana.Value;
+        ShieldAmount.Value = 0f;
         isDead = false;
     }
 
@@ -324,9 +356,16 @@ public class CharacterStats : NetworkBehaviour
         CurrentMana.Value = Mathf.Min(CurrentMana.Value, MaxMana.Value);
     }
 
-    public void Heal(float amount)
+    // healerClientId (optional) looks up the healer's own HealingMultiplier
+    // (gear) and scales the amount by it, mirroring how DealDamage applies
+    // the attacker's DamageMultiplier. NoAttacker (the default) = no
+    // scaling, for regen ticks and other sourceless healing.
+    public void Heal(float amount, ulong healerClientId = NoAttacker)
     {
         if (!IsServer) return;
+        CharacterStats healer = AttackerStats(healerClientId);
+        if (healer != null) amount *= healer.HealingMultiplier.Value;
+
         CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + amount);
     }
 
