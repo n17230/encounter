@@ -77,7 +77,7 @@ public class EnemyAI : NetworkBehaviour
         NetworkObject.Despawn();
     }
 
-    // See PlayerMovement.ServerBeginPull.
+    // See PlayerMovement.ServerBeginPull - same direction-agnostic contract.
     public void ServerBeginPull(Vector3 towardPosition, float speed, float duration)
     {
         if (!IsServer) return;

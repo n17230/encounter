@@ -175,9 +175,12 @@ public class PlayerMovement : NetworkBehaviour
         controller.Move(motion * Time.fixedDeltaTime);
     }
 
-    // Called server-side (e.g. by a resolving Vacuum cast) to drag this
-    // player toward towardPosition for up to duration seconds, or until
-    // they arrive. Overrides normal input for that window.
+    // Called server-side (e.g. by a resolving ground-targeted ability) to
+    // drive this player straight toward towardPosition for up to duration
+    // seconds, or until they arrive. Overrides normal input for that
+    // window. Direction-agnostic - a "push away" effect just passes a
+    // towardPosition on the far side of the victim (see
+    // PlayerAbilities.ResolveGroundAbility).
     public void ServerBeginPull(Vector3 towardPosition, float speed, float duration)
     {
         if (!IsServer) return;

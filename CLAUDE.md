@@ -95,37 +95,44 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `NotifyCastRejectedClientRpc(abilityId, reason)` which rolls the
     predicted cooldown/cast bar back. Cooldowns are otherwise never
     synced — the prediction is the client's only view of them.
-  - **Ground-targeted abilities + pull** (WoW "Blizzard"-style, added
-    2026-09-11 for Vacuum): `AbilityData.IsGroundTargeted` +
-    `GroundEffectRadius` + `PullSpeed`. Pressing the hotkey doesn't cast
-    immediately — it arms `PlayerAbilities.IsAimingGroundTarget`, which
-    draws an owner-local `GroundTargetReticle` (a `TargetRingIndicator`-
-    style procedural ring, never networked) following a mouse raycast
-    that ignores the `Characters` layer so it hits terrain through
-    players/mobs. Left-click (within `Range` of the caster) confirms and
-    sends `CastGroundTargetedAbilityServerRpc(slot, worldPoint)`; the
-    same hotkey again, or opening the menu, cancels aiming.
-    `PlayerTargeting` ignores clicks entirely while aiming
-    (`abilities.IsAimingGroundTarget` guard) so placement clicks can't
-    also reselect your target. On resolve (after `CastTime`, same
-    coroutine pattern as unit-targeted casts, no facing/LoS check —
-    there's no single target to lose sight of), every alive `Targetable`
-    (player or mob, caster included) within `GroundEffectRadius` of the
-    point gets pulled: `PlayerMovement.ServerBeginPull` /
-    `EnemyAI.ServerBeginPull` override normal movement, driving the
-    character straight at the point at `PullSpeed` until arrival or a
-    duration cap. For players this needed two things to actually work:
-    a `ClientRpc` so the *owning* client (which alone may move its own
-    `CharacterController`) performs the drag, and — the part that would
-    otherwise silently break it — `MovementValidator` is fed a
-    continuous `Reset` for the pull's duration in
-    `ValidateReplicatedMovement`, since the pull moves faster than
-    `RunSpeed` and would otherwise itself get read as a speed violation
-    and snapped back. `AbilityVacuum` (Id `vacuum`): 15-unit radius (the
-    requested 30-unit diameter), 15/s pull speed, no damage/effect.
-    CastTime 0 (instant), Cooldown 25s, and ManaCost 240 were all set
-    explicitly by the user (2026-09-11). Range 30 and the pull speed
-    are still placeholder numbers — flagged for tuning.
+  - **Ground-targeted abilities + forced movement** (WoW "Blizzard"-
+    style, added 2026-09-11): `AbilityData.IsGroundTargeted` +
+    `GroundEffectRadius` + `ForceSpeed` + `PushAway`. Pressing the
+    hotkey doesn't cast immediately — it arms
+    `PlayerAbilities.IsAimingGroundTarget`, which draws an owner-local
+    `GroundTargetReticle` (a `TargetRingIndicator`-style procedural
+    ring, never networked) following a mouse raycast that ignores the
+    `Characters` layer so it hits terrain through players/mobs.
+    Left-click (within `Range` of the caster) confirms and sends
+    `CastGroundTargetedAbilityServerRpc(slot, worldPoint)`; the same
+    hotkey again, or opening the menu, cancels aiming. `PlayerTargeting`
+    ignores clicks entirely while aiming (`abilities.IsAimingGroundTarget`
+    guard) so placement clicks can't also reselect your target. On
+    resolve (after `CastTime`, same coroutine pattern as unit-targeted
+    casts, no facing/LoS check — there's no single target to lose sight
+    of), every alive `Targetable` (player or mob, caster included)
+    within `GroundEffectRadius` of the point is driven toward a force
+    target point at `ForceSpeed` via `PlayerMovement.ServerBeginPull` /
+    `EnemyAI.ServerBeginPull`: for a pull (`PushAway` false) that point
+    is the cast location itself; for a push (`PushAway` true) it's
+    computed per-victim, radially outward past the edge of the radius —
+    same underlying "drive toward a point" method either way, so the
+    push/pull split lives entirely in `ResolveGroundAbility`'s target-
+    point math, not in the movement code. For players this needed two
+    things to actually work: a `ClientRpc` so the *owning* client
+    (which alone may move its own `CharacterController`) performs the
+    drag, and — the part that would otherwise silently break it —
+    `MovementValidator` is fed a continuous `Reset` for the duration in
+    `ValidateReplicatedMovement`, since the forced movement is faster
+    than `RunSpeed` and would otherwise itself get read as a speed
+    violation and snapped back. **Force Compression** (Id
+    `force_compression`, was named Vacuum until renamed 2026-09-11) and
+    **Force Expansion** (Id `force_expansion`, its opposite) are
+    otherwise identical assets — 15-unit radius (the requested 30-unit
+    diameter), instant cast, 25s cooldown, 240 mana, 15/s force speed,
+    no damage/effect — differing only in `PushAway`. Range 30 and the
+    force speed are still placeholder numbers, never specified beyond
+    the diameter — flagged for tuning.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from

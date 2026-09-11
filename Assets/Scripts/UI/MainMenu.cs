@@ -235,7 +235,11 @@ public class MainMenu : MonoBehaviour
         if (ability.IsGroundTargeted)
         {
             sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area");
-            if (ability.PullSpeed > 0f) sb.AppendLine($"Pulls everyone in the area inward at {ability.PullSpeed}/s");
+            if (ability.ForceSpeed > 0f)
+            {
+                string direction = ability.PushAway ? "outward, away from" : "inward, toward";
+                sb.AppendLine($"Blasts everyone in the area {direction} the center at {ability.ForceSpeed}/s");
+            }
         }
 
         if (ability.Effect != null)

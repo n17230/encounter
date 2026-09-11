@@ -7,30 +7,35 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 1. Vacuum / ground-targeted casting (highest risk — newest, most moving parts)
+## 1. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
-- Press Vacuum's hotkey: does a ring reticle appear and follow the mouse
-  across the terrain? Does it correctly ignore player/mob colliders (aim
-  "through" a mob standing in front of the spot) and only hit ground?
+- Press either spell's hotkey: does a ring reticle appear and follow the
+  mouse across the terrain? Does it correctly ignore player/mob
+  colliders (aim "through" a mob standing in front of the spot) and only
+  hit ground?
 - Left-click within range: does it cast there? Outside range: does it
   show "Out of range" and stay in aiming mode rather than canceling?
 - Press the same hotkey again while aiming: does it cancel cleanly (no
   reticle left behind)?
-- Cast it near a mix of players and mobs standing within the 30-unit
-  circle — do all of them get pulled toward the center, including the
-  caster if they're standing in the circle too?
-- **Watch the console during a pull for `[PlayerMovement] client ...
-  movement rejected` warnings.** If any appear during/right after a
-  pull, the movement-validator suppression isn't covering the full
-  window and a pulled remote player will get snapped back mid-pull —
+- Cast **Force Compression** near a mix of players and mobs standing
+  within the 30-unit circle — do all of them get pulled toward the
+  center, including the caster if they're standing in the circle too?
+- Cast **Force Expansion** the same way — does everyone in the circle
+  get blasted radially *outward*, each in their own correct direction
+  away from the center (not all flung the same direction)? Do they stop
+  a bit past the edge of the circle rather than flying forever?
+- **Watch the console during either spell for `[PlayerMovement] client
+  ... movement rejected` warnings.** If any appear during/right after a
+  cast, the movement-validator suppression isn't covering the full
+  window and a moved remote player will get snapped back mid-flight —
   this is the part most likely to be subtly wrong since it couldn't be
   tested at all.
-- Does a pulled player regain normal WASD control immediately once they
-  reach the center (not stuck, not a weird pause)?
-- Placeholder numbers on `AbilityVacuum` that were never specified,
-  only guessed — reconsider these two: Range 30, Pull speed 15/s. The
-  30-unit diameter (→ 15-unit radius), instant cast (0s), 25s cooldown,
-  and 240 mana cost all came from you.
+- Does an affected player regain normal WASD control immediately once
+  the forced movement ends (not stuck, not a weird pause)?
+- Placeholder numbers that were never specified, only guessed — the
+  same two on both spells since they're otherwise identical: Range 30,
+  Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
+  cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
 ## 2. Auto-attack
 

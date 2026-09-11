@@ -548,11 +548,15 @@ public class PlayerAbilities : NetworkBehaviour
     // and a ground AoE has no single thing to lose sight of.
     private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition)
     {
-        if (ability.PullSpeed <= 0f || ability.GroundEffectRadius <= 0f) return;
+        if (ability.ForceSpeed <= 0f || ability.GroundEffectRadius <= 0f) return;
 
-        // Generous cap in case something never quite reaches the exact
-        // centre (e.g. blocked by terrain) - it simply regains control then.
-        float pullDuration = ability.GroundEffectRadius / ability.PullSpeed + 0.5f;
+        // A push is implemented as "pull toward a point on the far side of
+        // you" - ServerBeginPull only ever drives a character straight at
+        // whatever point it's given, so the two directions share every line
+        // of the actual movement code (including the movement-validator
+        // suppression, which is the part worth not duplicating).
+        const float pushClearance = 8f; // how far past the radius a push sends its victims
+        float pushDistance = ability.GroundEffectRadius + pushClearance;
 
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
@@ -563,13 +567,28 @@ public class PlayerAbilities : NetworkBehaviour
             offset.y = 0f;
             if (offset.magnitude > ability.GroundEffectRadius) continue;
 
+            Vector3 forceTarget;
+            if (ability.PushAway)
+            {
+                Vector3 radial = offset.sqrMagnitude > 0.01f ? offset.normalized : Vector3.forward;
+                forceTarget = groundPosition + radial * pushDistance;
+            }
+            else
+            {
+                forceTarget = groundPosition;
+            }
+
+            // Generous cap in case something never quite arrives (e.g.
+            // blocked by terrain) - it simply regains control then.
+            float duration = Vector3.Distance(candidate.transform.position, forceTarget) / ability.ForceSpeed + 0.5f;
+
             if (candidate.TryGetComponent(out PlayerMovement playerMovement))
             {
-                playerMovement.ServerBeginPull(groundPosition, ability.PullSpeed, pullDuration);
+                playerMovement.ServerBeginPull(forceTarget, ability.ForceSpeed, duration);
             }
             else if (candidate.TryGetComponent(out EnemyAI enemyAi))
             {
-                enemyAi.ServerBeginPull(groundPosition, ability.PullSpeed, pullDuration);
+                enemyAi.ServerBeginPull(forceTarget, ability.ForceSpeed, duration);
             }
         }
     }

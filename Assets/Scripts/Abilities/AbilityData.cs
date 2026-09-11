@@ -44,8 +44,11 @@ public class AbilityData : ScriptableObject
     // unit, the player aims a reticle and clicks to confirm a point on the
     // ground within Range of the caster; RequiresTarget is ignored. On
     // resolve, every player/mob within GroundEffectRadius of that point is
-    // affected - currently only a pull (PullSpeed, 0 = no pull).
+    // affected - currently only a forced move (ForceSpeed, 0 = none):
+    // pulled toward the center, or blasted radially outward from it if
+    // PushAway is set.
     public bool IsGroundTargeted = false;
     public float GroundEffectRadius = 0f;
-    public float PullSpeed = 0f;
+    public float ForceSpeed = 0f;
+    public bool PushAway = false;
 }
