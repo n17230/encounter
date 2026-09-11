@@ -1,3 +1,4 @@
+using System.Text;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -21,6 +22,7 @@ public class PlayerHUD : NetworkBehaviour
         UIScale.Apply();
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
+        GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));
 
         DrawTargetFrame();
     }
@@ -35,7 +37,25 @@ public class PlayerHUD : NetworkBehaviour
         if (target != null && target.Stats != null)
         {
             DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.SyncedMaxHealth.Value, Color.red);
+            GUI.Label(new Rect(10, 50, 400, 20), DescribeEffects(target.Stats));
         }
+    }
+
+    private string DescribeEffects(CharacterStats subject)
+    {
+        if (subject.ActiveEffects.Count == 0) return "";
+
+        double now = NetworkManager.ServerTime.Time;
+        StringBuilder sb = new StringBuilder();
+        foreach (ActiveEffectNet entry in subject.ActiveEffects)
+        {
+            StatusEffectData effect = GameDatabase.GetEffect(entry.EffectId.ToString());
+            string name = effect != null ? effect.DisplayName : entry.EffectId.ToString();
+            double remaining = System.Math.Max(0.0, entry.ExpireServerTime - now);
+            if (sb.Length > 0) sb.Append("   ");
+            sb.Append($"{name} {remaining:0.0}s");
+        }
+        return sb.ToString();
     }
 
     private void DrawBar(float x, float y, float width, float height, float current, float max, Color fillColor)

@@ -2,30 +2,32 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
+// A lingering hazard: anyone standing in it has the patch's status effect
+// reapplied every refreshInterval (which, by the tracker's extend-only
+// rule, keeps the effect alive without ever shortening it). The patch's
+// own lifetime is separate from the effect's duration on a victim.
 [RequireComponent(typeof(SphereCollider))]
 public class GroundPatch : NetworkBehaviour
 {
     private const float DefaultMeshRadius = 0.5f;
 
-    private DebuffType effectType;
-    private float magnitude;
-    private float refreshInterval;
-    private float debuffDuration;
+    [SerializeField] private float refreshInterval = 1f;
+
+    private StatusEffectData effect;
     private float despawnTime;
     private ulong casterClientId;
 
     private readonly Dictionary<ulong, CharacterStats> occupants = new Dictionary<ulong, CharacterStats>();
     private readonly Dictionary<ulong, float> nextRefreshTime = new Dictionary<ulong, float>();
 
-    public void Initialize(DebuffType type, float effectMagnitude, float effectRefreshInterval, float effectDebuffDuration, float patchDuration, float radius, ulong casterId)
+    public void Initialize(StatusEffectData effectData, float patchDuration, float radius, ulong casterId)
     {
-        effectType = type;
-        magnitude = effectMagnitude;
-        refreshInterval = effectRefreshInterval;
-        debuffDuration = effectDebuffDuration;
+        effect = effectData;
         despawnTime = Time.time + patchDuration;
         casterClientId = casterId;
 
+        // Visual scale and trigger radius both derive from the same value so
+        // they can never disagree, regardless of the prefab's authored scale.
         float horizontalScale = radius / DefaultMeshRadius;
         Vector3 scale = transform.localScale;
         transform.localScale = new Vector3(horizontalScale, scale.y, horizontalScale);
@@ -72,12 +74,14 @@ public class GroundPatch : NetworkBehaviour
             return;
         }
 
+        if (effect == null) return;
+
         List<ulong> occupantIds = new List<ulong>(occupants.Keys);
         foreach (ulong id in occupantIds)
         {
             if (Time.time < nextRefreshTime[id]) continue;
             nextRefreshTime[id] = Time.time + refreshInterval;
-            occupants[id].ApplyDebuff(effectType, magnitude, refreshInterval, debuffDuration, casterClientId);
+            occupants[id].ReceiveHit(new HitInfo { AttackerClientId = casterClientId, Effect = effect });
         }
     }
 }

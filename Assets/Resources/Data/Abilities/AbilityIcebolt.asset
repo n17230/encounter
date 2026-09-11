@@ -32,8 +32,5 @@ MonoBehaviour:
   PatchScatterRadius: 6
   PatchRadius: 1.5
   PatchDuration: 6
-  Debuff: 2
-  DebuffMagnitude: 0.66
-  DebuffTickInterval: 1
-  DebuffDuration: 3
-  DirectHitDebuffDuration: 5
+  Effect: {fileID: 11400000, guid: 73ee1124347b7beb5d4a4f1f869f2cdb, type: 2}
+  DirectHitEffectDuration: 5

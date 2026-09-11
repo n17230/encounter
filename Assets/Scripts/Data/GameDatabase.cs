@@ -11,14 +11,18 @@ public static class GameDatabase
 {
     private static Dictionary<string, AbilityData> abilitiesById;
     private static Dictionary<string, ItemData> itemsById;
+    private static Dictionary<string, StatusEffectData> effectsById;
     private static List<AbilityData> abilities;
     private static List<ItemData> items;
+    private static List<StatusEffectData> effects;
 
     public static IReadOnlyList<AbilityData> Abilities { get { EnsureLoaded(); return abilities; } }
     public static IReadOnlyList<ItemData> Items { get { EnsureLoaded(); return items; } }
+    public static IReadOnlyList<StatusEffectData> Effects { get { EnsureLoaded(); return effects; } }
 
-    public static AbilityData GetAbility(string id) => Lookup(Abilities == null ? null : abilitiesById, id);
-    public static ItemData GetItem(string id) => Lookup(Items == null ? null : itemsById, id);
+    public static AbilityData GetAbility(string id) { EnsureLoaded(); return Lookup(abilitiesById, id); }
+    public static ItemData GetItem(string id) { EnsureLoaded(); return Lookup(itemsById, id); }
+    public static StatusEffectData GetEffect(string id) { EnsureLoaded(); return Lookup(effectsById, id); }
 
     private static T Lookup<T>(Dictionary<string, T> table, string id) where T : class
     {
@@ -31,6 +35,7 @@ public static class GameDatabase
         if (abilitiesById != null) return;
         abilitiesById = Index(Resources.LoadAll<AbilityData>("Data/Abilities"), a => a.Id, out abilities);
         itemsById = Index(Resources.LoadAll<ItemData>("Data/Items"), i => i.Id, out items);
+        effectsById = Index(Resources.LoadAll<StatusEffectData>("Data/Effects"), e => e.Id, out effects);
     }
 
     private static Dictionary<string, T> Index<T>(T[] loaded, Func<T, string> idOf, out List<T> ordered) where T : UnityEngine.Object

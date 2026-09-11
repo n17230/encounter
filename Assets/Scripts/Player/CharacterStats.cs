@@ -1,23 +1,12 @@
-using System.Collections.Generic;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
 public class CharacterStats : NetworkBehaviour
 {
-    private class ActiveDebuff
-    {
-        public float Magnitude;
-        public float TickInterval;
-        public float NextTickTime;
-        public float ExpireTime;
-        public ulong AttackerClientId;
-    }
-
     // Sentinel meaning "no attacker" - damage from a source that shouldn't
     // generate threat (environmental, or callers that don't track a caster).
     public const ulong NoAttacker = ulong.MaxValue;
-
-    private static readonly object SlowModifierSource = new object();
 
     [SerializeField] private float baseMaxHealth = 100f;
     [SerializeField] private float baseHealthRegenRate = 2f;
@@ -39,7 +28,7 @@ public class CharacterStats : NetworkBehaviour
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     // The Stat objects above only carry modifiers on the server (gear and
-    // debuffs are applied there). Clients need the resulting values for the
+    // effects are applied there). Clients need the resulting values for the
     // HUD and, for the owner, for local movement - so the server mirrors
     // them out here whenever they change.
     public readonly NetworkVariable<float> SyncedMaxHealth =
@@ -49,11 +38,15 @@ public class CharacterStats : NetworkBehaviour
     public readonly NetworkVariable<float> SyncedRunSpeed =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    private readonly Dictionary<DebuffType, ActiveDebuff> activeDebuffs = new Dictionary<DebuffType, ActiveDebuff>();
+    // Client-visible mirror of the active status effects (name + expiry),
+    // for UI only. The authoritative state is the server-side tracker.
+    public readonly NetworkList<ActiveEffectNet> ActiveEffects = new NetworkList<ActiveEffectNet>();
+
+    private readonly StatusEffectTracker effects = new StatusEffectTracker();
     private bool isDead;
     private ThreatTable threatTable;
 
-    public event System.Action OnDeath;
+    public event Action OnDeath;
 
     private void Awake()
     {
@@ -64,6 +57,24 @@ public class CharacterStats : NetworkBehaviour
         RunSpeed = new Stat(baseRunSpeed);
         Armor = new Stat(baseArmor);
         threatTable = GetComponent<ThreatTable>();
+
+        effects.Applied += HandleEffectApplied;
+        effects.Refreshed += SyncEffect;
+        effects.Expired += HandleEffectExpired;
+    }
+
+    public Stat GetStat(StatType type)
+    {
+        switch (type)
+        {
+            case StatType.MaxHealth: return MaxHealth;
+            case StatType.HealthRegenRate: return HealthRegenRate;
+            case StatType.MaxMana: return MaxMana;
+            case StatType.ManaRegenRate: return ManaRegenRate;
+            case StatType.RunSpeed: return RunSpeed;
+            case StatType.Armor: return Armor;
+            default: return null;
+        }
     }
 
     public override void OnNetworkSpawn()
@@ -96,19 +107,31 @@ public class CharacterStats : NetworkBehaviour
             CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + ManaRegenRate.Value * Time.fixedDeltaTime);
         }
 
-        ProcessDebuffs();
+        effects.Tick(Time.time, TickEffect);
     }
 
-    public void ApplyDamage(float rawDamage, ulong attackerClientId = NoAttacker)
+    // The one way anything hostile reaches a character. Server-only.
+    public void ReceiveHit(in HitInfo hit)
     {
         if (!IsServer) return;
+
+        if (hit.Damage > 0f) DealDamage(hit.Damage, hit.AttackerClientId);
+        if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
+
+        if (hit.Effect != null)
+        {
+            float duration = hit.EffectDuration > 0f ? hit.EffectDuration : hit.Effect.Duration;
+            effects.Apply(hit.Effect, duration, hit.AttackerClientId, Time.time);
+        }
+    }
+
+    private void DealDamage(float rawDamage, ulong attackerClientId)
+    {
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
         CurrentHealth.Value = Mathf.Max(0f, CurrentHealth.Value - mitigated);
 
-        if (attackerClientId != NoAttacker)
-        {
-            threatTable?.AddThreat(attackerClientId, mitigated);
-        }
+        // 1 threat per 1 point of damage actually dealt (post-mitigation).
+        AddThreat(mitigated, attackerClientId);
 
         if (CurrentHealth.Value <= 0f && !isDead)
         {
@@ -117,20 +140,62 @@ public class CharacterStats : NetworkBehaviour
         }
     }
 
-    // For threat generated independent of damage (e.g. a taunt with 0
-    // damage but a large ThreatValue) - separate from the automatic 1
-    // threat-per-1-damage path in ApplyDamage, so the two stack additively
-    // rather than one replacing the other.
-    public void AddThreat(float amount, ulong attackerClientId)
+    private void AddThreat(float amount, ulong attackerClientId)
     {
-        if (!IsServer) return;
         if (attackerClientId == NoAttacker) return;
         threatTable?.AddThreat(attackerClientId, amount);
+    }
+
+    private void TickEffect(StatusEffectTracker.ActiveEffect effect)
+    {
+        DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+    }
+
+    private void HandleEffectApplied(StatusEffectTracker.ActiveEffect effect)
+    {
+        foreach (StatBonus bonus in effect.Data.Modifiers)
+        {
+            GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, effect.Data));
+        }
+        SyncEffect(effect);
+    }
+
+    private void HandleEffectExpired(StatusEffectTracker.ActiveEffect effect)
+    {
+        foreach (StatType type in Enum.GetValues(typeof(StatType)))
+        {
+            GetStat(type)?.RemoveAllModifiersFromSource(effect.Data);
+        }
+
+        for (int i = ActiveEffects.Count - 1; i >= 0; i--)
+        {
+            if (ActiveEffects[i].EffectId == effect.Data.Id) ActiveEffects.RemoveAt(i);
+        }
+    }
+
+    private void SyncEffect(StatusEffectTracker.ActiveEffect effect)
+    {
+        ActiveEffectNet entry = new ActiveEffectNet
+        {
+            EffectId = effect.Data.Id,
+            ExpireServerTime = NetworkManager.ServerTime.Time + (effect.ExpireTime - Time.time),
+        };
+
+        for (int i = 0; i < ActiveEffects.Count; i++)
+        {
+            if (ActiveEffects[i].EffectId == entry.EffectId)
+            {
+                ActiveEffects[i] = entry;
+                return;
+            }
+        }
+        ActiveEffects.Add(entry);
     }
 
     public void RestoreFull()
     {
         if (!IsServer) return;
+        effects.ClearAll();
         CurrentHealth.Value = MaxHealth.Value;
         CurrentMana.Value = MaxMana.Value;
         isDead = false;
@@ -157,99 +222,5 @@ public class CharacterStats : NetworkBehaviour
         if (CurrentMana.Value < amount) return false;
         CurrentMana.Value -= amount;
         return true;
-    }
-
-    public void ApplyDebuff(DebuffType type, float magnitude, float tickInterval, float duration, ulong attackerClientId = NoAttacker)
-    {
-        if (!IsServer) return;
-        if (type == DebuffType.None) return;
-
-        float now = Time.time;
-
-        if (activeDebuffs.TryGetValue(type, out ActiveDebuff existing))
-        {
-            // General rule (more of these cases are coming): a weaker
-            // reapplication of the same debuff type must never downgrade an
-            // already-stronger one. Duration and magnitude are judged
-            // independently - each only ever moves up, never down. This is
-            // what stops e.g. an ice patch's shorter/weaker tick from
-            // cutting short or diluting a frostbolt's longer/stronger
-            // direct-hit debuff. TickInterval is deliberately left alone on
-            // refresh either way (same invariant as before: a refresh never
-            // touches NextTickTime, so a due tick always still fires).
-            float candidateExpireTime = now + duration;
-            bool durationImproved = candidateExpireTime > existing.ExpireTime;
-            bool magnitudeImproved = magnitude > existing.Magnitude;
-
-            if (durationImproved) existing.ExpireTime = candidateExpireTime;
-
-            if (magnitudeImproved)
-            {
-                if (type == DebuffType.Slow)
-                {
-                    // The active StatModifier was added with the old
-                    // magnitude and is immutable - swap it for one with the
-                    // new, stronger magnitude rather than just bumping the
-                    // stored value (which alone wouldn't affect RunSpeed).
-                    RunSpeed.RemoveAllModifiersFromSource(SlowModifierSource);
-                    RunSpeed.AddModifier(new StatModifier(-magnitude, StatModifierType.PercentAdditive, SlowModifierSource));
-                }
-                existing.Magnitude = magnitude;
-            }
-
-            if (durationImproved || magnitudeImproved) existing.AttackerClientId = attackerClientId;
-
-            return;
-        }
-
-        activeDebuffs[type] = new ActiveDebuff
-        {
-            Magnitude = magnitude,
-            TickInterval = tickInterval,
-            NextTickTime = now,
-            ExpireTime = now + duration,
-            AttackerClientId = attackerClientId
-        };
-
-        if (type == DebuffType.Slow)
-        {
-            RunSpeed.AddModifier(new StatModifier(-magnitude, StatModifierType.PercentAdditive, SlowModifierSource));
-        }
-    }
-
-    private void ProcessDebuffs()
-    {
-        if (activeDebuffs.Count == 0) return;
-
-        float now = Time.time;
-        List<DebuffType> expired = null;
-
-        foreach (KeyValuePair<DebuffType, ActiveDebuff> entry in activeDebuffs)
-        {
-            DebuffType type = entry.Key;
-            ActiveDebuff debuff = entry.Value;
-
-            if (type == DebuffType.Burn && now >= debuff.NextTickTime)
-            {
-                ApplyDamage(debuff.Magnitude, debuff.AttackerClientId);
-                debuff.NextTickTime += debuff.TickInterval;
-            }
-
-            if (now >= debuff.ExpireTime)
-            {
-                (expired ??= new List<DebuffType>()).Add(type);
-            }
-        }
-
-        if (expired == null) return;
-
-        foreach (DebuffType type in expired)
-        {
-            activeDebuffs.Remove(type);
-            if (type == DebuffType.Slow)
-            {
-                RunSpeed.RemoveAllModifiersFromSource(SlowModifierSource);
-            }
-        }
     }
 }

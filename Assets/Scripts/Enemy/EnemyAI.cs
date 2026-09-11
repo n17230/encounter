@@ -138,11 +138,12 @@ public class EnemyAI : NetworkBehaviour
 
                 if (weapon != null)
                 {
-                    target.ApplyDamage(weapon.Damage * modifier);
-                    if (weapon.Debuff != DebuffType.None)
+                    target.ReceiveHit(new HitInfo
                     {
-                        target.ApplyDebuff(weapon.Debuff, weapon.DebuffMagnitude, weapon.DebuffTickInterval, weapon.DebuffDuration);
-                    }
+                        Damage = weapon.Damage * modifier,
+                        AttackerClientId = CharacterStats.NoAttacker,
+                        Effect = weapon.Effect,
+                    });
                 }
             }
         }

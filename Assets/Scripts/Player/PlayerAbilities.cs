@@ -249,8 +249,14 @@ public class PlayerAbilities : NetworkBehaviour
         }
         else
         {
-            target.Stats.ApplyDamage(ability.Damage, OwnerClientId);
-            if (ability.ThreatValue > 0f) target.Stats.AddThreat(ability.ThreatValue, OwnerClientId);
+            target.Stats.ReceiveHit(new HitInfo
+            {
+                Damage = ability.Damage,
+                ExtraThreat = ability.ThreatValue,
+                AttackerClientId = OwnerClientId,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
         }
     }
 

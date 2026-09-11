@@ -52,12 +52,14 @@ public class Projectile : NetworkBehaviour
         Targetable target = targetObject.GetComponent<Targetable>();
         if (target != null && target.Stats != null)
         {
-            target.Stats.ApplyDamage(ability.Damage, casterClientId);
-
-            float directHitDuration = ability.DirectHitDebuffDuration > 0f ? ability.DirectHitDebuffDuration : ability.DebuffDuration;
-            target.Stats.ApplyDebuff(ability.Debuff, ability.DebuffMagnitude, ability.DebuffTickInterval, directHitDuration, casterClientId);
-
-            if (ability.ThreatValue > 0f) target.Stats.AddThreat(ability.ThreatValue, casterClientId);
+            target.Stats.ReceiveHit(new HitInfo
+            {
+                Damage = ability.Damage,
+                ExtraThreat = ability.ThreatValue,
+                AttackerClientId = casterClientId,
+                Effect = ability.Effect,
+                EffectDuration = ability.DirectHitEffectDuration,
+            });
         }
 
         PlayImpactVfxClientRpc(transform.position);
@@ -99,8 +101,7 @@ public class Projectile : NetworkBehaviour
 
             GameObject patchInstance = Instantiate(ability.GroundPatchPrefab, spawnPosition, Quaternion.identity);
             patchInstance.GetComponent<NetworkObject>().Spawn();
-            patchInstance.GetComponent<GroundPatch>().Initialize(
-                ability.Debuff, ability.DebuffMagnitude, ability.DebuffTickInterval, ability.DebuffDuration, ability.PatchDuration, ability.PatchRadius, casterClientId);
+            patchInstance.GetComponent<GroundPatch>().Initialize(ability.Effect, ability.PatchDuration, ability.PatchRadius, casterClientId);
         }
     }
 }

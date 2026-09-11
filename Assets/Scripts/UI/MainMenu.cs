@@ -206,16 +206,29 @@ public class MainMenu : MonoBehaviour
         if (ability.CastTime > 0f) sb.AppendLine($"Cast Time: {ability.CastTime}s");
         sb.AppendLine($"Range: {ability.Range}");
 
-        if (ability.Debuff == DebuffType.Burn)
+        if (ability.Effect != null)
         {
-            sb.AppendLine($"Burn: {ability.DebuffMagnitude}/sec for {ability.DebuffDuration}s");
-        }
-        else if (ability.Debuff == DebuffType.Slow)
-        {
-            sb.AppendLine($"Slow: -{ability.DebuffMagnitude * 100f}% speed for {ability.DebuffDuration}s");
+            float duration = ability.DirectHitEffectDuration > 0f ? ability.DirectHitEffectDuration : ability.Effect.Duration;
+            sb.AppendLine(DescribeEffect(ability.Effect, duration));
         }
 
         return sb.ToString().TrimEnd();
+    }
+
+    private static string DescribeEffect(StatusEffectData effect, float duration)
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        sb.Append(effect.DisplayName).Append(':');
+        if (effect.TickDamage > 0f) sb.Append($" {effect.TickDamage} dmg/{effect.TickInterval}s");
+        foreach (StatBonus bonus in effect.Modifiers)
+        {
+            bool isPercent = bonus.ModifierType == StatModifierType.PercentAdditive;
+            float displayValue = isPercent ? bonus.Value * 100f : bonus.Value;
+            string sign = displayValue >= 0f ? "+" : "";
+            sb.Append($" {sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}");
+        }
+        sb.Append($" for {duration}s");
+        return sb.ToString();
     }
 
     private static string BuildItemTooltip(ItemData item)

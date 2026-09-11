@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -63,41 +63,22 @@ public class CharacterEquipment : NetworkBehaviour
     {
         int index = (int)slot;
         ItemData previous = equippedItems[index];
-        if (previous != null) RemoveBonuses(previous);
+        if (previous == item) return;
+
+        if (previous != null)
+        {
+            foreach (StatType type in Enum.GetValues(typeof(StatType)))
+            {
+                stats.GetStat(type)?.RemoveAllModifiersFromSource(previous);
+            }
+        }
 
         equippedItems[index] = item;
-        if (item != null) ApplyBonuses(item);
-    }
+        if (item == null) return;
 
-    private void ApplyBonuses(ItemData item)
-    {
         foreach (StatBonus bonus in item.Bonuses)
         {
-            GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, item));
-        }
-    }
-
-    private void RemoveBonuses(ItemData item)
-    {
-        GetStat(StatType.MaxHealth)?.RemoveAllModifiersFromSource(item);
-        GetStat(StatType.HealthRegenRate)?.RemoveAllModifiersFromSource(item);
-        GetStat(StatType.MaxMana)?.RemoveAllModifiersFromSource(item);
-        GetStat(StatType.ManaRegenRate)?.RemoveAllModifiersFromSource(item);
-        GetStat(StatType.RunSpeed)?.RemoveAllModifiersFromSource(item);
-        GetStat(StatType.Armor)?.RemoveAllModifiersFromSource(item);
-    }
-
-    private Stat GetStat(StatType type)
-    {
-        switch (type)
-        {
-            case StatType.MaxHealth: return stats.MaxHealth;
-            case StatType.HealthRegenRate: return stats.HealthRegenRate;
-            case StatType.MaxMana: return stats.MaxMana;
-            case StatType.ManaRegenRate: return stats.ManaRegenRate;
-            case StatType.RunSpeed: return stats.RunSpeed;
-            case StatType.Armor: return stats.Armor;
-            default: return null;
+            stats.GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, item));
         }
     }
 }

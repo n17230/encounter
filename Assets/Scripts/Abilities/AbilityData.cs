@@ -31,13 +31,12 @@ public class AbilityData : ScriptableObject
     public float PatchRadius = 1.5f;
     public float PatchDuration = 6f;
 
-    public DebuffType Debuff = DebuffType.None;
-    public float DebuffMagnitude = 0f;
-    public float DebuffTickInterval = 1f;
-    public float DebuffDuration = 3f;
+    // Status effect applied on hit (and refreshed by this ability's ground
+    // patches). Null = none.
+    public StatusEffectData Effect;
 
-    // Duration used only for the debuff applied directly to the projectile's
-    // primary target on impact - ground patches always use DebuffDuration.
-    // 0 means "no override, use DebuffDuration for the primary target too".
-    public float DirectHitDebuffDuration = 0f;
+    // Duration used only for the effect applied directly to the primary
+    // target on impact - ground patches always use Effect.Duration.
+    // 0 means "no override, use Effect.Duration for the primary target too".
+    public float DirectHitEffectDuration = 0f;
 }

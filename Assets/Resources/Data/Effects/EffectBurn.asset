@@ -9,9 +9,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ad0f38d90dd851c4bb6817bf45620099, type: 3}
-  m_Name: WeaponGoblinClaws
-  m_EditorClassIdentifier:
-  WeaponName: Goblin Claws
-  Damage: 100
-  Effect: {fileID: 0}
+  m_Script: {fileID: 11500000, guid: 79acd89f2c7d4c6753584aa50fb79de4, type: 3}
+  m_Name: EffectBurn
+  m_EditorClassIdentifier: 
+  Id: burn
+  DisplayName: Burning
+  Duration: 3
+  TickDamage: 50
+  TickInterval: 1
+  Modifiers: []
