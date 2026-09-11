@@ -17,7 +17,7 @@ MonoBehaviour:
   RequiresTarget: 0
   Range: 30
   Cooldown: 15
-  CastTime: 1.5
+  CastTime: 0
   ManaCost: 120
   ThreatValue: 0
   Damage: 0
