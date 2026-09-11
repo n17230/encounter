@@ -71,7 +71,16 @@ whole file once it's empty.
 - Amulet of Mana (+15 per 5s tick) and Amulet of Rejuvenation (+10 hp
   per 5s) — relative strength of the two next to each other.
 
-## 6. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 6. Reported by the user, not yet looked into
+
+- Firebolt/Icebolt's VFX does not home in on the target — it flies
+  straight rather than tracking. The crude tracer (`Projectile`'s actual
+  movement, which the VFX is presumably meant to follow/represent) does
+  home in correctly. So the underlying homing logic works; something in
+  how the visual effect is attached to or driven by the projectile is
+  the mismatch. Not investigated yet.
+
+## 7. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect
