@@ -23,6 +23,13 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float strikeForgetSeconds = 30f;
     [SerializeField] private float correctionGraceSeconds = 1f;
 
+    // Longer than correctionGraceSeconds on purpose: a fresh spawn has to
+    // get through scene load + the owner's own terrain-snap + a full
+    // network round trip before the server's view of this player's
+    // position is trustworthy, which is a slower process than recovering
+    // from a single mid-game correction.
+    [SerializeField] private float spawnGraceSeconds = 2f;
+
     private CharacterController controller;
     private CharacterStats stats;
     private NetworkTransform networkTransform;
@@ -69,6 +76,19 @@ public class PlayerMovement : NetworkBehaviour
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
         networkTransform = GetComponent<NetworkTransform>();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        // The owner's own spawn-time terrain snap (see PlayerRespawn) needs
+        // a round trip to replicate back to the server before it's fair to
+        // judge this player's position. Without this, a remote (non-host)
+        // player could get their very first FixedUpdate validated against
+        // the prefab's raw baked spawn position - which, on a terrain
+        // that's since been sculpted, can look like it's below ground - and
+        // get "corrected" right back to that same bad position, landing
+        // them under the terrain with nothing to stand on.
+        validationResumeTime = Time.time + spawnGraceSeconds;
     }
 
     private void Update()

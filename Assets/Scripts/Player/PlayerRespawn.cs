@@ -40,14 +40,11 @@ public class PlayerRespawn : NetworkBehaviour
     private void HandleDeath()
     {
         stats.RestoreFull();
-        RespawnClientRpc();
-    }
-
-    [ClientRpc]
-    private void RespawnClientRpc()
-    {
-        if (!IsOwner) return;
-        movement.TeleportTo(OnTerrain(respawnPoint));
+        // Server-initiated, so it can use ServerTeleportTo (same path Recall
+        // uses) to pre-arm the movement validator before the owner's
+        // teleport lands, rather than needing a grace period like the
+        // owner-initiated spawn snap below.
+        movement.ServerTeleportTo(OnTerrain(respawnPoint));
     }
 
     // Terrain height changes as the world gets sculpted, so spawn/respawn

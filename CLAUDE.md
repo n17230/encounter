@@ -71,8 +71,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   instant feel matters, position cheating doesn't. Every damage/mana/
   cooldown/effect decision still happens only on the server.
   `PlayerRespawn`: server decides (`OnDeath` → `RestoreFull` +
-  `RespawnClientRpc`), the owner executes via
-  `PlayerMovement.TeleportTo` → `NetworkTransform.Teleport` (only the
+  `PlayerMovement.ServerTeleportTo`, same path Recall uses — server-
+  initiated, pre-arms the validator before the owner moves), the owner
+  executes via `TeleportTo` → `NetworkTransform.Teleport` (only the
   authority may teleport). Mobs (`EnemyAI`) stay fully server-driven.
   - **Server-side movement validation** ("the MMO way" — decided
     2026-09-11 with going public in mind): `MovementValidator` (pure C#,
@@ -86,6 +87,26 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     double-count, and 5 strikes within 30 s → `DisconnectClient`. The
     host's own player is exempt. Tunables are `[SerializeField]`s on
     `PlayerMovement`.
+    - **Bug fixed 2026-09-11 — remote players falling through the map on
+      spawn**: `ValidateReplicatedMovement` had no grace period, so a
+      remote (non-host) player's very first tick could get judged
+      against the prefab's raw baked spawn position — before
+      `PlayerRespawn`'s owner-side terrain snap had round-tripped back
+      to the server — which on a since-resculpted terrain can look
+      below-ground, triggering a "correction" back to that same bad,
+      genuinely-below-ground position. Fixed two ways: (1)
+      `PlayerMovement.OnNetworkSpawn` now sets `validationResumeTime`
+      `spawnGraceSeconds` (2s, longer than `correctionGraceSeconds`'s 1s
+      on purpose — a fresh spawn has more to settle than a single
+      correction) out, giving the owner-initiated snap time to land
+      before the server judges anything; (2) `PlayerRespawn.HandleDeath`
+      switched from its own `RespawnClientRpc` to
+      `PlayerMovement.ServerTeleportTo` (the same path Recall uses) —
+      death is server-detected, so it can pre-arm the validator
+      *before* telling the owner to move, needing no grace period at
+      all. Never seen actually fail in the Editor, only reasoned from
+      the code — the host being exempt from validation is what explains
+      the bug only ever showing up for the second (non-host) player.
   - **Client-side cast prediction**: `PlayerAbilities` pre-checks
     cooldown / mana (`CurrentMana` NetworkVariable) / target / range /
     facing locally and shows the reason instantly ("Out of range", …),

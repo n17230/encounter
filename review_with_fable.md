@@ -7,7 +7,24 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 1. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
+## 1. Player 2 falling through the map on spawn — fix applied, needs confirming
+
+- This was diagnosed from reading the code, not from being able to
+  reproduce it — the movement validator had no grace period after spawn,
+  so a remote (non-host) player's position could get judged before their
+  own terrain-snap had round-tripped back to the server, and "corrected"
+  right back into the ground. Fixed in `PlayerMovement`
+  (`spawnGraceSeconds`) and `PlayerRespawn` (death-respawn now pre-arms
+  the validator via `ServerTeleportTo` instead of its own RPC).
+- **Please confirm**: connect as a second (non-host) client and watch
+  them spawn — do they land and stand normally? Die and respawn a few
+  times too, since that path changed as well.
+- If it still happens, check the console for `[PlayerMovement] client
+  ... movement rejected (BelowGround)` right around spawn/respawn time —
+  that would mean the fix didn't fully close the window (e.g.
+  `spawnGraceSeconds` isn't long enough over real network latency).
+
+## 2. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
 - Press either spell's hotkey: does a ring reticle appear and follow the
   mouse across the terrain? Does it correctly ignore player/mob
@@ -37,7 +54,7 @@ whole file once it's empty.
   Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
   cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
-## 2. Recall
+## 3. Recall
 
 - Target a player or a mob and cast Recall — does it teleport instantly
   to right where you're standing?
@@ -53,7 +70,7 @@ whole file once it's empty.
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 3. Auto-attack
+## 4. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -62,7 +79,7 @@ whole file once it's empty.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 4. Party frames + F1–F5 targeting + minimap compass
+## 5. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -90,7 +107,7 @@ whole file once it's empty.
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 5. Minimap / Echolocator
+## 6. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -99,7 +116,7 @@ whole file once it's empty.
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 6. Gear — ring slots and the recent renumbering
+## 7. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -112,7 +129,7 @@ whole file once it's empty.
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 7. General combat/economy numbers worth a sanity pass
+## 8. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool, regen in 5s ticks — does an actual
   fight feel like mana is a real constraint now, or too tight/loose?
@@ -120,7 +137,7 @@ whole file once it's empty.
 - Amulet of Mana (+15 per 5s tick) and Amulet of Rejuvenation (+10 hp
   per 5s) — relative strength of the two next to each other.
 
-## 8. Reported by the user, not yet looked into
+## 9. Reported by the user, not yet looked into
 
 - Firebolt/Icebolt's VFX does not home in on the target — it flies
   straight rather than tracking. The crude tracer (`Projectile`'s actual
@@ -129,7 +146,7 @@ whole file once it's empty.
   how the visual effect is attached to or driven by the projectile is
   the mismatch. Not investigated yet.
 
-## 9. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 10. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect
