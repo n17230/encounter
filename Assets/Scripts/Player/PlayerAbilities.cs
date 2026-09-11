@@ -8,11 +8,6 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterStats))]
 public class PlayerAbilities : NetworkBehaviour
 {
-    // All abilities that exist in the game. Index here must match the order
-    // of MainMenu's "Available Abilities" list, since the client sends the
-    // server a pool index (not the AbilityData asset itself - ScriptableObjects
-    // can't cross an RPC) to identify which spell a slot is bound to.
-    [SerializeField] private List<AbilityData> abilityPool = new List<AbilityData>();
     [SerializeField] private float facingConeAngle = 120f;
     public float FacingConeAngle => facingConeAngle;
 
@@ -27,10 +22,11 @@ public class PlayerAbilities : NetworkBehaviour
     private string fizzleMessage;
     private float fizzleMessageEndTime;
 
-    // Server-authoritative: for each of the 8 loadout slots, which abilityPool
-    // index (or -1 if empty) the owning player has bound to it.
-    private readonly int[] serverSlotPoolIndex = new int[LoadoutSelection.MaxSlots];
-    private readonly float[] cooldownReadyTime = new float[64];
+    // Server-authoritative: which ability (or null) the owning player has in
+    // each loadout slot. Clients only ever send slot indices to cast, and
+    // ability Ids to (re)assign slots - never the assets themselves.
+    private readonly AbilityData[] serverSlotAbilities = new AbilityData[PlayerProfile.AbilitySlots];
+    private readonly Dictionary<AbilityData, float> cooldownReadyTime = new Dictionary<AbilityData, float>();
 
     // Server-authoritative cast lock - while Time.time is before this, no
     // new cast (instant or otherwise) can start, regardless of which
@@ -43,7 +39,6 @@ public class PlayerAbilities : NetworkBehaviour
     {
         targeting = GetComponent<PlayerTargeting>();
         stats = GetComponent<CharacterStats>();
-        for (int i = 0; i < serverSlotPoolIndex.Length; i++) serverSlotPoolIndex[i] = -1;
     }
 
     public override void OnNetworkSpawn()
@@ -62,21 +57,16 @@ public class PlayerAbilities : NetworkBehaviour
 
     private void SyncLoadoutToServer()
     {
-        int[] slotToPoolIndex = new int[LoadoutSelection.MaxSlots];
-        for (int i = 0; i < LoadoutSelection.MaxSlots; i++)
-        {
-            slotToPoolIndex[i] = abilityPool.IndexOf(LoadoutSelection.SlotAbilities[i]);
-        }
-        SetLoadoutServerRpc(slotToPoolIndex);
+        SetLoadoutServerRpc(string.Join(";", ProfileStore.Current.SlotAbilityIds));
     }
 
     [ServerRpc]
-    private void SetLoadoutServerRpc(int[] slotToPoolIndex)
+    private void SetLoadoutServerRpc(string joinedAbilityIds)
     {
-        for (int i = 0; i < serverSlotPoolIndex.Length && i < slotToPoolIndex.Length; i++)
+        string[] ids = (joinedAbilityIds ?? "").Split(';');
+        for (int i = 0; i < serverSlotAbilities.Length; i++)
         {
-            int poolIndex = slotToPoolIndex[i];
-            serverSlotPoolIndex[i] = (poolIndex >= 0 && poolIndex < abilityPool.Count) ? poolIndex : -1;
+            serverSlotAbilities[i] = i < ids.Length ? GameDatabase.GetAbility(ids[i]) : null;
         }
     }
 
@@ -86,10 +76,11 @@ public class PlayerAbilities : NetworkBehaviour
         if (MainMenu.IsOpen) return;
         if (isCasting) return; // can't start a new cast until the current one finishes
 
-        for (int slot = 0; slot < LoadoutSelection.MaxSlots; slot++)
+        PlayerProfile profile = ProfileStore.Current;
+        for (int slot = 0; slot < PlayerProfile.AbilitySlots; slot++)
         {
-            AbilityData ability = LoadoutSelection.SlotAbilities[slot];
-            KeyBindingOption? key = LoadoutSelection.SlotKeys[slot];
+            AbilityData ability = profile.GetSlotAbility(slot);
+            KeyBindingOption? key = profile.GetSlotKey(slot);
             if (ability == null || !key.HasValue) continue;
             if (!key.Value.WasPressedThisFrame()) continue;
 
@@ -169,14 +160,11 @@ public class PlayerAbilities : NetworkBehaviour
     {
         if (Time.time < serverCastEndTime) return; // still resolving a previous cast
 
-        if (slotIndex < 0 || slotIndex >= serverSlotPoolIndex.Length) return;
+        if (slotIndex < 0 || slotIndex >= serverSlotAbilities.Length) return;
 
-        int poolIndex = serverSlotPoolIndex[slotIndex];
-        if (poolIndex < 0 || poolIndex >= abilityPool.Count) return;
-
-        AbilityData ability = abilityPool[poolIndex];
+        AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null) return;
-        if (Time.time < cooldownReadyTime[poolIndex]) return;
+        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime) return;
 
         if (ability.RequiresTarget)
         {
@@ -186,12 +174,12 @@ public class PlayerAbilities : NetworkBehaviour
 
         if (!stats.TrySpendMana(ability.ManaCost)) return;
 
-        cooldownReadyTime[poolIndex] = Time.time + ability.Cooldown;
+        cooldownReadyTime[ability] = Time.time + ability.Cooldown;
 
         if (ability.CastTime > 0f)
         {
             serverCastEndTime = Time.time + ability.CastTime;
-            PlayCastVfxClientRpc(poolIndex, ability.CastTime);
+            PlayCastVfxClientRpc(ability.Id, ability.CastTime);
             StartCoroutine(ResolveAfterCastTime(ability, targetNetworkObjectId, ability.CastTime));
         }
         else
@@ -202,15 +190,11 @@ public class PlayerAbilities : NetworkBehaviour
 
     // Everyone sees the caster's hand-glow VFX, not just the owner - it's
     // purely cosmetic (no gameplay state), so each client just instantiates
-    // it locally rather than it being a NetworkObject. poolIndex is used
-    // instead of the AbilityData itself since ScriptableObjects can't cross
-    // an RPC, same as everywhere else abilities are referenced over the wire.
+    // it locally rather than it being a NetworkObject.
     [ClientRpc]
-    private void PlayCastVfxClientRpc(int poolIndex, float duration)
+    private void PlayCastVfxClientRpc(string abilityId, float duration)
     {
-        if (poolIndex < 0 || poolIndex >= abilityPool.Count) return;
-
-        AbilityData ability = abilityPool[poolIndex];
+        AbilityData ability = GameDatabase.GetAbility(abilityId);
         if (ability == null || ability.CastVfxPrefab == null) return;
 
         Vector3 spawnPosition = transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;

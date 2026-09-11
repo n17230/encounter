@@ -51,13 +51,13 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
-        if (MovementBindings.WasPressed(MovementAction.AutoRun))
+        if (MovementInput.WasPressed(MovementAction.AutoRun))
         {
             autoRun = !autoRun;
         }
 
-        bool forwardHeld = MovementBindings.IsHeld(MovementAction.Forward) || (Input.GetMouseButton(0) && Input.GetMouseButton(1));
-        bool backwardHeld = MovementBindings.IsHeld(MovementAction.Backward);
+        bool forwardHeld = MovementInput.IsHeld(MovementAction.Forward) || (Input.GetMouseButton(0) && Input.GetMouseButton(1));
+        bool backwardHeld = MovementInput.IsHeld(MovementAction.Backward);
         if (autoRun && (forwardHeld || backwardHeld))
         {
             autoRun = false;
@@ -68,10 +68,10 @@ public class PlayerMovement : NetworkBehaviour
         else if (backwardHeld) forwardInput = -1f;
 
         float strafe = 0f;
-        if (MovementBindings.IsHeld(MovementAction.StrafeRight)) strafe += 1f;
-        if (MovementBindings.IsHeld(MovementAction.StrafeLeft)) strafe -= 1f;
+        if (MovementInput.IsHeld(MovementAction.StrafeRight)) strafe += 1f;
+        if (MovementInput.IsHeld(MovementAction.StrafeLeft)) strafe -= 1f;
 
-        bool jumpRequested = MovementBindings.WasPressed(MovementAction.Jump);
+        bool jumpRequested = MovementInput.WasPressed(MovementAction.Jump);
 
         float lookDeltaYaw = 0f;
         if (Input.GetMouseButton(1))

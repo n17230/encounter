@@ -5,13 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(CharacterStats))]
 public class CharacterEquipment : NetworkBehaviour
 {
-    private static readonly int SlotCount = System.Enum.GetValues(typeof(GearSlot)).Length;
-
-    // All gear items that exist in the game, in a fixed order shared with
-    // MainMenu's "Available Gear" list - same pool-index-over-RPC pattern
-    // as PlayerAbilities.abilityPool, since ItemData ScriptableObjects
-    // can't be sent directly over an RPC.
-    [SerializeField] private List<ItemData> itemPool = new List<ItemData>();
+    private static readonly int SlotCount = PlayerProfile.GearSlotCount;
 
     private CharacterStats stats;
     private readonly ItemData[] equippedItems = new ItemData[SlotCount];
@@ -38,22 +32,17 @@ public class CharacterEquipment : NetworkBehaviour
 
     private void SyncGearToServer()
     {
-        int[] slotToPoolIndex = new int[SlotCount];
-        for (int i = 0; i < SlotCount; i++)
-        {
-            ItemData equipped = GearSelection.EquippedItems[i];
-            slotToPoolIndex[i] = equipped != null ? itemPool.IndexOf(equipped) : -1;
-        }
-        SetGearServerRpc(slotToPoolIndex);
+        SetGearServerRpc(string.Join(";", ProfileStore.Current.GearIds));
     }
 
     [ServerRpc]
-    private void SetGearServerRpc(int[] slotToPoolIndex)
+    private void SetGearServerRpc(string joinedItemIds)
     {
-        for (int slot = 0; slot < SlotCount && slot < slotToPoolIndex.Length; slot++)
+        string[] ids = (joinedItemIds ?? "").Split(';');
+        for (int slot = 0; slot < SlotCount; slot++)
         {
-            int poolIndex = slotToPoolIndex[slot];
-            ItemData item = (poolIndex >= 0 && poolIndex < itemPool.Count) ? itemPool[poolIndex] : null;
+            ItemData item = slot < ids.Length ? GameDatabase.GetItem(ids[slot]) : null;
+            if (item != null && (int)item.Slot != slot) item = null; // wrong-slot items are rejected
             Equip((GearSlot)slot, item);
         }
 

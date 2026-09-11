@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
   m_Name: AbilityFirebolt
   m_EditorClassIdentifier: 
+  Id: firebolt
   AbilityName: Firebolt
   RequiresTarget: 1
   Range: 50

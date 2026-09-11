@@ -1,95 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public static class TestingAreaGate
-{
-    public static bool Entered;
-}
-
-public struct KeyBindingOption
-{
-    public KeyCode Key;
-    public bool RequiresShift;
-
-    public KeyBindingOption(KeyCode key, bool requiresShift)
-    {
-        Key = key;
-        RequiresShift = requiresShift;
-    }
-
-    public string DisplayName => RequiresShift ? $"Shift+{Key}" : Key.ToString();
-
-    public bool WasPressedThisFrame()
-    {
-        bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        if (RequiresShift != shiftHeld) return false;
-        return Input.GetKeyDown(Key);
-    }
-
-    public bool Matches(KeyBindingOption other) => Key == other.Key && RequiresShift == other.RequiresShift;
-}
-
-// Testing-lobby-scoped kit picker: up to 8 unique abilities, each with a
-// player-chosen key binding from a fixed allowed set. Not the real
-// player-assignable loadout system from DESIGN_IDEAS.md - that needs a
-// proper item/ability unlock system first.
-public static class LoadoutSelection
-{
-    public const int MaxSlots = 8;
-    public static readonly AbilityData[] SlotAbilities = new AbilityData[MaxSlots];
-    public static readonly KeyBindingOption?[] SlotKeys = new KeyBindingOption?[MaxSlots];
-}
-
-// Testing-lobby-scoped gear picker: one item per GearSlot. Not the real
-// persistent/unlock-gated equipment system from DESIGN_IDEAS.md.
-public static class GearSelection
-{
-    public static readonly ItemData[] EquippedItems = new ItemData[System.Enum.GetValues(typeof(GearSlot)).Length];
-}
-
-public enum MovementAction { Forward, Backward, StrafeLeft, StrafeRight, Jump, AutoRun }
-
-// Owner-local movement key bindings, rebindable from the in-game menu. Same
-// static/resets-on-restart scoping as LoadoutSelection - not persisted.
-public static class MovementBindings
-{
-    // Indexed by MovementAction, so this order must match the enum's.
-    private static readonly KeyCode[] Defaults =
-    {
-        KeyCode.W, KeyCode.S, KeyCode.A, KeyCode.D, KeyCode.Space, KeyCode.Backslash,
-    };
-
-    public static readonly KeyCode[] Keys = (KeyCode[])Defaults.Clone();
-
-    public static bool IsHeld(MovementAction action) => Input.GetKey(Keys[(int)action]);
-    public static bool WasPressed(MovementAction action) => Input.GetKeyDown(Keys[(int)action]);
-
-    public static void ResetToDefaults()
-    {
-        System.Array.Copy(Defaults, Keys, Keys.Length);
-    }
-}
-
-// Uniform scale for all of the IMGUI dev UI. Every OnGUI in the project
-// calls Apply() first, then lays out against Width/Height instead of
-// Screen.width/height so edge-anchored elements stay on the edges.
-public static class UIScale
-{
-    public const float Min = 0.75f;
-    public const float Max = 2.5f;
-    public const float Step = 0.25f;
-
-    public static float Value = 1f;
-
-    public static float Width => Screen.width / Value;
-    public static float Height => Screen.height / Value;
-
-    public static void Apply()
-    {
-        GUI.matrix = Matrix4x4.Scale(new Vector3(Value, Value, 1f));
-    }
-}
-
+// Pregame menu (skills / gear / options / enter) and, once in the testing
+// area, the Escape menu that reuses the same panels. All choices are read
+// from and written to ProfileStore.Current, which persists across restarts.
 public class MainMenu : MonoBehaviour
 {
     private enum Panel { None, Skills, Gear, Options }
@@ -107,14 +21,13 @@ public class MainMenu : MonoBehaviour
     // re-send any skill/gear changes to the server.
     public static event System.Action Closed;
 
-    [SerializeField] private AbilityData[] availableAbilities;
-    [SerializeField] private ItemData[] availableGear;
-
     private Panel activePanel = Panel.None;
     private int selectedSlot = -1;
     private int awaitingKeyForSlot = -1;
     private int awaitingKeyForMovement = -1;
     private Vector2 scrollPosition;
+
+    private static PlayerProfile Profile => ProfileStore.Current;
 
     private static KeyBindingOption[] BuildAllowedKeyBindings()
     {
@@ -182,7 +95,17 @@ public class MainMenu : MonoBehaviour
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
+        ProfileStore.Save();
         Closed?.Invoke();
+    }
+
+    private void LeavePanel()
+    {
+        activePanel = Panel.None;
+        selectedSlot = -1;
+        awaitingKeyForSlot = -1;
+        awaitingKeyForMovement = -1;
+        ProfileStore.Save();
     }
 
     private void CaptureAbilityKey()
@@ -191,16 +114,14 @@ public class MainMenu : MonoBehaviour
         {
             if (!option.WasPressedThisFrame()) continue;
 
-            for (int i = 0; i < LoadoutSelection.MaxSlots; i++)
+            for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
             {
-                if (LoadoutSelection.SlotKeys[i].HasValue && LoadoutSelection.SlotKeys[i].Value.Matches(option))
-                {
-                    LoadoutSelection.SlotKeys[i] = null;
-                }
+                KeyBindingOption? existing = Profile.GetSlotKey(i);
+                if (existing.HasValue && existing.Value.Matches(option)) Profile.SetSlotKey(i, null);
             }
             if (!option.RequiresShift) UnbindMovementKey(option.Key);
 
-            LoadoutSelection.SlotKeys[awaitingKeyForSlot] = option;
+            Profile.SetSlotKey(awaitingKeyForSlot, option);
             awaitingKeyForSlot = -1;
             break;
         }
@@ -216,16 +137,16 @@ public class MainMenu : MonoBehaviour
             if (!Input.GetKeyDown(key)) continue;
 
             UnbindMovementKey(key);
-            for (int i = 0; i < LoadoutSelection.MaxSlots; i++)
+            for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
             {
-                KeyBindingOption? slotKey = LoadoutSelection.SlotKeys[i];
+                KeyBindingOption? slotKey = Profile.GetSlotKey(i);
                 if (slotKey.HasValue && slotKey.Value.Key == key && !slotKey.Value.RequiresShift)
                 {
-                    LoadoutSelection.SlotKeys[i] = null;
+                    Profile.SetSlotKey(i, null);
                 }
             }
 
-            MovementBindings.Keys[awaitingKeyForMovement] = key;
+            Profile.MovementKeys[awaitingKeyForMovement] = key;
             awaitingKeyForMovement = -1;
             return;
         }
@@ -233,9 +154,10 @@ public class MainMenu : MonoBehaviour
 
     private static void UnbindMovementKey(KeyCode key)
     {
-        for (int i = 0; i < MovementBindings.Keys.Length; i++)
+        KeyCode[] keys = Profile.MovementKeys;
+        for (int i = 0; i < keys.Length; i++)
         {
-            if (MovementBindings.Keys[i] == key) MovementBindings.Keys[i] = KeyCode.None;
+            if (keys[i] == key) keys[i] = KeyCode.None;
         }
     }
 
@@ -327,6 +249,7 @@ public class MainMenu : MonoBehaviour
         if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
         if (GUILayout.Button("Enter Testing Area", GUILayout.Height(40)))
         {
+            ProfileStore.Save();
             TestingAreaGate.Entered = true;
         }
         GUILayout.EndArea();
@@ -352,28 +275,26 @@ public class MainMenu : MonoBehaviour
 
         GUILayout.BeginVertical(GUILayout.Width(300));
         GUILayout.Label("Available Abilities");
-        foreach (AbilityData ability in availableAbilities)
+        foreach (AbilityData ability in GameDatabase.Abilities)
         {
-            if (ability == null) continue;
-            if (System.Array.IndexOf(LoadoutSelection.SlotAbilities, ability) >= 0) continue;
+            if (Profile.IndexOfAbility(ability) >= 0) continue;
 
             if (GUILayout.Button(new GUIContent(ability.AbilityName, BuildAbilityTooltip(ability))))
             {
-                int emptySlot = System.Array.IndexOf(LoadoutSelection.SlotAbilities, null);
-                if (emptySlot >= 0)
-                {
-                    LoadoutSelection.SlotAbilities[emptySlot] = ability;
-                }
+                int emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, null);
+                if (emptySlot < 0) emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, "");
+                if (emptySlot >= 0) Profile.SetSlotAbility(emptySlot, ability);
             }
         }
         GUILayout.EndVertical();
 
         GUILayout.BeginVertical(GUILayout.Width(300));
-        GUILayout.Label("Your Kit (8 slots)");
-        for (int i = 0; i < LoadoutSelection.MaxSlots; i++)
+        GUILayout.Label($"Your Kit ({PlayerProfile.AbilitySlots} slots)");
+        for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
         {
-            AbilityData slotAbility = LoadoutSelection.SlotAbilities[i];
-            string keyLabel = LoadoutSelection.SlotKeys[i].HasValue ? LoadoutSelection.SlotKeys[i].Value.DisplayName : "Unbound";
+            AbilityData slotAbility = Profile.GetSlotAbility(i);
+            KeyBindingOption? slotKey = Profile.GetSlotKey(i);
+            string keyLabel = slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound";
             string label = slotAbility != null ? $"{i + 1}. {slotAbility.AbilityName} [{keyLabel}]" : $"{i + 1}. (empty)";
 
             if (slotAbility == null)
@@ -393,8 +314,8 @@ public class MainMenu : MonoBehaviour
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Remove"))
                 {
-                    LoadoutSelection.SlotAbilities[i] = null;
-                    LoadoutSelection.SlotKeys[i] = null;
+                    Profile.SetSlotAbility(i, null);
+                    Profile.SetSlotKey(i, null);
                     selectedSlot = -1;
                 }
                 if (GUILayout.Button(awaitingKeyForSlot == i ? "Press a key..." : "Set Key Binding"))
@@ -409,12 +330,7 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndHorizontal();
         GUILayout.EndScrollView();
 
-        if (GUILayout.Button("Back"))
-        {
-            activePanel = Panel.None;
-            selectedSlot = -1;
-            awaitingKeyForSlot = -1;
-        }
+        if (GUILayout.Button("Back")) LeavePanel();
         GUILayout.EndArea();
     }
 
@@ -426,8 +342,7 @@ public class MainMenu : MonoBehaviour
         GUILayout.Label("Choose Your Gear");
         foreach (GearSlot slot in System.Enum.GetValues(typeof(GearSlot)))
         {
-            int slotIndex = (int)slot;
-            ItemData equipped = GearSelection.EquippedItems[slotIndex];
+            ItemData equipped = Profile.GetGear(slot);
 
             GUILayout.BeginHorizontal();
             string slotLabel = $"{slot}: {(equipped != null ? equipped.ItemName : "(empty)")}";
@@ -435,21 +350,17 @@ public class MainMenu : MonoBehaviour
 
             if (equipped != null)
             {
-                if (GUILayout.Button("Unequip", GUILayout.Width(80)))
-                {
-                    GearSelection.EquippedItems[slotIndex] = null;
-                }
+                if (GUILayout.Button("Unequip", GUILayout.Width(80))) Profile.SetGear(slot, null);
             }
             else
             {
-                foreach (ItemData item in availableGear)
+                foreach (ItemData item in GameDatabase.Items)
                 {
-                    if (item == null || item.Slot != slot) continue;
-                    if (System.Array.IndexOf(GearSelection.EquippedItems, item) >= 0) continue;
+                    if (item.Slot != slot || Profile.IsEquipped(item)) continue;
 
                     if (GUILayout.Button(new GUIContent(item.ItemName, BuildItemTooltip(item)), GUILayout.Width(100)))
                     {
-                        GearSelection.EquippedItems[slotIndex] = item;
+                        Profile.SetGear(slot, item);
                     }
                 }
             }
@@ -458,10 +369,7 @@ public class MainMenu : MonoBehaviour
 
         GUILayout.EndScrollView();
 
-        if (GUILayout.Button("Back"))
-        {
-            activePanel = Panel.None;
-        }
+        if (GUILayout.Button("Back")) LeavePanel();
         GUILayout.EndArea();
     }
 
@@ -471,30 +379,25 @@ public class MainMenu : MonoBehaviour
 
         GUILayout.Label("UI Scale");
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("-", GUILayout.Width(40)))
-        {
-            UIScale.Value = Mathf.Max(UIScale.Min, UIScale.Value - UIScale.Step);
-        }
+        if (GUILayout.Button("-", GUILayout.Width(40))) UIScale.Value -= UIScale.Step;
         GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
         GUILayout.Label($"{UIScale.Value * 100f:0}%", centered);
-        if (GUILayout.Button("+", GUILayout.Width(40)))
-        {
-            UIScale.Value = Mathf.Min(UIScale.Max, UIScale.Value + UIScale.Step);
-        }
+        if (GUILayout.Button("+", GUILayout.Width(40))) UIScale.Value += UIScale.Step;
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
         GUILayout.Label("Movement Keybindings");
 
-        for (int i = 0; i < MovementBindings.Keys.Length; i++)
+        KeyCode[] keys = Profile.MovementKeys;
+        for (int i = 0; i < keys.Length; i++)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(MovementActionNames[i], GUILayout.Width(120));
 
             string keyLabel;
             if (awaitingKeyForMovement == i) keyLabel = "Press a key...";
-            else if (MovementBindings.Keys[i] == KeyCode.None) keyLabel = "Unbound";
-            else keyLabel = MovementBindings.Keys[i].ToString();
+            else if (keys[i] == KeyCode.None) keyLabel = "Unbound";
+            else keyLabel = keys[i].ToString();
 
             if (GUILayout.Button(keyLabel))
             {
@@ -506,15 +409,11 @@ public class MainMenu : MonoBehaviour
 
         if (GUILayout.Button("Reset to Defaults"))
         {
-            MovementBindings.ResetToDefaults();
+            System.Array.Copy(MovementInput.Defaults, keys, keys.Length);
             awaitingKeyForMovement = -1;
         }
 
-        if (GUILayout.Button("Back"))
-        {
-            activePanel = Panel.None;
-            awaitingKeyForMovement = -1;
-        }
+        if (GUILayout.Button("Back")) LeavePanel();
         GUILayout.EndArea();
     }
 }

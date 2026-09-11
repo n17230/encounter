@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearShield
   m_EditorClassIdentifier:
+  Id: shield
   ItemName: Shield
   Slot: 14
   Bonuses:

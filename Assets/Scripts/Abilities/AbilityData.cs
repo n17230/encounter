@@ -3,6 +3,9 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "reallyfungame/Ability", fileName = "NewAbility")]
 public class AbilityData : ScriptableObject
 {
+    // Stable identity used over the network and in saved profiles. Never
+    // change once content ships; the asset name/order can change freely.
+    public string Id;
     public string AbilityName = "New Ability";
     public bool RequiresTarget = true;
     public float Range = 30f;
