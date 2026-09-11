@@ -145,6 +145,14 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   frame. `DebuffType` enum is gone. Icebolt's direct hit uses
   `AbilityData.DirectHitEffectDuration` (5s) vs. the patch's
   `Effect.Duration` (3s).
+- **Resource numbers** (`Player.prefab`): 1000 health / 1000 mana. Regen
+  is **discrete**: every `regenTickInterval` (5 s) the character gains
+  rate × 5 — base mana regen 1/s → **5 mana per 5 s**, base health regen
+  1.25/s → 6.25 per 5 s; the dead don't regen. Rates stay per-second so
+  gear/aura bonuses read naturally (the Amulet's +1.5/s = +7.5 per tick).
+  Firebolt/Icebolt cost **120 mana** (no cooldown, 2 s cast), so a full
+  pool is ~8 casts and takes 1000/1 = ~17 min to refill from empty on
+  base regen alone — mana is meant to be a real constraint now.
 - **Synced derived stats**: `Stat` modifiers (gear, effects) only exist
   server-side, so `CharacterStats` mirrors `MaxHealth`/`MaxMana`/`RunSpeed`
   into `SyncedMaxHealth`/`SyncedMaxMana`/`SyncedRunSpeed`

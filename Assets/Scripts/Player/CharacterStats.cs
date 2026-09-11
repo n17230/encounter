@@ -16,6 +16,11 @@ public class CharacterStats : NetworkBehaviour
     [SerializeField] private float baseRunSpeed = 6f;
     [SerializeField] private float baseArmor = 0f;
 
+    // Regen is paid out in discrete ticks rather than continuously: every
+    // regenTickInterval seconds, rate x interval is added. Rates stay in
+    // per-second units so gear/aura bonuses read naturally.
+    [SerializeField] private float regenTickInterval = 5f;
+
     public Stat MaxHealth { get; private set; }
     public Stat HealthRegenRate { get; private set; }
     public Stat MaxMana { get; private set; }
@@ -50,6 +55,7 @@ public class CharacterStats : NetworkBehaviour
     private readonly List<(EffectImmunity rule, object source)> immunities = new List<(EffectImmunity, object)>();
     private bool isDead;
     private ThreatTable threatTable;
+    private float nextRegenTick;
 
     public event Action OnDeath;
 
@@ -89,6 +95,7 @@ public class CharacterStats : NetworkBehaviour
         if (!IsServer) return;
         CurrentHealth.Value = MaxHealth.Value;
         CurrentMana.Value = MaxMana.Value;
+        nextRegenTick = Time.time + regenTickInterval;
         SyncDerivedStats();
     }
 
@@ -106,13 +113,12 @@ public class CharacterStats : NetworkBehaviour
 
         SyncDerivedStats();
 
-        if (CurrentHealth.Value < MaxHealth.Value)
+        while (Time.time >= nextRegenTick)
         {
-            CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + HealthRegenRate.Value * Time.fixedDeltaTime);
-        }
-        if (CurrentMana.Value < MaxMana.Value)
-        {
-            CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + ManaRegenRate.Value * Time.fixedDeltaTime);
+            nextRegenTick += regenTickInterval;
+            if (isDead) continue;
+            CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + HealthRegenRate.Value * regenTickInterval);
+            CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + ManaRegenRate.Value * regenTickInterval);
         }
 
         effects.Tick(Time.time, TickEffect);

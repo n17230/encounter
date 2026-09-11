@@ -448,7 +448,7 @@ MonoBehaviour:
   baseMaxHealth: 1000
   baseHealthRegenRate: 1.25
   baseMaxMana: 1000
-  baseManaRegenRate: 12.5
+  baseManaRegenRate: 1
   baseRunSpeed: 6
   baseArmor: 0
 --- !u!114 &6829104506017181073
