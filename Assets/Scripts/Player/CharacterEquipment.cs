@@ -56,8 +56,15 @@ public class CharacterEquipment : NetworkBehaviour
         for (int slot = 0; slot < SlotCount; slot++)
         {
             ItemData item = slot < ids.Length ? GameDatabase.GetItem(ids[slot]) : null;
-            if (item != null && (int)item.Slot != slot) item = null; // wrong-slot items are rejected
-            Equip((GearSlot)slot, item);
+            GearSlot physicalSlot = (GearSlot)slot;
+
+            // A ring item's own Slot is just "Ring1" as a category; it's
+            // valid in either physical ring slot. Everything else needs an
+            // exact match.
+            bool validPlacement = item != null && (item.Slot.IsRing() ? physicalSlot.IsRing() : item.Slot == physicalSlot);
+            if (!validPlacement) item = null;
+
+            Equip(physicalSlot, item);
         }
 
         bool broadcasts = false;

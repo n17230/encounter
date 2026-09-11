@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Id: fire_trinket
   ItemName: Fire Trinket
-  Slot: 12
+  Slot: 10
   Bonuses:
   - Stat: 8
     ModifierType: 1

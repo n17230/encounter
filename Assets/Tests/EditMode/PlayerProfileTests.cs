@@ -71,4 +71,13 @@ public class PlayerProfileTests
         Assert.AreEqual(KeyCode.UpArrow, loaded.MovementKeys[(int)MovementAction.Forward]);
         Assert.AreEqual(1.5f, loaded.UiScale);
     }
+
+    [Test]
+    public void OnlyRing1AndRing2AreRingSlots()
+    {
+        Assert.IsTrue(GearSlot.Ring1.IsRing());
+        Assert.IsTrue(GearSlot.Ring2.IsRing());
+        Assert.IsFalse(GearSlot.Trinket.IsRing());
+        Assert.IsFalse(GearSlot.MainHand.IsRing());
+    }
 }

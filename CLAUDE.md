@@ -239,6 +239,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
   allies' minimaps draw a broadcasting player regardless of their own
   reveals (`GearTransmittingBeacon`, Ring1, Id `transmitting_beacon`).
+  **Gear slots: 13, not 15** — `GearSlot` has `Ring1`/`Ring2` only
+  (`Ring3`/`Ring4` removed 2026-09-11), and those two are
+  **interchangeable**: a ring item's `Slot` is just the `Ring1` category,
+  `GearSlotExtensions.IsRing()` treats either physical slot as valid for
+  it in `CharacterEquipment.SetGearServerRpc`'s placement check, and
+  `MainMenu.TargetSlotFor` picks whichever physical ring slot is free
+  (Ring1 first) when equipping one from the inventory grid.
   No terrain by design.
   Disc/blip textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D

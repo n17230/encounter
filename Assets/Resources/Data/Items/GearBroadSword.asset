@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Id: broad_sword
   ItemName: Broad Sword
-  Slot: 13
+  Slot: 11
   Bonuses:
   - Stat: 7
     ModifierType: 1

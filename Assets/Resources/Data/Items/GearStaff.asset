@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Id: staff
   ItemName: Staff
-  Slot: 13
+  Slot: 11
   Bonuses:
   - Stat: 6
     ModifierType: 1

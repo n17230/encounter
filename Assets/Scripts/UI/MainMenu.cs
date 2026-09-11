@@ -446,7 +446,7 @@ public class MainMenu : MonoBehaviour
     private static readonly string[] SlotShortNames =
     {
         "Head", "Neck", "Chest", "Cape", "Gloves", "Belt", "Legs", "Boots",
-        "Ring 1", "Ring 2", "Ring 3", "Ring 4", "Trinket", "Main", "Off",
+        "Ring 1", "Ring 2", "Trinket", "Main", "Off",
     };
 
     // Paper-doll on the left, inventory grid on the right. Items draw as an
@@ -491,13 +491,23 @@ public class MainMenu : MonoBehaviour
 
             if (GUI.Button(rect, new GUIContent("X", BuildItemTooltip(item) + "\n(click to equip)"), icon))
             {
-                Profile.SetGear(item.Slot, item);
+                Profile.SetGear(TargetSlotFor(item), item);
             }
         }
         if (index == 0) GUI.Label(new Rect(inventoryX, 24f, 300f, 20f), "(nothing left to equip)");
 
         if (GUI.Button(new Rect(0, 410f, 100f, 26f), "Back")) LeavePanel();
         GUILayout.EndArea();
+    }
+
+    // Rings equip into whichever physical ring slot is free (Ring1 first);
+    // if both are occupied, Ring1 is overwritten, same as any other slot.
+    private static GearSlot TargetSlotFor(ItemData item)
+    {
+        if (!item.Slot.IsRing()) return item.Slot;
+        if (Profile.GetGear(GearSlot.Ring1) == null) return GearSlot.Ring1;
+        if (Profile.GetGear(GearSlot.Ring2) == null) return GearSlot.Ring2;
+        return GearSlot.Ring1;
     }
 
     private void DrawOptionsPanel()

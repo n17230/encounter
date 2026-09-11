@@ -205,12 +205,13 @@ can equip at most **one item per slot**:
 - Belt
 - Legs
 - Boots
-- Ring x4 (4 separate, independent ring slots)
+- Ring x2 (interchangeable — any ring can go in either slot; decided
+  2026-09-11, reduced from the original 4)
 - Trinket
 - Main hand
 - Off hand
 
-That's **15 gear slots** per character.
+That's **13 gear slots** per character.
 
 - **Two-handed weapons**: a two-handed main-hand item occupies both the
   main hand and off hand slots, locking out off hand while equipped —
@@ -219,8 +220,6 @@ That's **15 gear slots** per character.
   unequip), not a strict 1 item ↔ 1 slot mapping.
 
 Open questions:
-- Do the 4 ring slots behave identically/interchangeably, or is there any
-  differentiation between them?
 - Items are slot-typed (a ring can only go in a ring slot, etc.) — any
   planned exceptions to that, or is it a hard rule?
 
@@ -312,3 +311,5 @@ Open questions:
 - 2026-09-07: Confirmed gear can boost max health/mana and their regen
   rates — regen rate itself needs to be a modifiable `Stat`, not a
   hardcoded constant.
+- 2026-09-11: Cut ring slots from 4 to 2, and made those 2 interchangeable
+  (resolves the open question above) — 15 gear slots become 13.

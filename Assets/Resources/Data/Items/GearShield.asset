@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   Id: shield
   ItemName: Shield
-  Slot: 14
+  Slot: 12
   Bonuses:
   - Stat: 5
     ModifierType: 0
