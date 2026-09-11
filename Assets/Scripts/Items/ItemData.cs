@@ -11,6 +11,7 @@ public class ItemData : ScriptableObject
     public List<StatBonus> Bonuses = new List<StatBonus>();
     public List<EffectImmunity> Immunities = new List<EffectImmunity>();
     public List<ItemAura> Auras = new List<ItemAura>();
+    public MinimapReveal Reveals = MinimapReveal.None;
 
     // For MainHand items: what the player's auto-attack swings with. Null on
     // anything that isn't a weapon (the unarmed Fists profile is used then).

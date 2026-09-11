@@ -12,6 +12,7 @@ public class PlayerHUD : NetworkBehaviour
 
     // Refreshed once per frame in Update rather than per OnGUI pass.
     private Targetable[] minimapBlips = new Targetable[0];
+    private MinimapReveal minimapReveals;
 
     private void Awake()
     {
@@ -23,7 +24,17 @@ public class PlayerHUD : NetworkBehaviour
     private void Update()
     {
         if (!IsOwner) return;
-        minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
+
+        minimapReveals = MinimapReveal.None;
+        foreach (GearSlot slot in System.Enum.GetValues(typeof(GearSlot)))
+        {
+            ItemData item = ProfileStore.Current.GetGear(slot);
+            if (item != null) minimapReveals |= item.Reveals;
+        }
+
+        minimapBlips = minimapReveals == MinimapReveal.None
+            ? System.Array.Empty<Targetable>()
+            : FindObjectsByType<Targetable>(FindObjectsSortMode.None);
     }
 
     private void OnGUI()
@@ -31,7 +42,7 @@ public class PlayerHUD : NetworkBehaviour
         if (!IsOwner) return;
 
         DevGui.Begin();
-        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips);
+        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips, minimapReveals);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
         GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));

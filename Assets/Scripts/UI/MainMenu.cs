@@ -272,6 +272,8 @@ public class MainMenu : MonoBehaviour
             foreach (StatBonus bonus in aura.Effect.Modifiers) sb.Append(", ").Append(DescribeBonus(bonus));
             sb.AppendLine();
         }
+        if ((item.Reveals & MinimapReveal.Players) != 0) sb.AppendLine("Reveals players on the minimap");
+        if ((item.Reveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Reveals monsters on the minimap");
 
         return sb.ToString().TrimEnd();
     }

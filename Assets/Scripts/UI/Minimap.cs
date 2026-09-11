@@ -20,7 +20,9 @@ public static class Minimap
     private static Texture2D discTexture;
     private static Texture2D blipTexture;
 
-    public static void Draw(Transform self, Targetable currentTarget, IReadOnlyList<Targetable> blips)
+    // reveals: which kinds of blip the wearer's gear lets them see. With
+    // MinimapReveal.None only the player's own marker draws.
+    public static void Draw(Transform self, Targetable currentTarget, IReadOnlyList<Targetable> blips, MinimapReveal reveals)
     {
         EnsureTextures();
 
@@ -34,11 +36,15 @@ public static class Minimap
         {
             if (blip == null || blip.transform == self) continue;
 
+            bool isPlayer = blip.GetComponent<PlayerMovement>() != null;
+            MinimapReveal needed = isPlayer ? MinimapReveal.Players : MinimapReveal.Mobs;
+            if ((reveals & needed) == 0) continue;
+
             Vector3 offset = blip.transform.position - self.position;
             Vector2 flat = new Vector2(offset.x, offset.z);
             if (flat.magnitude > WorldRadius) continue;
 
-            Color color = blip == currentTarget ? TargetColor : (blip.Stats != null && blip.Stats.GetComponent<PlayerMovement>() != null ? PlayerColor : MobColor);
+            Color color = blip == currentTarget ? TargetColor : (isPlayer ? PlayerColor : MobColor);
             DrawBlip(centre + WorldToMap(flat), 6f, color);
         }
 
