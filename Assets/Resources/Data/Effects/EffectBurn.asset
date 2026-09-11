@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Id: burn
   DisplayName: Burning
-  Duration: 3
-  TickDamage: 50
+  Duration: 5
+  TickDamage: 10
   TickInterval: 1
   Modifiers: []
