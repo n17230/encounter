@@ -16,7 +16,7 @@ MonoBehaviour:
   AbilityName: Vacuum
   RequiresTarget: 0
   Range: 30
-  Cooldown: 15
+  Cooldown: 25
   CastTime: 0
   ManaCost: 120
   ThreatValue: 0
