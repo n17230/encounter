@@ -20,7 +20,7 @@ MonoBehaviour:
   CastTime: 2
   ManaCost: 120
   ThreatValue: 10
-  Damage: 100
+  Damage: 140
   MissileSpeed: 30
   ProjectilePrefab: {fileID: 2881004069007213672, guid: 157a86356e801c947a7ae56e6cc193e4,
     type: 3}
