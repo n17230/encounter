@@ -193,6 +193,11 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   and Tab is the tab-targeting key — the summon count is −/+ buttons
   for exactly that reason. The only text field is the server-address
   box, which is gone once connected.
+- **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
+  radar bottom-right, north-up, player at centre with a heading tick,
+  every `Targetable` within 50 world units as a blip (players green,
+  mobs red, current target yellow). No terrain by design. Disc/blip
+  textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,

@@ -10,6 +10,9 @@ public class PlayerHUD : NetworkBehaviour
     private PlayerTargeting targeting;
     private PlayerAutoAttack autoAttack;
 
+    // Refreshed once per frame in Update rather than per OnGUI pass.
+    private Targetable[] minimapBlips = new Targetable[0];
+
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
@@ -17,11 +20,18 @@ public class PlayerHUD : NetworkBehaviour
         autoAttack = GetComponent<PlayerAutoAttack>();
     }
 
+    private void Update()
+    {
+        if (!IsOwner) return;
+        minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
+    }
+
     private void OnGUI()
     {
         if (!IsOwner) return;
 
         DevGui.Begin();
+        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
         GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));
