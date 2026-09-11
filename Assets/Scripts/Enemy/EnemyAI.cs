@@ -86,7 +86,12 @@ public class EnemyAI : NetworkBehaviour
         toTarget.y = 0f;
         float distance = toTarget.magnitude;
 
-        if (distance > attackRange)
+        // Reach and cadence come from the main-hand weapon when there is one;
+        // the serialized fields are the fallback for unarmed mobs.
+        float reach = mainHandWeapon != null ? mainHandWeapon.Range : attackRange;
+        float cadence = mainHandWeapon != null ? mainHandWeapon.SwingInterval : attackInterval;
+
+        if (distance > reach)
         {
             Vector3 moveDirection = toTarget.normalized;
             transform.rotation = Quaternion.LookRotation(moveDirection);
@@ -100,7 +105,7 @@ public class EnemyAI : NetworkBehaviour
 
             if (Time.time >= nextAttackTime)
             {
-                nextAttackTime = Time.time + attackInterval;
+                nextAttackTime = Time.time + cadence;
                 if (animator != null) animator.SetTrigger("attack");
 
                 // Single attack cadence (attackInterval) with each swing

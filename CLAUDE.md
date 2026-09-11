@@ -171,6 +171,17 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   menu), right-drag turns the body, left-drag free-looks the camera,
   left-click / Tab targets, Escape clears the target first and opens the
   menu only when nothing is targeted.
+  **Right-clicking a mob** (a click, not a drag) targets it and arms
+  **auto-attack** (`PlayerAutoAttack`): the server swings the equipped
+  MainHand item's `WeaponData` (or the `Fists` fallback wired on the
+  prefab) every `SwingInterval` while the target is within `Range` and
+  inside the facing cone, stays armed while closing distance, follows
+  Tab target changes, and disarms on untarget/death. `WeaponData` now
+  owns `Range` (2 = melee, same as the mobs) and `SwingInterval`;
+  `EnemyAI` reads those from its main-hand weapon too (its own
+  `attackRange`/`attackInterval` are only the unarmed fallback).
+  `ItemData.Weapon` links a MainHand item to its weapon (`GearSword` →
+  `WeaponSword`, 40 dmg / 2 s; Fists are 15 dmg / 1.5 s).
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no

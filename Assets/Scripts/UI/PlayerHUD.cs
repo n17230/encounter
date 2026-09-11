@@ -8,11 +8,13 @@ public class PlayerHUD : NetworkBehaviour
 {
     private CharacterStats stats;
     private PlayerTargeting targeting;
+    private PlayerAutoAttack autoAttack;
 
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
         targeting = GetComponent<PlayerTargeting>();
+        autoAttack = GetComponent<PlayerAutoAttack>();
     }
 
     private void OnGUI()
@@ -38,6 +40,12 @@ public class PlayerHUD : NetworkBehaviour
         {
             DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.SyncedMaxHealth.Value, Color.red);
             GUI.Label(new Rect(10, 50, 400, 20), DescribeEffects(target.Stats));
+        }
+
+        if (autoAttack != null && autoAttack.IsArmed)
+        {
+            WeaponData weapon = autoAttack.LocalWeapon;
+            GUI.Label(new Rect(10, 68, 300, 20), $"Auto-attacking ({(weapon != null ? weapon.WeaponName : "unarmed")})");
         }
     }
 

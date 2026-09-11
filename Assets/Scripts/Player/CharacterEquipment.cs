@@ -11,6 +11,9 @@ public class CharacterEquipment : NetworkBehaviour
     private readonly ItemData[] equippedItems = new ItemData[SlotCount];
     private bool initialGearApplied;
 
+    // Server-side view of what the main hand swings with (null = unarmed).
+    public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
+
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();

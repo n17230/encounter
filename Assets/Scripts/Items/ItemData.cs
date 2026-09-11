@@ -9,4 +9,8 @@ public class ItemData : ScriptableObject
     public string ItemName;
     public GearSlot Slot;
     public List<StatBonus> Bonuses = new List<StatBonus>();
+
+    // For MainHand items: what the player's auto-attack swings with. Null on
+    // anything that isn't a weapon (the unarmed Fists profile is used then).
+    public WeaponData Weapon;
 }

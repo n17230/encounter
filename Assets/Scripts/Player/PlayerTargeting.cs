@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -8,20 +9,30 @@ public class PlayerTargeting : NetworkBehaviour
     [SerializeField] private float maxTargetDistance = 100f;
     [SerializeField] private float tabTargetRange = 70f;
 
+    // A right-click that doesn't move the mouse is a click; anything more
+    // is the turn-drag that also uses the right button.
+    [SerializeField] private float clickMaxPixels = 5f;
+    [SerializeField] private float clickMaxSeconds = 0.3f;
+
     public Targetable CurrentTarget { get; private set; }
 
-    public void ClearTarget()
-    {
-        CurrentTarget = null;
-    }
+    // Raised when the player right-clicks a target: "attack this".
+    public event Action<Targetable> AttackRequested;
 
     private PlayerCamera playerCameraComponent;
     private Targetable self;
+    private Vector3 rightDownPosition;
+    private float rightDownTime;
 
     private void Awake()
     {
         playerCameraComponent = GetComponent<PlayerCamera>();
         self = GetComponent<Targetable>();
+    }
+
+    public void ClearTarget()
+    {
+        CurrentTarget = null;
     }
 
     private void Update()
@@ -34,14 +45,40 @@ public class PlayerTargeting : NetworkBehaviour
             CycleTarget();
         }
 
+        if (Input.GetMouseButtonDown(1))
+        {
+            rightDownPosition = Input.mousePosition;
+            rightDownTime = Time.time;
+        }
+        else if (Input.GetMouseButtonUp(1) && IsClick(rightDownPosition, rightDownTime))
+        {
+            Targetable clicked = RaycastTarget();
+            if (clicked != null && clicked != self)
+            {
+                CurrentTarget = clicked;
+                AttackRequested?.Invoke(clicked);
+            }
+        }
+
         if (!Input.GetMouseButtonDown(0)) return;
         if (Input.GetMouseButton(1)) return;
 
+        CurrentTarget = RaycastTarget();
+    }
+
+    private bool IsClick(Vector3 downPosition, float downTime)
+    {
+        return (Input.mousePosition - downPosition).magnitude <= clickMaxPixels
+            && Time.time - downTime <= clickMaxSeconds;
+    }
+
+    private Targetable RaycastTarget()
+    {
         Camera cam = playerCameraComponent.Camera;
-        if (cam == null) return;
+        if (cam == null) return null;
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        CurrentTarget = Physics.Raycast(ray, out RaycastHit hit, maxTargetDistance)
+        return Physics.Raycast(ray, out RaycastHit hit, maxTargetDistance)
             ? hit.collider.GetComponentInParent<Targetable>()
             : null;
     }

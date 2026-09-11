@@ -195,6 +195,7 @@ GameObject:
   - component: {fileID: 6082482177394902775}
   - component: {fileID: 3390821744671205318}
   - component: {fileID: 7777777777777770001}
+  - component: {fileID: 7777777777777770002}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -573,3 +574,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRespawn
   ShowTopMostFoldoutHeaderGroup: 1
   respawnPoint: {x: 0, y: 1, z: 0}
+--- !u!114 &7777777777777770002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8297905753372389552}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 928b00ab4cc0d934128f4ec10ef0878a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  unarmedWeapon: {fileID: 11400000, guid: d2ded500f3260885aaa58751ed9fb8ca, type: 2}
+  facingConeAngle: 120

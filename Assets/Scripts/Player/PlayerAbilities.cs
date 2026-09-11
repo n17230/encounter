@@ -371,16 +371,7 @@ public class PlayerAbilities : NetworkBehaviour
 
     private bool IsWithinFacingCone(NetworkObject targetObject)
     {
-        Vector3 toTarget = targetObject.transform.position - transform.position;
-        toTarget.y = 0f;
-        if (toTarget.sqrMagnitude < 0.0001f) return true;
-
-        Vector3 facing = transform.forward;
-        facing.y = 0f;
-        facing.Normalize();
-
-        float angle = Vector3.Angle(facing, toTarget.normalized);
-        return angle <= facingConeAngle * 0.5f;
+        return FacingCone.IsWithin(transform, targetObject.transform.position, facingConeAngle);
     }
 
     private bool HasLineOfSight(NetworkObject targetObject)
