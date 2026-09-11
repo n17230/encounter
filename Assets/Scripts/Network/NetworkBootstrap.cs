@@ -36,7 +36,7 @@ public class NetworkBootstrap : MonoBehaviour
         if (NetworkManager.Singleton == null) return;
         if (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer) return;
 
-        UIScale.Apply();
+        DevGui.Begin();
         GUILayout.BeginArea(new Rect(10, 10, 260, 140));
 
         GUILayout.Label("Server address");

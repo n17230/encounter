@@ -145,7 +145,7 @@ public class PlayerAbilities : NetworkBehaviour
     {
         if (!IsOwner) return;
 
-        UIScale.Apply();
+        DevGui.Begin();
         const float barWidth = 300f;
         const float barHeight = 24f;
         float x = (UIScale.Width - barWidth) * 0.5f;

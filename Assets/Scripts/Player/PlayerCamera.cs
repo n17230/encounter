@@ -13,7 +13,6 @@ public class PlayerCamera : NetworkBehaviour
 
     private float pitch;
     private float freeLookYaw;
-    private bool cursorLocked;
 
     public Camera Camera => playerCamera;
 
@@ -45,11 +44,6 @@ public class PlayerCamera : NetworkBehaviour
         // way the player is actually facing/moving.
         bool freeLooking = !menuOpen && Input.GetMouseButton(0) && !turning;
 
-        // While dragging to look, hide and lock the cursor (MMO style). This
-        // also gives the Game view exclusive input in the Editor, so keys
-        // like Tab can't move focus elsewhere and drop the held button.
-        SetCursorLocked(turning || freeLooking);
-
         if (turning || freeLooking)
         {
             pitch -= Input.GetAxis("Mouse Y") * pitchSensitivity;
@@ -67,18 +61,5 @@ public class PlayerCamera : NetworkBehaviour
         }
 
         cameraPivot.localRotation = Quaternion.Euler(pitch, freeLookYaw, 0f);
-    }
-
-    public override void OnNetworkDespawn()
-    {
-        if (IsOwner) SetCursorLocked(false);
-    }
-
-    private void SetCursorLocked(bool locked)
-    {
-        if (cursorLocked == locked) return;
-        cursorLocked = locked;
-        Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
-        Cursor.visible = !locked;
     }
 }

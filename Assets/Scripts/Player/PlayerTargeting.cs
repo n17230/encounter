@@ -19,15 +19,6 @@ public class PlayerTargeting : NetworkBehaviour
         self = GetComponent<Targetable>();
     }
 
-    // Tab is tab-targeting, never IMGUI focus traversal: swallow it before
-    // any OnGUI control can react to it.
-    private void OnGUI()
-    {
-        if (!IsOwner) return;
-        Event e = Event.current;
-        if (e.isKey && e.keyCode == KeyCode.Tab) e.Use();
-    }
-
     private void Update()
     {
         if (!IsOwner) return;

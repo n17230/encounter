@@ -19,7 +19,7 @@ public class PlayerHUD : NetworkBehaviour
     {
         if (!IsOwner) return;
 
-        UIScale.Apply();
+        DevGui.Begin();
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
         GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));

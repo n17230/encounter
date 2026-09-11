@@ -157,7 +157,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   (−/+ 25% steps, 75–250%) and movement rebinding (any non-mouse key;
   binding a key steals it from other movement actions *and* ability
   slots, and vice versa). Ability hotkeys are limited to 1–5, Shift+1–5,
-  F1–F5, Q/E/R/T/F/G. `UIScale.Apply()` must be the first line of every
+  F1–F5, Q/E/R/T/F/G. `DevGui.Begin()` (UI scale + swallows Tab so IMGUI focus traversal never grabs it) must be the first line of every
   `OnGUI`, laying out against `UIScale.Width/Height`.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the

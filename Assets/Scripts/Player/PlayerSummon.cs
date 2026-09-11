@@ -19,7 +19,7 @@ public class PlayerSummon : NetworkBehaviour
         if (!IsOwner) return;
         if (summonableMobs == null || summonableMobs.Length == 0) return;
 
-        UIScale.Apply();
+        DevGui.Begin();
         float x = UIScale.Width - 210;
 
         if (GUI.Button(new Rect(x, 10, 200, 20), panelOpen ? "Close Summon" : "Summon Mob"))

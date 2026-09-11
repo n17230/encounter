@@ -165,7 +165,7 @@ public class MainMenu : MonoBehaviour
     {
         if (TestingAreaGate.Entered && !IsOpen) return;
 
-        UIScale.Apply();
+        DevGui.Begin();
         switch (activePanel)
         {
             case Panel.None:
