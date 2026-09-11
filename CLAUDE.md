@@ -161,22 +161,25 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   details and a hard-won-lessons section: `ServerListenAddress` loopback
   default, `UNITY_SERVER` being defined in the Editor, Git-Bash `scp -r`
   silently dropping files). Server still runs via manual `nohup`, not
-  systemd. The scene's `UnityTransport` currently points at the VPS IP;
-  there's no local/VPS switch yet.
+  systemd. The scene's `UnityTransport` is authored with the VPS IP (what
+  a shipped build dials by default); `NetworkBootstrap`'s panel has an
+  address field that defaults to `127.0.0.1` in the Editor (incl. MPPM
+  virtual players) and remembers the last address in the profile.
 - A Windows Standalone build was sent to the user's brother and works
   end-to-end against the VPS.
 
 ## Not yet done
 
-1. systemd unit for the dedicated server.
-2. Local-vs-VPS connection target switch without editing the scene.
-3. Fire/ice ground patches as URP Decal Projectors (visual only; needs the
+1. systemd unit for the dedicated server, and **redeploy a fresh server
+   build** — the VPS still runs the pre-refactor build, whose network
+   protocol no longer matches (new NetworkVariables/RPC signatures).
+2. Fire/ice ground patches as URP Decal Projectors (visual only; needs the
    Decal renderer feature added to the three URP renderer assets in the
    Editor first) and real particle VFX instead of coloured discs.
-4. The designed systems in `DESIGN_IDEAS.md` / `ARCHITECTURE_NOTES.md`:
+3. The designed systems in `DESIGN_IDEAS.md` / `ARCHITECTURE_NOTES.md`:
    loot, account-backed unlock-gated profile, encounter wipe/reset state
    machine, taunt/threat reset on combat end, two-handed weapons.
-5. Consider downsizing the largest TriForge textures in `Assets/External`
+4. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
 
 ## Notes for future sessions
