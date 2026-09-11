@@ -33,5 +33,5 @@ MonoBehaviour:
   Effect: {fileID: 0}
   DirectHitEffectDuration: 0
   IsGroundTargeted: 1
-  GroundEffectRadius: 10
+  GroundEffectRadius: 15
   PullSpeed: 15

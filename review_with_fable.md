@@ -16,7 +16,7 @@ whole file once it's empty.
   show "Out of range" and stay in aiming mode rather than canceling?
 - Press the same hotkey again while aiming: does it cancel cleanly (no
   reticle left behind)?
-- Cast it near a mix of players and mobs standing within the 20-unit
+- Cast it near a mix of players and mobs standing within the 30-unit
   circle — do all of them get pulled toward the center, including the
   caster if they're standing in the circle too?
 - **Watch the console during a pull for `[PlayerMovement] client ...
@@ -29,7 +29,7 @@ whole file once it's empty.
   reach the center (not stuck, not a weird pause)?
 - Placeholder numbers on `AbilityVacuum` that were never specified,
   only guessed — reconsider all of these: Range 30, Cooldown 15s, Mana
-  cost 120, Pull speed 15/s. Only the 20-unit diameter (→ 10-unit
+  cost 120, Pull speed 15/s. Only the 30-unit diameter (→ 15-unit
   radius) came from you, and cast time is now 0 (instant) per request.
 
 ## 2. Auto-attack
