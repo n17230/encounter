@@ -10,6 +10,11 @@ public class PlayerTargeting : NetworkBehaviour
 
     public Targetable CurrentTarget { get; private set; }
 
+    public void ClearTarget()
+    {
+        CurrentTarget = null;
+    }
+
     private PlayerCamera playerCameraComponent;
     private Targetable self;
 

@@ -169,7 +169,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,
-  left-click / Tab targets, Escape menu.
+  left-click / Tab targets, Escape clears the target first and opens the
+  menu only when nothing is targeted.
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no

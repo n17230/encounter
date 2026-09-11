@@ -79,8 +79,29 @@ public class MainMenu : MonoBehaviour
 
         if (!TestingAreaGate.Entered) return;
 
-        if (IsOpen) CloseInGameMenu();
-        else OpenInGameMenu();
+        if (IsOpen)
+        {
+            CloseInGameMenu();
+            return;
+        }
+
+        // MMO convention: Escape first drops the current target; only with
+        // nothing targeted does it open the menu.
+        PlayerTargeting targeting = LocalPlayer<PlayerTargeting>();
+        if (targeting != null && targeting.CurrentTarget != null)
+        {
+            targeting.ClearTarget();
+            return;
+        }
+
+        OpenInGameMenu();
+    }
+
+    private static T LocalPlayer<T>() where T : Component
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager == null || manager.LocalClient == null || manager.LocalClient.PlayerObject == null) return null;
+        return manager.LocalClient.PlayerObject.GetComponent<T>();
     }
 
     private void OpenInGameMenu()
@@ -285,13 +306,6 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndArea();
     }
 
-    private static PlayerSummon LocalPlayerSummon()
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        if (manager == null || manager.LocalClient == null || manager.LocalClient.PlayerObject == null) return null;
-        return manager.LocalClient.PlayerObject.GetComponent<PlayerSummon>();
-    }
-
     // Testing-lobby tool: spawn mobs to fight. Buttons rather than a text
     // field for the count, because IMGUI's native Tab focus traversal grabs
     // any focusable control and Tab is the tab-targeting key.
@@ -300,7 +314,7 @@ public class MainMenu : MonoBehaviour
         GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 120, UIScale.Height / 2f - 150, 240, 300));
         GUILayout.Label("Summon Mobs");
 
-        PlayerSummon summon = LocalPlayerSummon();
+        PlayerSummon summon = LocalPlayer<PlayerSummon>();
         if (summon == null || summon.SummonableMobs.Count == 0)
         {
             GUILayout.Label("No player spawned yet.");
