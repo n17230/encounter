@@ -263,6 +263,7 @@ public class MainMenu : MonoBehaviour
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.AppendLine(item.ItemName);
         sb.AppendLine($"Slot: {item.Slot}");
+        if (item.Weapon != null) sb.AppendLine($"Weapon: {item.Weapon.Damage} dmg every {item.Weapon.SwingInterval}s");
 
         foreach (StatBonus bonus in item.Bonuses)
         {
@@ -415,42 +416,61 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    // Indexed by GearSlot.
+    private static readonly string[] SlotShortNames =
+    {
+        "Head", "Neck", "Chest", "Cape", "Gloves", "Belt", "Legs", "Boots",
+        "Ring 1", "Ring 2", "Ring 3", "Ring 4", "Trinket", "Main", "Off",
+    };
+
+    // Paper-doll on the left, inventory grid on the right. Items draw as an
+    // "X" placeholder until there's 2D art; hovering tells you what it is.
+    // "Inventory" is every item in the game that isn't equipped - there's
+    // no real inventory/loot system yet.
     private void DrawGearPanel()
     {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 200, UIScale.Height / 2f - 260, 400, 520));
-        scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(480));
+        const float cell = 60f;
+        const float gap = 6f;
+        const float inventoryX = 240f;
+        const int inventoryColumns = 6;
 
-        GUILayout.Label("Choose Your Gear");
-        foreach (GearSlot slot in System.Enum.GetValues(typeof(GearSlot)))
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 320, UIScale.Height / 2f - 220, 640, 440));
+        GUI.Label(new Rect(0, 0, 200, 20), "Equipment");
+        GUI.Label(new Rect(inventoryX, 0, 200, 20), "Inventory");
+
+        GUIStyle icon = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter, fontSize = 22, fontStyle = FontStyle.Bold };
+        GUIStyle tag = new GUIStyle(GUI.skin.label) { fontSize = 9, alignment = TextAnchor.UpperLeft };
+
+        GearSlot[] slots = (GearSlot[])System.Enum.GetValues(typeof(GearSlot));
+        for (int i = 0; i < slots.Length; i++)
         {
-            ItemData equipped = Profile.GetGear(slot);
+            Rect rect = new Rect((i % 3) * (cell + gap), 24f + (i / 3) * (cell + gap), cell, cell);
+            ItemData equipped = Profile.GetGear(slots[i]);
+            string tooltip = equipped != null ? BuildItemTooltip(equipped) + "\n(click to unequip)" : $"{SlotShortNames[i]} (empty)";
 
-            GUILayout.BeginHorizontal();
-            string slotLabel = $"{slot}: {(equipped != null ? equipped.ItemName : "(empty)")}";
-            GUILayout.Label(new GUIContent(slotLabel, equipped != null ? BuildItemTooltip(equipped) : null), GUILayout.Width(220));
-
-            if (equipped != null)
+            if (GUI.Button(rect, new GUIContent(equipped != null ? "X" : "", tooltip), icon) && equipped != null)
             {
-                if (GUILayout.Button("Unequip", GUILayout.Width(80))) Profile.SetGear(slot, null);
+                Profile.SetGear(slots[i], null);
             }
-            else
-            {
-                foreach (ItemData item in GameDatabase.Items)
-                {
-                    if (item.Slot != slot || Profile.IsEquipped(item)) continue;
-
-                    if (GUILayout.Button(new GUIContent(item.ItemName, BuildItemTooltip(item)), GUILayout.Width(100)))
-                    {
-                        Profile.SetGear(slot, item);
-                    }
-                }
-            }
-            GUILayout.EndHorizontal();
+            GUI.Label(new Rect(rect.x + 3f, rect.y + 2f, cell - 6f, 14f), SlotShortNames[i], tag);
         }
 
-        GUILayout.EndScrollView();
+        int index = 0;
+        foreach (ItemData item in GameDatabase.Items)
+        {
+            if (Profile.IsEquipped(item)) continue;
 
-        if (GUILayout.Button("Back")) LeavePanel();
+            Rect rect = new Rect(inventoryX + (index % inventoryColumns) * (cell + gap), 24f + (index / inventoryColumns) * (cell + gap), cell, cell);
+            index++;
+
+            if (GUI.Button(rect, new GUIContent("X", BuildItemTooltip(item) + "\n(click to equip)"), icon))
+            {
+                Profile.SetGear(item.Slot, item);
+            }
+        }
+        if (index == 0) GUI.Label(new Rect(inventoryX, 24f, 300f, 20f), "(nothing left to equip)");
+
+        if (GUI.Button(new Rect(0, 410f, 100f, 26f), "Back")) LeavePanel();
         GUILayout.EndArea();
     }
 

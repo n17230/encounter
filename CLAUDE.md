@@ -151,7 +151,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   disposable — don't invest in it; real UI should be UI Toolkit): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
   and, after `TestingAreaGate.Entered`, the same panels as an **Escape
-  menu** (`MainMenu.IsOpen`). While open, `PlayerMovement`, `PlayerCamera`,
+  menu** (`MainMenu.IsOpen`). The Gear page is a paper-doll: 3×5 grid of
+  equipment slots on the left, inventory grid (= every unequipped item in
+  the game, no real inventory yet) on the right; items are an "X"
+  placeholder with a hover tooltip until there's 2D art. While open, `PlayerMovement`, `PlayerCamera`,
   `PlayerTargeting`, `PlayerAbilities` ignore gameplay input; on close
   `MainMenu.Closed` triggers loadout/gear re-sync. Options page: UI scale
   (−/+ 25% steps, 75–250%) and movement rebinding (any non-mouse key;
