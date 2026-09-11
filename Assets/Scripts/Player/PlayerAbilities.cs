@@ -117,7 +117,7 @@ public class PlayerAbilities : NetworkBehaviour
         targetNetworkObject = null;
 
         if (predictedCooldownReady.TryGetValue(ability, out float ready) && Time.time < ready) return "Not ready";
-        if (stats.CurrentMana.Value < ability.ManaCost) return "Not enough mana";
+        if (stats.CurrentMana.Value < ability.ManaCost * stats.SyncedManaCostMultiplier.Value) return "Not enough mana";
 
         if (!ability.RequiresTarget) return null;
 

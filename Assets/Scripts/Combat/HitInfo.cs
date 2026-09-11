@@ -1,4 +1,4 @@
-public enum HitSource { Unknown, Melee, Ability, GroundPatch }
+public enum HitSource { Unknown, Melee, Ability, GroundPatch, Aura }
 
 // Everything one hostile interaction can carry, so every source of harm
 // (projectile impact, instant cast, melee swing, ground patch) goes

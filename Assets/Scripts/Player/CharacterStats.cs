@@ -22,6 +22,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat ManaRegenRate { get; private set; }
     public Stat RunSpeed { get; private set; }
     public Stat Armor { get; private set; }
+    public Stat ManaCostMultiplier { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -38,6 +39,8 @@ public class CharacterStats : NetworkBehaviour
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public readonly NetworkVariable<float> SyncedRunSpeed =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public readonly NetworkVariable<float> SyncedManaCostMultiplier =
+        new NetworkVariable<float>(1f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     // Client-visible mirror of the active status effects (name + expiry),
     // for UI only. The authoritative state is the server-side tracker.
@@ -58,6 +61,7 @@ public class CharacterStats : NetworkBehaviour
         ManaRegenRate = new Stat(baseManaRegenRate);
         RunSpeed = new Stat(baseRunSpeed);
         Armor = new Stat(baseArmor);
+        ManaCostMultiplier = new Stat(1f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -75,6 +79,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.ManaRegenRate: return ManaRegenRate;
             case StatType.RunSpeed: return RunSpeed;
             case StatType.Armor: return Armor;
+            case StatType.ManaCostMultiplier: return ManaCostMultiplier;
             default: return null;
         }
     }
@@ -92,6 +97,7 @@ public class CharacterStats : NetworkBehaviour
         if (SyncedMaxHealth.Value != MaxHealth.Value) SyncedMaxHealth.Value = MaxHealth.Value;
         if (SyncedMaxMana.Value != MaxMana.Value) SyncedMaxMana.Value = MaxMana.Value;
         if (SyncedRunSpeed.Value != RunSpeed.Value) SyncedRunSpeed.Value = RunSpeed.Value;
+        if (SyncedManaCostMultiplier.Value != ManaCostMultiplier.Value) SyncedManaCostMultiplier.Value = ManaCostMultiplier.Value;
     }
 
     private void FixedUpdate()
@@ -120,11 +126,17 @@ public class CharacterStats : NetworkBehaviour
         if (hit.Damage > 0f) DealDamage(hit.Damage, hit.AttackerClientId);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
 
-        if (hit.Effect != null && !IsImmune(hit.Effect, hit.Source))
-        {
-            float duration = hit.EffectDuration > 0f ? hit.EffectDuration : hit.Effect.Duration;
-            effects.Apply(hit.Effect, duration, hit.AttackerClientId, Time.time);
-        }
+        if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
+    }
+
+    // Non-hostile application too (auras, buffs). duration <= 0 uses the
+    // effect's own Duration. Server-only.
+    public void ApplyEffect(StatusEffectData effect, float duration, ulong attackerClientId, HitSource source)
+    {
+        if (!IsServer || effect == null) return;
+        if (IsImmune(effect, source)) return;
+
+        effects.Apply(effect, duration > 0f ? duration : effect.Duration, attackerClientId, Time.time);
     }
 
     // Immunities are keyed by source the same way modifiers are, so gear
@@ -239,11 +251,14 @@ public class CharacterStats : NetworkBehaviour
         CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + amount);
     }
 
-    public bool TrySpendMana(float amount)
+    // baseCost is the ability's listed cost; the character's ManaCostMultiplier
+    // (gear) is applied here so every caller pays the discounted price.
+    public bool TrySpendMana(float baseCost)
     {
         if (!IsServer) return false;
-        if (CurrentMana.Value < amount) return false;
-        CurrentMana.Value -= amount;
+        float cost = baseCost * ManaCostMultiplier.Value;
+        if (CurrentMana.Value < cost) return false;
+        CurrentMana.Value -= cost;
         return true;
     }
 }

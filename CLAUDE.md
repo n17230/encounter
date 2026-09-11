@@ -118,7 +118,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `CharacterStats` by source (the item) on equip, like stat modifiers,
   and checked in `ReceiveHit` before an effect is applied —
   `GearIceCleats` (Id `ice_cleats`, Boots) is immune to `slow` from
-  ground patches only; a direct Icebolt still slows. Put new combat
+  ground patches only; a direct Icebolt still slows. **Auras**:
+  `ItemData.Auras` (`ItemAura {Effect, Range}`) — `CharacterEquipment`
+  pulses the effect (via `CharacterStats.ApplyEffect`, the non-hostile
+  entry) onto every alive player within Range, self included, every 1 s
+  with a 2.5 s duration, so it lapses on leaving range and same-asset
+  auras don't stack. `GearManaAmulet` (Necklace) radiates `mana_aura`
+  (+1.5 mana/s) at 40 range. **`StatType.ManaCostMultiplier`** (base 1,
+  synced as `SyncedManaCostMultiplier`) is applied in
+  `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
+  basic attack) gives −10%. Put new combat
   features (combat log, downed state, damage numbers) here, not at
   call sites.
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,

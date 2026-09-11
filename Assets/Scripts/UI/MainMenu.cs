@@ -247,13 +247,7 @@ public class MainMenu : MonoBehaviour
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.Append(effect.DisplayName).Append(':');
         if (effect.TickDamage > 0f) sb.Append($" {effect.TickDamage} dmg/{effect.TickInterval}s");
-        foreach (StatBonus bonus in effect.Modifiers)
-        {
-            bool isPercent = bonus.ModifierType == StatModifierType.PercentAdditive;
-            float displayValue = isPercent ? bonus.Value * 100f : bonus.Value;
-            string sign = displayValue >= 0f ? "+" : "";
-            sb.Append($" {sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}");
-        }
+        foreach (StatBonus bonus in effect.Modifiers) sb.Append(' ').Append(DescribeBonus(bonus));
         sb.Append($" for {duration}s");
         return sb.ToString();
     }
@@ -265,20 +259,33 @@ public class MainMenu : MonoBehaviour
         sb.AppendLine($"Slot: {item.Slot}");
         if (item.Weapon != null) sb.AppendLine($"Weapon: {item.Weapon.Damage} dmg every {item.Weapon.SwingInterval}s");
 
-        foreach (StatBonus bonus in item.Bonuses)
-        {
-            bool isPercent = bonus.ModifierType == StatModifierType.PercentAdditive;
-            float displayValue = isPercent ? bonus.Value * 100f : bonus.Value;
-            string sign = displayValue >= 0f ? "+" : "";
-            sb.AppendLine($"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}");
-        }
+        foreach (StatBonus bonus in item.Bonuses) sb.AppendLine(DescribeBonus(bonus));
         foreach (EffectImmunity immunity in item.Immunities)
         {
             if (immunity.Effect == null) continue;
             sb.AppendLine($"Immune to {immunity.Effect.DisplayName}{(immunity.GroundOnly ? " from ground effects" : "")}");
         }
+        foreach (ItemAura aura in item.Auras)
+        {
+            if (aura.Effect == null) continue;
+            sb.Append($"Aura ({aura.Range} range): {aura.Effect.DisplayName}");
+            foreach (StatBonus bonus in aura.Effect.Modifiers) sb.Append(", ").Append(DescribeBonus(bonus));
+            sb.AppendLine();
+        }
 
         return sb.ToString().TrimEnd();
+    }
+
+    private static string DescribeBonus(StatBonus bonus)
+    {
+        bool isPercent = bonus.ModifierType == StatModifierType.PercentAdditive;
+        float displayValue = isPercent ? bonus.Value * 100f : bonus.Value;
+        if (bonus.Stat == StatType.ManaCostMultiplier)
+        {
+            return $"Mana cost {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
+        string sign = displayValue >= 0f ? "+" : "";
+        return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";
     }
 
     private void OpenPanel(Panel panel)

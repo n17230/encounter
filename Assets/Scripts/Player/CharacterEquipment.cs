@@ -7,9 +7,15 @@ public class CharacterEquipment : NetworkBehaviour
 {
     private static readonly int SlotCount = PlayerProfile.GearSlotCount;
 
+    // Auras are re-applied on everyone in range this often, with enough
+    // duration to bridge the gap; step out of range and it simply lapses.
+    private const float AuraPulseInterval = 1f;
+    private const float AuraPulseDuration = 2.5f;
+
     private CharacterStats stats;
     private readonly ItemData[] equippedItems = new ItemData[SlotCount];
     private bool initialGearApplied;
+    private float nextAuraPulse;
 
     // Server-side view of what the main hand swings with (null = unarmed).
     public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
@@ -59,6 +65,33 @@ public class CharacterEquipment : NetworkBehaviour
         else
         {
             stats.ClampToMax();
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        if (!IsServer || Time.time < nextAuraPulse) return;
+        nextAuraPulse = Time.time + AuraPulseInterval;
+
+        foreach (ItemData item in equippedItems)
+        {
+            if (item == null || item.Auras.Count == 0) continue;
+            foreach (ItemAura aura in item.Auras) PulseAura(aura);
+        }
+    }
+
+    private void PulseAura(ItemAura aura)
+    {
+        if (aura.Effect == null) return;
+
+        foreach (NetworkClient client in NetworkManager.ConnectedClientsList)
+        {
+            if (client.PlayerObject == null) continue;
+            CharacterStats ally = client.PlayerObject.GetComponent<CharacterStats>();
+            if (ally == null || ally.CurrentHealth.Value <= 0f) continue;
+            if (Vector3.Distance(transform.position, ally.transform.position) > aura.Range) continue;
+
+            ally.ApplyEffect(aura.Effect, AuraPulseDuration, CharacterStats.NoAttacker, HitSource.Aura);
         }
     }
 
