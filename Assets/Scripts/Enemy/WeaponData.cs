@@ -7,9 +7,10 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "Encounter/Weapon", fileName = "NewWeapon")]
 public class WeaponData : ScriptableObject
 {
-    // Every melee attack reaches this far (horizontal centre-to-centre),
-    // mob or player, armed or unarmed.
-    public const float MeleeRange = 2f;
+    // Every basic (auto) attack reaches this far (horizontal centre-to-
+    // centre), mob or player, armed or unarmed. Melee *abilities* are not
+    // bound by this - they carry their own AbilityData.Range.
+    public const float BasicAttackRange = 2f;
 
     public string WeaponName = "New Weapon";
     public float Damage = 10f;

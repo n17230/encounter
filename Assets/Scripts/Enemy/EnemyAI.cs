@@ -89,7 +89,7 @@ public class EnemyAI : NetworkBehaviour
         // serialized interval is the fallback for unarmed mobs.
         float cadence = mainHandWeapon != null ? mainHandWeapon.SwingInterval : attackInterval;
 
-        if (distance > WeaponData.MeleeRange)
+        if (distance > WeaponData.BasicAttackRange)
         {
             Vector3 moveDirection = toTarget.normalized;
             transform.rotation = Quaternion.LookRotation(moveDirection);

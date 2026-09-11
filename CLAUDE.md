@@ -176,8 +176,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   MainHand item's `WeaponData` (or the `Fists` fallback wired on the
   prefab) every `SwingInterval` while the target is within `Range` and
   inside the facing cone, stays armed while closing distance, follows
-  Tab target changes, and disarms on untarget/death. **All melee reaches
-  `WeaponData.MeleeRange` = 2** (one constant, mobs and players alike);
+  Tab target changes, and disarms on untarget/death. **All basic attacks reach
+  `WeaponData.BasicAttackRange` = 2** (one constant, mobs and players
+  alike; melee *abilities* use their own `AbilityData.Range`);
   `WeaponData` owns `SwingInterval`, and `EnemyAI` reads it from its
   main-hand weapon (its own `attackInterval` is only the unarmed
   fallback). `ItemData.Weapon` links a MainHand item to its weapon
