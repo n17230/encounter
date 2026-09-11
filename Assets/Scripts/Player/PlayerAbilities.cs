@@ -401,12 +401,15 @@ public class PlayerAbilities : NetworkBehaviour
             }
         }
 
-        if (!stats.TrySpendMana(ability.ManaCost))
+        if (!stats.HasEnoughMana(ability.ManaCost))
         {
             NotifyCastRejectedClientRpc(ability.Id, "Not enough mana");
             return;
         }
 
+        // Mana is only actually spent once the cast succeeds - see
+        // ResolveAbility - not here at cast start. This check just stops an
+        // unaffordable cast from starting in the first place.
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
 
         if (ability.CastTime > 0f)
@@ -473,6 +476,15 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
+        // Every fizzle check above has passed - the cast is actually
+        // succeeding, so this is where mana is spent (not at cast start;
+        // a fizzled cast costs nothing).
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
         if (ability.RecallTarget)
         {
             Vector3 recallPosition = transform.position;
@@ -529,12 +541,13 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastRejectedClientRpc(ability.Id, "Out of range");
             return;
         }
-        if (!stats.TrySpendMana(ability.ManaCost))
+        if (!stats.HasEnoughMana(ability.ManaCost))
         {
             NotifyCastRejectedClientRpc(ability.Id, "Not enough mana");
             return;
         }
 
+        // Spent at resolve, not here - see ResolveGroundAbility.
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
 
         if (ability.CastTime > 0f)
@@ -557,9 +570,18 @@ public class PlayerAbilities : NetworkBehaviour
 
     // No range/facing/LoS re-check at resolve time (unlike unit-targeted
     // abilities) - the point was already fixed and validated at cast start,
-    // and a ground AoE has no single thing to lose sight of.
+    // and a ground AoE has no single thing to lose sight of. Mana is still
+    // spent here rather than at cast start, for consistency with
+    // ResolveAbility (and so a class of failure this method might grow
+    // later - e.g. a re-check - doesn't cost mana on fizzle).
     private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition)
     {
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
         if (ability.ForceSpeed <= 0f || ability.GroundEffectRadius <= 0f) return;
 
         // A push is implemented as "pull toward a point on the far side of

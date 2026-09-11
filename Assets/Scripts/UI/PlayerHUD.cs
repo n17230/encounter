@@ -21,7 +21,7 @@ public class PlayerHUD : NetworkBehaviour
     // Refreshed once per frame in Update rather than per OnGUI pass.
     private Targetable[] minimapBlips = new Targetable[0];
     private MinimapReveal minimapReveals;
-    private readonly List<Minimap.Ping> mobPings = new List<Minimap.Ping>();
+    private readonly List<Vector3> mobPingPositions = new List<Vector3>();
     private float nextMobPing;
     private float lastMobPingTime = float.NegativeInfinity;
     private float mobPingAlpha;
@@ -57,7 +57,7 @@ public class PlayerHUD : NetworkBehaviour
             // Reset so re-equipping starts a fresh cycle rather than resuming
             // a stale timer.
             nextMobPing = 0f;
-            mobPings.Clear();
+            mobPingPositions.Clear();
             mobPingAlpha = 0f;
             return;
         }
@@ -66,12 +66,12 @@ public class PlayerHUD : NetworkBehaviour
         {
             nextMobPing = Time.time + MobPingInterval;
             lastMobPingTime = Time.time;
-            mobPings.Clear();
+            mobPingPositions.Clear();
             foreach (Targetable blip in minimapBlips)
             {
                 if (blip == null || blip.transform == transform) continue;
                 if (blip.GetComponent<PlayerMovement>() != null) continue; // mobs only
-                mobPings.Add(new Minimap.Ping { Subject = blip, Position = blip.transform.position });
+                mobPingPositions.Add(blip.transform.position);
             }
         }
 
@@ -84,7 +84,7 @@ public class PlayerHUD : NetworkBehaviour
         if (!IsOwner) return;
 
         DevGui.Begin();
-        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips, minimapReveals, mobPings, mobPingAlpha);
+        Minimap.Draw(transform, targeting.CurrentTarget, minimapBlips, minimapReveals, mobPingPositions, mobPingAlpha);
         PartyFrames.Draw(minimapBlips, OwnerClientId);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);

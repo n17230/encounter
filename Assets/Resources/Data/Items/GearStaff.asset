@@ -19,6 +19,9 @@ MonoBehaviour:
   - Stat: 6
     ModifierType: 1
     Value: -0.1
+  - Stat: 2
+    ModifierType: 0
+    Value: 250
   Immunities: []
   Auras: []
   Weapon: {fileID: 11400000, guid: 780a4832ec9d5f5a0d0b30951f64920a, type: 2}

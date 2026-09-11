@@ -281,6 +281,15 @@ public class CharacterStats : NetworkBehaviour
         CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + amount);
     }
 
+    // Read-only affordability check (ManaCostMultiplier applied), for
+    // gating whether a cast is even allowed to start - it spends nothing,
+    // so callers must still call TrySpendMana at the point the cast
+    // actually succeeds.
+    public bool HasEnoughMana(float baseCost)
+    {
+        return CurrentMana.Value >= baseCost * ManaCostMultiplier.Value;
+    }
+
     // baseCost is the ability's listed cost; the character's ManaCostMultiplier
     // (gear) is applied here so every caller pays the discounted price.
     public bool TrySpendMana(float baseCost)

@@ -32,23 +32,16 @@ public static class Minimap
     private static Texture2D blipTexture;
     private static GUIStyle compassStyle;
 
-    // A mob position captured at the moment of an echolocation-style pulse.
-    // Subject is kept only to preserve the current-target highlight; the
-    // dot itself is drawn at the frozen Position, not the subject's live one.
-    public struct Ping
-    {
-        public Targetable Subject;
-        public Vector3 Position;
-    }
-
     // reveals: which kinds of blip the wearer's gear lets them see (Players
-    // draws live; Mobs are shown only via mobPings - see below). With
-    // MinimapReveal.None and no pings, only the player's own marker draws.
-    // mobPings/mobPingAlpha: a snapshot of mob positions from the most
-    // recent pulse, faded out by the caller over its cooldown - the dots
-    // don't track the mobs' current positions, by design.
+    // draws live; Mobs are shown only via mobPingPositions - see below).
+    // With MinimapReveal.None and no pings, only the player's own marker
+    // draws. mobPingPositions/mobPingAlpha: mob positions captured at the
+    // most recent echolocation-style pulse, faded out by the caller over
+    // its cooldown - always drawn as plain red dots (MobColor), never
+    // highlighted even if one happens to be the current target, and
+    // frozen at the captured position rather than tracking the mob live.
     public static void Draw(Transform self, Targetable currentTarget, IReadOnlyList<Targetable> blips, MinimapReveal reveals,
-        IReadOnlyList<Ping> mobPings, float mobPingAlpha)
+        IReadOnlyList<Vector3> mobPingPositions, float mobPingAlpha)
     {
         EnsureTextures();
 
@@ -74,15 +67,15 @@ public static class Minimap
             DrawBlip(centre + WorldToMap(flat), 6f, color);
         }
 
-        if (mobPingAlpha > 0f && mobPings != null)
+        if (mobPingAlpha > 0f && mobPingPositions != null)
         {
-            foreach (Ping ping in mobPings)
+            foreach (Vector3 pingPosition in mobPingPositions)
             {
-                Vector3 offset = ping.Position - self.position;
+                Vector3 offset = pingPosition - self.position;
                 Vector2 flat = new Vector2(offset.x, offset.z);
                 if (flat.magnitude > WorldRadius) continue;
 
-                Color color = ReferenceEquals(ping.Subject, currentTarget) ? TargetColor : MobColor;
+                Color color = MobColor;
                 color.a *= mobPingAlpha;
                 DrawBlip(centre + WorldToMap(flat), 6f, color);
             }

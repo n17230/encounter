@@ -116,6 +116,20 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `NotifyCastRejectedClientRpc(abilityId, reason)` which rolls the
     predicted cooldown/cast bar back. Cooldowns are otherwise never
     synced — the prediction is the client's only view of them.
+  - **Mana is spent on successful cast, not on cast start** (changed
+    2026-09-11): `CharacterStats.HasEnoughMana` (read-only) gates
+    whether a cast is even allowed to start, in both
+    `CastAbilityServerRpc` and `CastGroundTargetedAbilityServerRpc` —
+    same rejection ("Not enough mana") as before, just no longer
+    deducts anything. The actual `TrySpendMana` deduction moved into
+    `ResolveAbility` (after every fizzle check — target lost/range/
+    facing/LoS — has passed, right before the effect/projectile/recall
+    actually happens) and the top of `ResolveGroundAbility`. A cast
+    that fizzles during its cast-time window now costs nothing; only a
+    cast that actually lands is charged. For instant-cast abilities
+    this is a no-op in timing (resolve happens the same tick), but for
+    Firebolt/Icebolt's 2 s cast it means the mana bar visibly drops
+    when the cast *completes*, not when it starts.
   - **Ground-targeted abilities + forced movement** (WoW "Blizzard"-
     style, added 2026-09-11): `AbilityData.IsGroundTargeted` +
     `GroundEffectRadius` + `ForceSpeed` + `PushAway`. Pressing the
@@ -216,18 +230,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   pulses the effect (via `CharacterStats.ApplyEffect`, the non-hostile
   entry) onto every alive player within Range, self included, every 1 s
   with a 2.5 s duration, so it lapses on leaving range and same-asset
-  auras don't stack. `GearManaAmulet` (Necklace) radiates `mana_aura`
-  (+1.5 mana/s) at 40 range; `GearAmuletOfRejuvenation` (Necklace, Id
-  `amulet_of_rejuvenation`) radiates `rejuvenation` (a periodic heal, not
-  a regen-rate modifier) at 40 range. **Periodic healing**:
-  `StatusEffectData.TickHeal` is the heal-side counterpart to
-  `TickDamage` (either or both can be set; `StatusEffectTracker.Tick`
-  schedules a tick if either is > 0) — `rejuvenation` is 10 hp every 5 s,
-  applied via `CharacterStats.Heal` in `TickEffect`.
+  auras don't stack. `GearAmuletOfReplenishment` (Necklace, Id
+  `amulet_of_replenishment`, was Amulet of Mana / `GearManaAmulet` until
+  renamed 2026-09-11) radiates `mana_aura` (+3 mana/s, i.e. +15 per the
+  5 s regen tick — see Resource numbers below) at 40 range;
+  `GearAmuletOfRegeneration` (Necklace, Id `amulet_of_regeneration`, was
+  Amulet of Rejuvenation until renamed 2026-09-11) radiates `rejuvenation`
+  (a periodic heal, not a regen-rate modifier — the underlying effect
+  asset keeps its old Id/name, only the item was renamed) at 40 range.
+  **Periodic healing**: `StatusEffectData.TickHeal` is the heal-side
+  counterpart to `TickDamage` (either or both can be set;
+  `StatusEffectTracker.Tick` schedules a tick if either is > 0) —
+  `rejuvenation` is 10 hp every 5 s, applied via `CharacterStats.Heal`
+  in `TickEffect`.
   **`StatType.ManaCostMultiplier`** (base 1,
   synced as `SyncedManaCostMultiplier`) is applied in
   `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
-  basic attack) gives −10%. **`StatType.DamageMultiplier`** scales all
+  basic attack) gives −10% mana cost and +250 max mana (`StatType.MaxMana`,
+  flat). **`StatType.DamageMultiplier`** scales all
   damage a player deals (applied in `DealDamage` via the attacker's
   stats, so DoT ticks count too). `GearFireTrinket` (Trinket, Id
   `fire_trinket`): +10% damage dealt, and a Range-0 aura of `burn` —
@@ -344,14 +364,19 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   equipped gear reveals (`ItemData.Reveals`, `MinimapReveal` flags
   Players/Mobs, unioned across worn items, read client-side from the
   profile). Revealed `Targetable`s within 50 world units draw as blips
-  (players green, mobs red, current target yellow) - **Players reveal is
+  (players green, mobs **always** red — mob pings never take the
+  target-highlight color even if the pinged mob is your current target;
+  that distinction was removed 2026-09-11 per explicit request, live
+  player blips still turn yellow on your target) - **Players reveal is
   live**, but **Mobs reveal is a pulse, not a tracker**: `PlayerHUD`
   snapshots every mob's position every `MobPingInterval` (5s) into
-  `mobPings` (`Minimap.Ping{Subject, Position}`, frozen - not the mob's
-  live transform), fading the dots out over `MobPingFadeDuration` (4s)
-  before the next pulse, so there's a ~1s blind gap each cycle;
-  `Minimap.Draw` takes `mobPings`/`mobPingAlpha` alongside the live
-  `blips`/`reveals`. `GearEcholocator` (Trinket, Id `echolocator`)
+  `mobPingPositions` (`List<Vector3>`, frozen — not the mob's live
+  transform; this used to carry the mob's `Targetable` too for the
+  highlight, simplified to plain positions once that was dropped),
+  fading the dots out over `MobPingFadeDuration` (4s) before the next
+  pulse, so there's a ~1s blind gap each cycle; `Minimap.Draw` takes
+  `mobPingPositions`/`mobPingAlpha` alongside the live `blips`/`reveals`.
+  `GearEcholocator` (Trinket, Id `echolocator`)
   grants the Mobs reveal. The reverse direction is
   `ItemData.BroadcastsLocation` → server-written
   `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
