@@ -239,6 +239,28 @@ Open questions:
   synced state — how is that represented/replicated under
   Netcode for GameObjects (see `CLAUDE.md`)?
 
+## Built so far (2026-09-11 refactor) — how the code now realises the above
+
+- Authority split: owner-authoritative movement (`NetworkTransform`
+  Owner mode), server-authoritative everything else. See `CLAUDE.md`.
+- Data-driven content with stable string `Id`s discovered by
+  `GameDatabase` from `Resources/Data`; Ids cross the network and are
+  saved, never list indices. Satisfies the "adding an item/ability should
+  not require touching character code" requirement above.
+- `StatBonus` is the shared "effect expressed as a modifier against a
+  stat" primitive for both gear (`ItemData.Bonuses`) and status effects
+  (`StatusEffectData.Modifiers`), plugging into `Stat`/`StatModifier`.
+- `CharacterStats.ReceiveHit(HitInfo)` is the single damage pipeline
+  (armor mitigation, threat, extra threat, effect application). Taunt's
+  "set to top of threat" override and the combat-end threat reset are the
+  next things to add there / in `ThreatTable`.
+- `StatusEffectTracker` (pure C#, tested) owns refresh/tick/expiry rules;
+  `TargetSelector` (pure C#, tested) owns enemy targeting modes.
+- `PlayerProfile` (JSON in `persistentDataPath`) is the local precursor of
+  the account-backed profile: slot Ids + hotkeys, gear Ids, movement
+  keys, UI scale. The account/unlock layer should wrap this, not replace
+  its shape.
+
 ## Change log
 
 - 2026-09-07: Initial capture — modularity requirement for gear/abilities,

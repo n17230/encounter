@@ -69,3 +69,4 @@ Thumbs.db
 
 # Local-only server/deployment notes (contains server IP/access info)
 SERVER_INFO.md
+/Tools/obj/
