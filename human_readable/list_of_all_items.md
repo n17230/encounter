@@ -4,6 +4,12 @@ Every item currently in `Assets/Resources/Data/Items/`, sorted by gear
 slot (in `GearSlot` enum order). Regenerate/update this by hand whenever
 items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
+## Helmet
+
+| Item | Effect |
+|---|---|
+| Champion's Helmet | +10 Max Health, +5 Armor, +10% threat generated |
+
 ## Necklace
 
 | Item | Effect |
@@ -67,4 +73,4 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 ## Slots with nothing yet
 
-Helmet, Gloves, Legs.
+Gloves, Legs.
