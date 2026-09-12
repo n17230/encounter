@@ -54,11 +54,14 @@ public class PlayerCamera : NetworkBehaviour
         {
             freeLookYaw += Input.GetAxis("Mouse X") * freeLookYawSensitivity;
         }
-        else
+        else if (turning)
         {
-            // Snap the camera back behind the player once free look ends.
+            // Right-drag turning rotates the body itself to match the
+            // camera, so the camera re-centers behind it.
             freeLookYaw = 0f;
         }
+        // Otherwise (free look just released, nothing held): hold the
+        // camera where it was left rather than snapping back.
 
         cameraPivot.localRotation = Quaternion.Euler(pitch, freeLookYaw, 0f);
     }
