@@ -18,7 +18,7 @@ MonoBehaviour:
   Range: 30
   Cooldown: 6
   CastTime: 0
-  ManaCost: 150
+  ManaCost: 75
   ThreatValue: 0
   Damage: 0
   HealAmount: 0

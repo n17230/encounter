@@ -18,7 +18,7 @@ MonoBehaviour:
   Range: 40
   Cooldown: 30
   CastTime: 0
-  ManaCost: 200
+  ManaCost: 100
   ThreatValue: 0
   Damage: 0
   MissileSpeed: 15
