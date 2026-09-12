@@ -349,6 +349,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     5s tick — converted to the per-second unit `ManaRegenRate` actually
     stores, same "mp5 ÷ 5" convention already used for the old Amulet of
     Replenishment).
+  - **Tomb of the Magi** (`GearTombOfTheMagi`, Id `tomb_of_the_magi`,
+    OffHand, added 2026-09-12): flat `+50 MaxMana` and `+0.4
+    ManaRegenRate` (same "+2 mp5" convention as Amulet of the Magi) — an
+    OffHand counterpart to it, smaller mana bonus, no threat/armor.
   - **Global cooldown** (added 2026-09-12, per explicit user request —
     also flagged on `review_with_fable.md`'s list): starting ANY cast
     (instant or with `CastTime`) locks out starting a different one for

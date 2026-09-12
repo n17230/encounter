@@ -52,6 +52,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Shield | +20 Armor |
+| Tomb of the Magi | +50 Max Mana, +0.4 Mana Regen/sec (+2 per 5s tick) |
 
 ## Slots with nothing yet
 
