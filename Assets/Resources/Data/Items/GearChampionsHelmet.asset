@@ -18,7 +18,7 @@ MonoBehaviour:
   Bonuses:
   - Stat: 0
     ModifierType: 0
-    Value: 10
+    Value: 50
   - Stat: 5
     ModifierType: 0
     Value: 5

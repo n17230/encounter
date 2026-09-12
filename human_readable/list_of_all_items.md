@@ -8,7 +8,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Effect |
 |---|---|
-| Champion's Helmet | +10 Max Health, +5 Armor, +10% threat generated |
+| Champion's Helmet | +50 Max Health, +5 Armor, +10% threat generated |
 
 ## Necklace
 
