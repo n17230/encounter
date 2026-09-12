@@ -62,6 +62,6 @@ retuned — it's a snapshot, not auto-generated.
 
 | Spell | Mana | Cooldown | Cast | Effect |
 |---|---|---|---|---|
-| Aura of Replenishment | 25 | 0s | Instant | You and allies within 40 units gain +3 mana/sec |
+| Aura of Replenishment | 25 | 0s | Instant | You and allies within 40 units gain +3 mana per 5s |
 | Aura of Regeneration | 25 | 0s | Instant | You and allies within 40 units gain a heal-over-time (+10 hp per 5s) |
 | Echolocation | 25 | 0s | Instant | Reveals every mob on your minimap |
