@@ -51,6 +51,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | 2H Axe | 80 damage / 3s swing, 2 range | Two-handed — occupies Off Hand too, no other bonus |
 | Holy Scepter | none (caster stat-stick) | +10% healing done |
 | Hunter's Bow | 60 damage / 2.5s swing, **50 range** | No other bonus |
+| Armorbreaker | 40 damage / 2s swing, 2 range | On hit, reduces the target's Armor by 2 for 10s, stacking up to 5 times (−10 Armor at max stacks) |
 
 ## Off Hand
 

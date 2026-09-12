@@ -92,6 +92,7 @@ public class CharacterStats : NetworkBehaviour
         effects.Applied += HandleEffectApplied;
         effects.Refreshed += SyncEffect;
         effects.Expired += HandleEffectExpired;
+        effects.StackAdded += HandleStackAdded;
     }
 
     public Stat GetStat(StatType type)
@@ -370,6 +371,19 @@ public class CharacterStats : NetworkBehaviour
             GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, effect.Data));
         }
         SyncEffect(effect);
+    }
+
+    // A StackUpToLimit effect gaining a 2nd+ stack (the 1st stack's
+    // modifiers are already added by HandleEffectApplied above) - one
+    // more copy of Modifiers, same source, so HandleEffectExpired's
+    // blanket RemoveAllModifiersFromSource still cleanly strips every
+    // stack at once when the whole thing expires.
+    private void HandleStackAdded(StatusEffectTracker.ActiveEffect effect)
+    {
+        foreach (StatBonus bonus in effect.Data.Modifiers)
+        {
+            GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, effect.Data));
+        }
     }
 
     private void HandleEffectExpired(StatusEffectTracker.ActiveEffect effect)

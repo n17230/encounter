@@ -16,11 +16,19 @@ using UnityEngine;
 //    ticking/expiring separately - for effects that SHOULD stack when
 //    multiple different players apply them (e.g. two healers each
 //    running their own heal-over-time on the same target).
+//  - StackUpToLimit: one shared instance (like RefreshExtendOnly), but
+//    each reapplication up to MaxStacks also adds another copy of
+//    Modifiers, so the magnitude grows with stack count instead of
+//    just the duration resetting - e.g. an on-hit armor-reduction debuff
+//    that gets worse the more you're hit, capped at some number of
+//    stacks. The whole stack shares one timer (reapplying always resets
+//    it), not per-stack independent timers.
 public enum EffectStackingMode
 {
     RefreshExtendOnly,
     Override,
     StackPerCaster,
+    StackUpToLimit,
 }
 
 // A buff/debuff authored as data. Keyed by asset at runtime: reapplying
@@ -44,8 +52,14 @@ public class StatusEffectData : ScriptableObject
     public float TickHeal = 0f;
     public float TickInterval = 1f;
 
-    // Stat modifiers held for as long as the effect is active.
+    // Stat modifiers held for as long as the effect is active - see
+    // StackUpToLimit above, one copy of these is added per stack.
     public List<StatBonus> Modifiers = new List<StatBonus>();
+
+    // Only meaningful when StackingMode is StackUpToLimit - the most
+    // copies of Modifiers that can be active at once. 1 (the default) is
+    // meaningless for any other mode.
+    public int MaxStacks = 1;
 
     // If > 0, while this effect is active this fraction of damage the
     // wearer takes is dealt directly to whoever applied the effect

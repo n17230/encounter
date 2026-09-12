@@ -12,6 +12,10 @@ public class StatusEffectTracker
         public float ExpireTime;
         public float NextTickTime;
         public ulong AttackerClientId;
+        // Only meaningful for StackUpToLimit effects - how many copies of
+        // Data.Modifiers are currently applied. Always 1 for every other
+        // mode.
+        public int StackCount = 1;
     }
 
     // What actually identifies "one active instance" in the dictionary.
@@ -43,6 +47,11 @@ public class StatusEffectTracker
     public event Action<ActiveEffect> Applied;
     public event Action<ActiveEffect> Refreshed;
     public event Action<ActiveEffect> Expired;
+    // Fires once per NEW stack added beyond the first (which Applied
+    // already covers) - i.e. for StackUpToLimit effects only, on stacks
+    // 2 through MaxStacks. Never fires for the initial application or
+    // once the cap is reached.
+    public event Action<ActiveEffect> StackAdded;
 
     public int Count => active.Count;
     public IEnumerable<ActiveEffect> All => active.Values;
@@ -84,6 +93,19 @@ public class StatusEffectTracker
             {
                 existing.ExpireTime = expireTime;
                 existing.AttackerClientId = attackerClientId;
+                Refreshed?.Invoke(existing);
+                return;
+            }
+
+            if (data.StackingMode == EffectStackingMode.StackUpToLimit)
+            {
+                existing.ExpireTime = expireTime; // the whole stack shares one timer
+                existing.AttackerClientId = attackerClientId;
+                if (existing.StackCount < data.MaxStacks)
+                {
+                    existing.StackCount++;
+                    StackAdded?.Invoke(existing);
+                }
                 Refreshed?.Invoke(existing);
                 return;
             }

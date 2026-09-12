@@ -341,6 +341,17 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     on the same target both tick independently — recasting by the
     *same* caster still just extends their own instance, per the
     `RefreshExtendOnly` rule.
+  - `StackUpToLimit` (`EffectArmorbreakerSunder`): one shared instance
+    like `RefreshExtendOnly` (the whole stack shares one timer — a
+    reapplication always resets it, doesn't add a second timer), but
+    each reapplication up to `MaxStacks` also fires
+    `StatusEffectTracker.StackAdded`, which adds another copy of
+    `Modifiers` — so magnitude scales with stack count instead of just
+    refreshing duration. `ActiveEffect.StackCount` tracks how many
+    copies are currently live; `HandleEffectExpired`'s blanket
+    `RemoveAllModifiersFromSource` still strips every copy at once
+    regardless of count, since they all share the same source
+    (`effect.Data`).
   **Known, deliberate limitation, not fixed**: `CharacterStats
   .ActiveEffects` (the client-visible `NetworkList` used for the HUD)
   and `HandleEffectExpired`'s `RemoveAllModifiersFromSource` both still
