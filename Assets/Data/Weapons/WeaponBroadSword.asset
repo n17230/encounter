@@ -16,3 +16,4 @@ MonoBehaviour:
   Damage: 40
   SwingInterval: 2
   Effect: {fileID: 0}
+  Range: 2

@@ -480,8 +480,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   **`StatType.ManaCostMultiplier`** (base 1,
   synced as `SyncedManaCostMultiplier`) is applied in
   `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
-  basic attack) gives −10% mana cost and +250 max mana (`StatType.MaxMana`,
-  flat). **`StatType.DamageMultiplier`** scales all
+  basic attack, **two-handed as of 2026-09-12**) gives −10% mana cost and
+  +250 max mana (`StatType.MaxMana`, flat). **`StatType.DamageMultiplier`** scales all
   damage a player deals (applied in `DealDamage` via the attacker's
   stats, so DoT ticks count too). `GearEmberStone` (Trinket, Id
   `ember_stone`, was `GearFireTrinket`/`fire_trinket` until renamed
@@ -668,18 +668,28 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   current target too — `MovementAction.AutoAttack`, rebindable on the
   Options page): the server swings the equipped
   MainHand item's `WeaponData` (or the `Fists` fallback wired on the
-  prefab) every `SwingInterval` while the target is within `Range` and
-  inside the facing cone, stays armed while closing distance, follows
-  Tab target changes, and disarms on untarget/death. **All basic attacks reach
-  `WeaponData.BasicAttackRange` = 2** (one constant, mobs and players
-  alike; melee *abilities* use their own `AbilityData.Range`);
-  `WeaponData` owns `SwingInterval`, and `EnemyAI` reads it from its
-  main-hand weapon (its own `attackInterval` is only the unarmed
-  fallback). `ItemData.Weapon` links a MainHand item to its weapon
-  (`GearBroadSword` → `WeaponBroadSword`, 40 dmg / 2 s, +100 max health
-  flat, and +40% threat generated via `StatType.ThreatMultiplier`
-  (was +20%, changed 2026-09-12), applied to the attacker's threat in
-  `CharacterStats.AddThreat`; Fists are 15 dmg / 1.5 s).
+  prefab) every `SwingInterval` while the target is within that weapon's
+  own `Range` and inside the facing cone, stays armed while closing
+  distance, follows Tab target changes, and disarms on untarget/death.
+  **`WeaponData.Range`** (was a shared `const BasicAttackRange = 2`
+  until made per-weapon 2026-09-12, for Hunter's Bow's 50-range basic
+  attack — `BasicAttackRange` still exists as the fallback default,
+  every weapon asset just sets its own `Range` now): `PlayerAutoAttack`
+  reads the equipped weapon's `Range` directly, `EnemyAI` reads its
+  main-hand weapon's `Range` (falling back to `BasicAttackRange` only if
+  unarmed); melee *abilities* are still unaffected, they carry their own
+  `AbilityData.Range`. `WeaponData` owns `SwingInterval`, and `EnemyAI`
+  reads it from its main-hand weapon (its own `attackInterval` is only
+  the unarmed fallback). `ItemData.Weapon` links a MainHand item to its
+  weapon (`GearBroadSword` → `WeaponBroadSword`, 40 dmg / 2 s / 2 range,
+  +100 max health flat, and +40% threat generated via
+  `StatType.ThreatMultiplier` (was +20%, changed 2026-09-12), applied to
+  the attacker's threat in `CharacterStats.AddThreat`; Fists are
+  15 dmg / 1.5 s / 2 range). **Hunter's Bow** (`GearHuntersBow`, Id
+  `hunters_bow`, MainHand, added 2026-09-12): 60 dmg / 2.5 s swing /
+  **50 range** — the first ranged basic attack, no other bonuses, **not**
+  marked two-handed (not requested, even though bows conventionally are
+  — flag if that should change).
   - **Two-handed weapons** (`ItemData.TwoHanded`, added 2026-09-12): a
     two-handed MainHand item occupies OffHand too - enforced both in
     `MainMenu`'s gear-equip click handler (equipping either one

@@ -134,11 +134,13 @@ public class EnemyAI : NetworkBehaviour
         toTarget.y = 0f;
         float distance = toTarget.magnitude;
 
-        // Cadence comes from the main-hand weapon when there is one; the
-        // serialized interval is the fallback for unarmed mobs.
+        // Cadence and reach come from the main-hand weapon when there is
+        // one; the serialized interval and the shared melee constant are
+        // the fallbacks for unarmed mobs.
         float cadence = mainHandWeapon != null ? mainHandWeapon.SwingInterval : attackInterval;
+        float range = mainHandWeapon != null ? mainHandWeapon.Range : WeaponData.BasicAttackRange;
 
-        if (distance > WeaponData.BasicAttackRange)
+        if (distance > range)
         {
             Vector3 moveDirection = toTarget.normalized;
             transform.rotation = Quaternion.LookRotation(moveDirection);

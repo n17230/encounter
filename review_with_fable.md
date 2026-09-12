@@ -7,7 +7,30 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 0. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
+## 0. Hunter's Bow (first ranged basic attack), Staff now two-handed
+
+- **`WeaponData.Range` is now per-weapon** instead of one shared
+  constant for everyone (`WeaponData.BasicAttackRange` still exists as
+  the fallback default) - this touched `PlayerAutoAttack` and `EnemyAI`,
+  so **please re-confirm basic melee auto-attack still works exactly as
+  before** for Fists/Broad Sword/2H Axe/goblins/ogres (all explicitly
+  set to `Range: 2`, matching the old constant) - low risk since it's
+  the same number, but it's a shared-code-path change.
+- **Hunter's Bow** (new item, MainHand, 60 dmg / 2.5s swing, **50
+  range** - the first weapon whose basic attack reaches farther than
+  melee): right-click a distant target and confirm auto-attack actually
+  fires from range without needing to walk into melee distance first,
+  and that it correctly stops firing/needs re-arming if the target
+  moves beyond 50 units. **Not marked two-handed** - wasn't requested,
+  even though bows conventionally are two-handed - flag if that's
+  actually wanted.
+- **Staff is now two-handed** (`ItemData.TwoHanded: true`) - equipping
+  it should now auto-clear whatever's in Off Hand (e.g. Shield), same
+  mutual-exclusivity behavior the 2H Axe already has. Confirm a
+  previously-saved profile with both Staff and an Off Hand item
+  equipped resolves cleanly (Off Hand empties) the next time gear syncs.
+
+## 1. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
 
 - **Boots of Lightness (genuinely new movement mechanic, never run)**:
   equip them, jump, then press Jump again while still in the air.
@@ -40,7 +63,7 @@ whole file once it's empty.
   explicitly specified, so flag if a flat +5 everywhere was actually
   wanted instead.
 
-## 1. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
+## 2. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
 
 - **`AbilityData.WeaponDamagePercent`** replaced the old all-or-nothing
   `UseWeaponDamage` bool (a straight rename/generalization, same field
@@ -58,7 +81,7 @@ whole file once it's empty.
   5s tick) and **The Everflow** (Trinket, +1 mana/sec = +5 per 5s tick) -
   both plain stat items, lowest risk, never equipped/tested.
 
-## 2. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
+## 3. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
 
 - **Global cooldown (explicitly requested)**: casting ANY ability now
   locks out starting a different one for 1.5s (not specified, the
@@ -99,7 +122,7 @@ whole file once it's empty.
   stat-bonus Necklace items, lowest risk in this batch, but still never
   equipped/tested.
 
-## 3. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
+## 4. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
 
 - **Broad Sword**: threat-generation bonus changed from +20% to +40%
   (`ThreatMultiplier`) - straightforward number change, low risk.
@@ -124,7 +147,7 @@ whole file once it's empty.
   a saved profile that somehow has both isn't possible to reach through
   the menu at all.
 
-## 4. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
+## 5. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
    Up, Crippling Blow, Seismic Slam, Barbarian's Mantle) — biggest and
    most novel batch yet, several brand-new mechanics
 
@@ -202,7 +225,7 @@ treat all of it as unverified:
   visual assets were provided) - they'll cast with no cast-bar VFX,
   matching how earlier spells started out.
 
-## 5. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
+## 6. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
 
 - **Radiant Embrace**: cast on a hurt ally, confirm exactly 350 healing
   lands (or 385 with Holy Scepter's +10%).
@@ -238,7 +261,7 @@ treat all of it as unverified:
 - All 5 abilities' `Range: 30` (where applicable) was never specified —
   only the numbers listed above came from you.
 
-## 6. Player 2 falling through the map on spawn — fix applied, needs confirming
+## 7. Player 2 falling through the map on spawn — fix applied, needs confirming
 
 - This was diagnosed from reading the code, not from being able to
   reproduce it — the movement validator had no grace period after spawn,
@@ -255,7 +278,7 @@ treat all of it as unverified:
   that would mean the fix didn't fully close the window (e.g.
   `spawnGraceSeconds` isn't long enough over real network latency).
 
-## 7. Mana-on-successful-cast, and mob dots always red
+## 8. Mana-on-successful-cast, and mob dots always red
 
 - Both were straightforward, targeted changes — lower risk than the rest
   of this list, but still never actually run.
@@ -267,7 +290,7 @@ treat all of it as unverified:
   pulsed dot should stay plain red like every other mob, never turning
   yellow the way it used to.
 
-## 8. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
+## 9. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
 - Press either spell's hotkey: does a ring reticle appear and follow the
   mouse across the terrain? Does it correctly ignore player/mob
@@ -297,7 +320,7 @@ treat all of it as unverified:
   Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
   cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
-## 9. Recall
+## 10. Recall
 
 - Target a player or a mob and cast Recall — does it teleport instantly
   to right where you're standing?
@@ -313,7 +336,7 @@ treat all of it as unverified:
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 10. One For All (damage redirect) — genuinely new mechanic, unrun
+## 11. One For All (damage redirect) — genuinely new mechanic, unrun
 
 - Cast it on an ally, have a mob hit *them*, and confirm 10% of that
   damage lands on *you* (the caster) instead — watch both health bars.
@@ -353,7 +376,7 @@ treat all of it as unverified:
   min), redirect (10%), mana cost (50), and instant cast all came from
   you.
 
-## 11. Auto-attack
+## 12. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -362,7 +385,7 @@ treat all of it as unverified:
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 12. Party frames + F1–F5 targeting + minimap compass
+## 13. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -390,7 +413,7 @@ treat all of it as unverified:
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 13. Minimap / Echolocator
+## 14. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -399,7 +422,7 @@ treat all of it as unverified:
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 14. Gear — ring slots and the recent renumbering
+## 15. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -412,7 +435,7 @@ treat all of it as unverified:
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 15. General combat/economy numbers worth a sanity pass
+## 16. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool (1250 with Staff's new +250 max mana),
   regen in 5s ticks — does an actual fight feel like mana is a real
@@ -425,7 +448,7 @@ treat all of it as unverified:
   names ("Regeneration" grants the "Rejuvenation" buff — the underlying
   effect wasn't renamed, only the item).
 
-## 16. Reported by the user, not yet looked into
+## 17. Reported by the user, not yet looked into
 
 - Firebolt/Icebolt's VFX does not home in on the target — it flies
   straight rather than tracking. The crude tracer (`Projectile`'s actual
@@ -434,7 +457,7 @@ treat all of it as unverified:
   how the visual effect is attached to or driven by the projectile is
   the mismatch. Not investigated yet.
 
-## 17. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 18. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect

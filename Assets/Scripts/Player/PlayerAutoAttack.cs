@@ -139,7 +139,7 @@ public class PlayerAutoAttack : NetworkBehaviour
 
         Vector3 toTarget = targetObject.transform.position - transform.position;
         toTarget.y = 0f;
-        if (toTarget.magnitude > WeaponData.BasicAttackRange) return; // armed, waiting to get in reach
+        if (toTarget.magnitude > weapon.Range) return; // armed, waiting to get in reach
         if (!FacingCone.IsWithin(transform, targetObject.transform.position, facingConeAngle)) return;
 
         nextSwingTime = Time.time + weapon.SwingInterval;
