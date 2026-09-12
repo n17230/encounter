@@ -9,8 +9,7 @@ using UnityEngine;
 public class PlayerSummon : NetworkBehaviour
 {
     [SerializeField] private GameObject[] summonableMobs;
-    [SerializeField] private float mapHalfExtent = 15f;
-    [SerializeField] private float edgeMargin = 20f;
+    [SerializeField] private float summonRadius = 100f;
     [SerializeField] private int maxSummonCount = 20;
 
     public IReadOnlyList<GameObject> SummonableMobs => summonableMobs;
@@ -35,32 +34,21 @@ public class PlayerSummon : NetworkBehaviour
 
         count = Mathf.Clamp(count, 1, maxSummonCount);
         GameObject prefab = summonableMobs[mobIndex];
-        float radius = GetMapEdgeRadius();
+        // Spawned on a ring around the summoning player's own position, not
+        // the map's center/edge - so it works the same wherever the player
+        // currently is.
+        Vector3 center = transform.position;
 
         for (int i = 0; i < count; i++)
         {
             float angle = Random.Range(0f, Mathf.PI * 2f);
-            float x = Mathf.Cos(angle) * radius;
-            float z = Mathf.Sin(angle) * radius;
+            float x = center.x + Mathf.Cos(angle) * summonRadius;
+            float z = center.z + Mathf.Sin(angle) * summonRadius;
             Vector3 spawnPosition = new Vector3(x, GetSpawnHeight(x, z), z);
 
             GameObject instance = Instantiate(prefab, spawnPosition, Quaternion.identity);
             instance.GetComponent<NetworkObject>().Spawn();
         }
-    }
-
-    // The map is the active Terrain, centered on the world origin, so its
-    // real half-extent is half of its actual (X/Z) size, not a fixed
-    // number that can drift out of sync with the terrain - `mapHalfExtent`
-    // is only the no-terrain fallback. `edgeMargin` keeps spawns a little
-    // inside the true boundary so mobs don't land off the playable terrain.
-    private float GetMapEdgeRadius()
-    {
-        Terrain terrain = Terrain.activeTerrain;
-        if (terrain == null) return mapHalfExtent;
-
-        Vector3 size = terrain.terrainData.size;
-        return Mathf.Max(0f, Mathf.Min(size.x, size.z) / 2f - edgeMargin);
     }
 
     // Terrain height varies across the map (and keeps changing as it's

@@ -543,8 +543,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   (applied in `CharacterStats.AddThreat`) — gear can grant it.
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon
-  Mobs, spawning `MobGoblin`/`MobOgre` variants on a circle of
-  `mapHalfExtent`), no wipe/reset encounter model, no loot, no unlocks.
+  Mobs, spawning `MobGoblin`/`MobOgre` variants on a `summonRadius`
+  (100) ring centered on the summoning player's own position, not the
+  map), no wipe/reset encounter model, no loot, no unlocks.
 
 ## Asset layout
 
