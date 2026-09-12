@@ -11,8 +11,22 @@ using UnityEngine;
 public class PlayerProfile
 {
     public const int AbilitySlots = 8;
-    public static readonly int GearSlotCount = Enum.GetValues(typeof(GearSlot)).Length;
+    // GearSlot's underlying values aren't contiguous (Legs is pinned to 6
+    // so removing Belt didn't shift every later slot's serialized value),
+    // so GearIds must be sized by the highest underlying value + 1, not by
+    // how many names the enum has.
+    public static readonly int GearSlotCount = HighestGearSlotValue() + 1;
     public static readonly int MovementActionCount = Enum.GetValues(typeof(MovementAction)).Length;
+
+    private static int HighestGearSlotValue()
+    {
+        int highest = 0;
+        foreach (GearSlot slot in Enum.GetValues(typeof(GearSlot)))
+        {
+            if ((int)slot > highest) highest = (int)slot;
+        }
+        return highest;
+    }
 
     public string[] SlotAbilityIds = new string[AbilitySlots];
     public KeyCode[] SlotKeys = new KeyCode[AbilitySlots];
