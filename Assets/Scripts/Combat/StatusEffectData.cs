@@ -57,4 +57,9 @@ public class StatusEffectData : ScriptableObject
     // CharacterStats.IsStunned and its consumers (currently just EnemyAI;
     // no ability stuns a player yet).
     public bool IsStun = false;
+
+    // A harmful effect, eligible to be stripped by a dispel ability (e.g.
+    // Cleanse) - see CharacterStats.RemoveOneNegativeEffect. False (the
+    // default) for buffs/auras, which a dispel should never touch.
+    public bool IsNegative = false;
 }

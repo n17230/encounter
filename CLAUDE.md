@@ -330,6 +330,41 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     slot — "(armor)" read as body armor despite the "mantle" name — a
     `HpThresholdEffects` entry at 50%: above it −15%
     `DamageTakenMultiplier`, below it +15% `DamageMultiplier`).
+  - **Cleanse** (`cleanse`, added 2026-09-12, `AbilityData
+    .RemovesNegativeEffect`, new mechanic): unit-targeted, instant, 150
+    mana, strips one currently active `StatusEffectData.IsNegative`
+    effect from the target via the new `CharacterStats
+    .RemoveOneNegativeEffect` (arbitrary pick if more than one is
+    active — no priority order requested). `IsNegative` was added and
+    set true on the 5 existing debuffs (`burn`, `slow`, `bleed`, `stun`,
+    `crippling_blow`); every buff/aura effect defaults to false and is
+    never dispellable. Range 30 and Cooldown 6s are unspecified
+    placeholders — mana cost and instant cast came from the user.
+  - **Amulet of Vitality** (`GearAmuletOfVitality`, Id
+    `amulet_of_vitality`, Necklace, added 2026-09-12): flat `+150
+    MaxHealth`, nothing else.
+  - **Amulet of the Magi** (`GearAmuletOfTheMagi`, Id
+    `amulet_of_the_magi`, Necklace, added 2026-09-12): flat `+100
+    MaxMana` and `+0.4 ManaRegenRate` (the user's "+2 mp5" — 2 mana per
+    5s tick — converted to the per-second unit `ManaRegenRate` actually
+    stores, same "mp5 ÷ 5" convention already used for the old Amulet of
+    Replenishment).
+  - **Global cooldown** (added 2026-09-12, per explicit user request —
+    also flagged on `review_with_fable.md`'s list): starting ANY cast
+    (instant or with `CastTime`) locks out starting a different one for
+    `globalCooldownDuration` (1.5s, the standard MMO GCD length — not
+    specified, a placeholder), on top of that ability's own `Cooldown`.
+    One shared gate across every slot, not per-ability. Same
+    predict-on-client/confirm-or-rollback-via-server pattern as the
+    existing per-ability cooldown: `predictedGlobalCooldownReady`
+    (client) vs. `serverGlobalCooldownReadyTime` (server, authoritative)
+    in `PlayerAbilities`, checked in `ClientPrecheck` and both
+    `CastAbilityServerRpc`/`CastGroundTargetedAbilityServerRpc`, set the
+    moment a cast actually starts (mirrors where the per-ability
+    `cooldownReadyTime`/`predictedCooldownReady` are set, i.e. after the
+    mana-affordability check, not before). No dedicated GCD UI element —
+    a blocked cast just shows the existing transient "Global cooldown"
+    notice, same as any other rejection reason.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
@@ -372,14 +407,31 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   pulses the effect (via `CharacterStats.ApplyEffect`, the non-hostile
   entry) onto every alive player within Range, self included, every 1 s
   with a 2.5 s duration, so it lapses on leaving range and same-asset
-  auras don't stack. `GearAmuletOfReplenishment` (Necklace, Id
-  `amulet_of_replenishment`, was Amulet of Mana / `GearManaAmulet` until
-  renamed 2026-09-11) radiates `mana_aura` (+3 mana/s, i.e. +15 per the
-  5 s regen tick — see Resource numbers below) at 40 range;
-  `GearAmuletOfRegeneration` (Necklace, Id `amulet_of_regeneration`, was
-  Amulet of Rejuvenation until renamed 2026-09-11) radiates `rejuvenation`
-  (a periodic heal, not a regen-rate modifier — the underlying effect
-  asset keeps its old Id/name, only the item was renamed) at 40 range.
+  auras don't stack.
+  - **Aura spells** (added 2026-09-12 — converted from the old amulet/
+    Echolocator gear items, which no longer exist): `AbilityData
+    .IsAuraSpell` + `AuraRange` + `AuraReveals` — cast once (no target,
+    instant, 50 mana, 0 cd — all unspecified placeholders), no gear
+    required, and it never expires on its own. `CharacterEquipment`
+    tracks at most **one** active cast-aura per caster
+    (`SetActiveAura`/`castAuraEffect`/`castAuraRange` — plain fields, not
+    a list, so casting a *different* aura spell always overwrites
+    whichever was active, WoW-Paladin-style — this was an explicit user
+    decision, asked via `AskUserQuestion`), pulsed every `FixedUpdate`
+    tick exactly like an item's own `Auras` would be (reuses `PulseAura`
+    directly). A reveal-only aura (no `Effect`) is carried via a new
+    `NetworkVariable<bool> CastAuraRevealsMobs`, read by `PlayerHUD`
+    alongside `ItemData.Reveals` when computing `minimapReveals`.
+    **Aura of Replenishment** (`aura_of_replenishment`, grants
+    `mana_aura` — unchanged effect asset/numbers, was the Amulet of
+    Replenishment). **Aura of Regeneration** (`aura_of_regeneration`,
+    grants `rejuvenation` — unchanged, was the Amulet of Regeneration).
+    **Echolocation** (`echolocation`, `AuraReveals: Mobs`, no `Effect` —
+    was the Echolocator item/Trinket). The party-wide pulse range (40,
+    same as the old amulets — confirmed explicitly, not guessed) and the
+    exclusivity rule both came from direct user answers to a clarifying
+    question; only the numbers (mana cost, cast time, cooldown) are
+    placeholders.
   **Periodic healing**: `StatusEffectData.TickHeal` is the heal-side
   counterpart to `TickDamage` (either or both can be set;
   `StatusEffectTracker.Tick` schedules a tick if either is > 0) —
@@ -549,8 +601,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   fading the dots out over `MobPingFadeDuration` (4s) before the next
   pulse, so there's a ~1s blind gap each cycle; `Minimap.Draw` takes
   `mobPingPositions`/`mobPingAlpha` alongside the live `blips`/`reveals`.
-  `GearEcholocator` (Trinket, Id `echolocator`)
-  grants the Mobs reveal. The reverse direction is
+  The **Echolocation** aura spell (Id `echolocation`, see above — no
+  longer a Trinket item) grants the Mobs reveal, always on once cast. The
+  reverse direction is
   `ItemData.BroadcastsLocation` → server-written
   `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
   allies' minimaps draw a broadcasting player regardless of their own

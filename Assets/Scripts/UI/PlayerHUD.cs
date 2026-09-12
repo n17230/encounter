@@ -17,6 +17,7 @@ public class PlayerHUD : NetworkBehaviour
     private CharacterStats stats;
     private PlayerTargeting targeting;
     private PlayerAutoAttack autoAttack;
+    private CharacterEquipment equipment;
 
     // Refreshed once per frame in Update rather than per OnGUI pass.
     private Targetable[] minimapBlips = new Targetable[0];
@@ -31,6 +32,7 @@ public class PlayerHUD : NetworkBehaviour
         stats = GetComponent<CharacterStats>();
         targeting = GetComponent<PlayerTargeting>();
         autoAttack = GetComponent<PlayerAutoAttack>();
+        equipment = GetComponent<CharacterEquipment>();
     }
 
     private void Update()
@@ -43,6 +45,7 @@ public class PlayerHUD : NetworkBehaviour
             ItemData item = ProfileStore.Current.GetGear(slot);
             if (item != null) minimapReveals |= item.Reveals;
         }
+        if (equipment.CastAuraRevealsMobs.Value) minimapReveals |= MinimapReveal.Mobs;
 
         // Always gathered: a broadcasting ally draws even with no reveals.
         minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);

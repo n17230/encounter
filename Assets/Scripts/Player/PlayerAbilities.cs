@@ -14,6 +14,11 @@ public class PlayerAbilities : NetworkBehaviour
 {
     [SerializeField] private float facingConeAngle = 120f;
     [SerializeField] private Color groundReticleColor = new Color(0.4f, 0.8f, 1f, 0.6f);
+    // Starting ANY cast (instant or otherwise) locks out starting another
+    // one for this long, on top of that ability's own Cooldown - a single
+    // shared gate across every slot. Not specified by the user; 1.5s is the
+    // standard MMO GCD length, flagged in review_with_fable.md.
+    [SerializeField] private float globalCooldownDuration = 1.5f;
     public float FacingConeAngle => facingConeAngle;
 
     private PlayerTargeting targeting;
@@ -45,6 +50,9 @@ public class PlayerAbilities : NetworkBehaviour
     // instant the key is pressed, so casting feels immediate. The server
     // still decides; a rejection rolls the predicted cooldown back.
     private readonly Dictionary<AbilityData, float> predictedCooldownReady = new Dictionary<AbilityData, float>();
+    // Same prediction/rollback treatment as predictedCooldownReady, but a
+    // single shared value instead of per-ability - see globalCooldownDuration.
+    private float predictedGlobalCooldownReady;
 
     // Server-authoritative: which ability (or null) the owning player has in
     // each loadout slot. Clients only ever send slot indices to cast, and
@@ -63,6 +71,8 @@ public class PlayerAbilities : NetworkBehaviour
     // this is what actually enforces the rule against a desynced or
     // malicious client.
     private float serverCastEndTime;
+    // Server-authoritative global cooldown - see globalCooldownDuration.
+    private float serverGlobalCooldownReadyTime;
 
     private void Awake()
     {
@@ -166,6 +176,7 @@ public class PlayerAbilities : NetworkBehaviour
 
             CastAbilityServerRpc(slot, targetNetworkObject != null ? targetNetworkObject.NetworkObjectId : 0);
             predictedCooldownReady[ability] = Time.time + ability.Cooldown;
+            predictedGlobalCooldownReady = Time.time + globalCooldownDuration;
 
             if (ability.CastTime > 0f)
             {
@@ -238,6 +249,7 @@ public class PlayerAbilities : NetworkBehaviour
 
         CastGroundTargetedAbilityServerRpc(slot, point);
         predictedCooldownReady[ability] = Time.time + ability.Cooldown;
+        predictedGlobalCooldownReady = Time.time + globalCooldownDuration;
 
         if (ability.CastTime > 0f)
         {
@@ -255,6 +267,7 @@ public class PlayerAbilities : NetworkBehaviour
         targetNetworkObject = null;
 
         if (predictedCooldownReady.TryGetValue(ability, out float ready) && Time.time < ready) return "Not ready";
+        if (Time.time < predictedGlobalCooldownReady) return "Global cooldown";
         if (stats.CurrentMana.Value < ability.ManaCost * stats.SyncedManaCostMultiplier.Value) return "Not enough mana";
 
         // Client-side mirror of the server's authoritative equipment (see
@@ -388,6 +401,11 @@ public class PlayerAbilities : NetworkBehaviour
         if (!IsOwner) return;
         AbilityData ability = GameDatabase.GetAbility(abilityId);
         if (ability != null) predictedCooldownReady.Remove(ability);
+        // Also rolled back unconditionally: worst case the client tries
+        // again a moment early, and the server (whose own GCD state is
+        // untouched by this) simply rejects it again for real if it's
+        // still active from a different, earlier successful cast.
+        predictedGlobalCooldownReady = 0f;
         if (isCasting && castingAbilityName == ability?.AbilityName) isCasting = false;
         ShowNotice(reason);
     }
@@ -403,6 +421,11 @@ public class PlayerAbilities : NetworkBehaviour
         if (Time.time < serverCastEndTime)
         {
             NotifyCastRejectedClientRpc(ability.Id, "Already casting");
+            return;
+        }
+        if (Time.time < serverGlobalCooldownReadyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Global cooldown");
             return;
         }
         if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
@@ -441,6 +464,7 @@ public class PlayerAbilities : NetworkBehaviour
         // ResolveAbility - not here at cast start. This check just stops an
         // unaffordable cast from starting in the first place.
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
+        serverGlobalCooldownReadyTime = Time.time + globalCooldownDuration;
 
         if (ability.CastTime > 0f)
         {
@@ -476,6 +500,11 @@ public class PlayerAbilities : NetworkBehaviour
 
     private void ResolveAbility(AbilityData ability, ulong targetNetworkObjectId)
     {
+        if (ability.IsAuraSpell)
+        {
+            ResolveAuraSpell(ability);
+            return;
+        }
         if (ability.EnemiesAroundCaster)
         {
             ResolveEnemiesAroundCaster(ability);
@@ -539,6 +568,12 @@ public class PlayerAbilities : NetworkBehaviour
         if (ability.ChargeToTarget)
         {
             ResolveChargeToTarget(ability, target, targetObject);
+            return;
+        }
+
+        if (ability.RemovesNegativeEffect)
+        {
+            target.Stats.RemoveOneNegativeEffect();
             return;
         }
 
@@ -619,6 +654,21 @@ public class PlayerAbilities : NetworkBehaviour
                 EffectDuration = ability.DirectHitEffectDuration,
             });
         }
+    }
+
+    // No targeting: grants (or replaces) this caster's one permanent active
+    // aura - see CharacterEquipment.SetActiveAura. No effect/reveal ever
+    // gets removed independently; casting a DIFFERENT aura spell just
+    // overwrites the single active slot.
+    private void ResolveAuraSpell(AbilityData ability)
+    {
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        equipment.SetActiveAura(ability.Effect, ability.AuraRange, ability.AuraReveals);
     }
 
     // What this caster actually swings with right now (equipped main hand,
@@ -787,6 +837,11 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastRejectedClientRpc(ability.Id, "Already casting");
             return;
         }
+        if (Time.time < serverGlobalCooldownReadyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Global cooldown");
+            return;
+        }
         if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
         {
             NotifyCastRejectedClientRpc(ability.Id, "Not ready");
@@ -805,6 +860,7 @@ public class PlayerAbilities : NetworkBehaviour
 
         // Spent at resolve, not here - see ResolveGroundAbility.
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
+        serverGlobalCooldownReadyTime = Time.time + globalCooldownDuration;
 
         if (ability.CastTime > 0f)
         {

@@ -28,6 +28,24 @@ public class CharacterEquipment : NetworkBehaviour
     public readonly NetworkVariable<bool> BroadcastsLocation =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // The permanent aura currently granted by an AbilityData.IsAuraSpell
+    // cast (see SetActiveAura) - not gear, so not part of equippedItems;
+    // pulsed the exact same way an item's own Auras would be. At most one
+    // at a time: a new SetActiveAura call replaces whichever was active.
+    private StatusEffectData castAuraEffect;
+    private float castAuraRange;
+    public readonly NetworkVariable<bool> CastAuraRevealsMobs =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    // Called by PlayerAbilities when an IsAuraSpell cast resolves.
+    public void SetActiveAura(StatusEffectData effect, float range, MinimapReveal reveals)
+    {
+        if (!IsServer) return;
+        castAuraEffect = effect;
+        castAuraRange = range;
+        CastAuraRevealsMobs.Value = (reveals & MinimapReveal.Mobs) != 0;
+    }
+
     // Server-side view of what the main hand swings with (null = unarmed).
     public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
 
@@ -111,6 +129,8 @@ public class CharacterEquipment : NetworkBehaviour
             if (item == null || item.Auras.Count == 0) continue;
             foreach (ItemAura aura in item.Auras) PulseAura(aura);
         }
+
+        if (castAuraEffect != null) PulseAura(new ItemAura { Effect = castAuraEffect, Range = castAuraRange });
 
         UpdateHpThresholds();
     }

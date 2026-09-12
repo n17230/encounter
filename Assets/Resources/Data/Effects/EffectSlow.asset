@@ -21,3 +21,4 @@ MonoBehaviour:
   - Stat: 4
     ModifierType: 1
     Value: -0.66
+  IsNegative: 1

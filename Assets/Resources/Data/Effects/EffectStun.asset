@@ -22,3 +22,4 @@ MonoBehaviour:
   Modifiers: []
   DamageRedirectPercent: 0
   IsStun: 1
+  IsNegative: 1

@@ -202,6 +202,23 @@ public class CharacterStats : NetworkBehaviour
         effects.Remove(effect);
     }
 
+    // Strips one currently active negative effect (StatusEffectData
+    // .IsNegative), whichever is found first if more than one is active -
+    // e.g. Cleanse. Server-only. Returns true if something was removed.
+    public bool RemoveOneNegativeEffect()
+    {
+        if (!IsServer) return false;
+
+        StatusEffectData found = null;
+        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+        {
+            if (!active.Data.IsNegative) continue;
+            found = active.Data;
+            break; // can't call effects.Remove while still enumerating effects.All
+        }
+        return found != null && effects.Remove(found);
+    }
+
     // True while any active effect (e.g. Trample, Seismic Slam) has
     // IsStun set - movement/casting/attacking should all be blocked. Only
     // EnemyAI currently checks this; no ability stuns a player yet.

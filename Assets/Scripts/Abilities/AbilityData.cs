@@ -113,4 +113,21 @@ public class AbilityData : ScriptableObject
 
     // Shared speed (units/sec) for ChargeForwardDistance and ChargeToTarget.
     public float ChargeSpeed = 20f;
+
+    // Cast once, no target: grants a permanent, party-wide aura centered on
+    // the caster - Effect (above) is pulsed to everyone within AuraRange
+    // (self included), and/or AuraReveals is granted on the caster's own
+    // minimap, exactly like the old gear-based auras did, except there's no
+    // gear to wear and no duration - it simply never expires on its own.
+    // At most one aura spell is active per caster at a time: casting a
+    // DIFFERENT one replaces whichever was active (see
+    // CharacterEquipment.SetActiveAura). RequiresTarget should be false.
+    public bool IsAuraSpell = false;
+    public float AuraRange = 40f;
+    public MinimapReveal AuraReveals = MinimapReveal.None;
+
+    // Unit-targeted (RequiresTarget), no damage/heal: removes one currently
+    // active negative effect (StatusEffectData.IsNegative) from the target,
+    // chosen arbitrarily if more than one is active - e.g. Cleanse.
+    public bool RemovesNegativeEffect = false;
 }

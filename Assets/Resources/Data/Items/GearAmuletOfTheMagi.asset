@@ -10,14 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
-  m_Name: GearAmuletOfReplenishment
-  m_EditorClassIdentifier: 
-  Id: amulet_of_replenishment
-  ItemName: Amulet of Replenishment
+  m_Name: GearAmuletOfTheMagi
+  m_EditorClassIdentifier:
+  Id: amulet_of_the_magi
+  ItemName: Amulet of the Magi
   Slot: 1
-  Bonuses: []
+  Bonuses:
+  - Stat: 2
+    ModifierType: 0
+    Value: 100
+  - Stat: 3
+    ModifierType: 0
+    Value: 0.4
+  HpThresholdEffects: []
   Immunities: []
-  Auras:
-  - Effect: {fileID: 11400000, guid: 80ef944a4e9fbae2df1d393dac6b4c9e, type: 2}
-    Range: 40
+  Auras: []
+  Reveals: 0
+  BroadcastsLocation: 0
   Weapon: {fileID: 0}
+  TwoHanded: 0

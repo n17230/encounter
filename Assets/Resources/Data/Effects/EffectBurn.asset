@@ -18,3 +18,4 @@ MonoBehaviour:
   TickDamage: 10
   TickInterval: 1
   Modifiers: []
+  IsNegative: 1
