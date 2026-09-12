@@ -57,6 +57,12 @@ public class PlayerTargeting : NetworkBehaviour
             CycleTarget();
         }
 
+        // Fixed, not rebindable, same as the party-target keys below.
+        if (Input.GetKeyDown(KeyCode.BackQuote))
+        {
+            CurrentTarget = self;
+        }
+
         for (int i = 0; i < PartyTargetKeys.Length; i++)
         {
             if (!Input.GetKeyDown(PartyTargetKeys[i])) continue;
