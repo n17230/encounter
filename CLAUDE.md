@@ -497,9 +497,11 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   everyone by construction. **Blank by default**: blips only draw for
   what the local player's equipped gear reveals (`ItemData.Reveals`,
   `MinimapReveal` flags Players/Mobs, unioned across worn items, read
-  client-side from the profile). Revealed `Targetable`s within 50 world
-  units draw as blips — players green (turning yellow on your current
-  target), mobs always red. **Players reveal is live**, but **Mobs
+  client-side from the profile). Revealed `Targetable`s within
+  `Minimap.WorldRadius` (150) draw as blips — players green (turning
+  yellow on your current target), mobs always red. Two faint reference
+  rings are drawn at the 50 and 100 marks so distance reads at a glance.
+  **Players reveal is live**, but **Mobs
   reveal is a pulse, not a tracker**: `PlayerHUD` snapshots every mob's
   position every `MobPingInterval` (5s) into `mobPingPositions`
   (`List<Vector3>`, frozen, not the mob's live transform), fading the

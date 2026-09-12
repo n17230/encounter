@@ -6,12 +6,17 @@ using UnityEngine;
 // positions. Disc textures are generated once since IMGUI has no circles.
 public static class Minimap
 {
-    public const float WorldRadius = 50f;
+    public const float WorldRadius = 150f;
     public const float ScreenRadius = 70f;
     public const float Margin = 12f;
 
+    // Concentric reference circles drawn inside the disc so distance is
+    // readable at a glance now that WorldRadius no longer matches the rim.
+    private static readonly float[] RangeRingWorldRadii = { 50f, 100f };
+
     private static readonly Color BackgroundColor = new Color(0f, 0f, 0f, 0.55f);
     private static readonly Color RimColor = new Color(1f, 1f, 1f, 0.6f);
+    private static readonly Color RangeRingColor = new Color(1f, 1f, 1f, 0.25f);
     private static readonly Color SelfColor = Color.white;
     private static readonly Color PlayerColor = new Color(0.3f, 1f, 0.3f);
     private static readonly Color MobColor = new Color(1f, 0.35f, 0.3f);
@@ -30,6 +35,7 @@ public static class Minimap
 
     private static Texture2D discTexture;
     private static Texture2D blipTexture;
+    private static Texture2D ringTexture;
     private static GUIStyle compassStyle;
 
     // reveals: which kinds of blip the wearer's gear lets them see (Players
@@ -50,6 +56,7 @@ public static class Minimap
         Vector2 centre = rect.center;
 
         GUI.DrawTexture(rect, discTexture);
+        DrawRangeRings(centre);
 
         foreach (Targetable blip in blips)
         {
@@ -89,6 +96,16 @@ public static class Minimap
         DrawCompass(centre);
     }
 
+    private static void DrawRangeRings(Vector2 centre)
+    {
+        foreach (float worldRadius in RangeRingWorldRadii)
+        {
+            float screenRadius = worldRadius * (ScreenRadius / WorldRadius);
+            float diameter = screenRadius * 2f;
+            GUI.DrawTexture(new Rect(centre.x - screenRadius, centre.y - screenRadius, diameter, diameter), ringTexture);
+        }
+    }
+
     private static void DrawCompass(Vector2 centre)
     {
         compassStyle ??= new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = 12 };
@@ -122,6 +139,7 @@ public static class Minimap
         if (discTexture != null) return;
         discTexture = MakeDisc(128, BackgroundColor, RimColor, rim: 2);
         blipTexture = MakeDisc(16, Color.white, Color.white, rim: 0);
+        ringTexture = MakeDisc(128, Color.clear, RangeRingColor, rim: 2);
     }
 
     private static Texture2D MakeDisc(int size, Color fill, Color rimColor, int rim)
