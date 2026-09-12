@@ -1,5 +1,8 @@
-// Matches the slot list from DESIGN_IDEAS.md: helmet, necklace, chest,
-// cape, gloves, belt, legs, boots, 2 rings, a trinket, main hand, off hand.
+// Matches the slot list from ARCHITECTURE_NOTES.md: helmet, necklace,
+// chest, cape, gloves, legs, boots, 2 rings, a trinket, main hand, off
+// hand. Legs is explicitly = 6 (not auto-incrementing from Gloves) so
+// removing Belt (formerly 5) doesn't shift every later slot's underlying
+// value - those are serialized directly into existing item assets.
 public enum GearSlot
 {
     Helmet,
@@ -7,8 +10,7 @@ public enum GearSlot
     Chest,
     Cape,
     Gloves,
-    Belt,
-    Legs,
+    Legs = 6,
     Boots,
     Ring1,
     Ring2,

@@ -467,13 +467,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   server-written `CharacterEquipment.BroadcastsLocation` NetworkVariable
   on the wearer; allies' minimaps draw a broadcasting player regardless
   of their own reveals (**Transmitting Beacon**, Ring1). **Gear slots:
-  13, not 15** — `GearSlot` has `Ring1`/`Ring2` only, and those two are
-  **interchangeable**: a ring item's `Slot` is just the `Ring1`
-  category, `GearSlotExtensions.IsRing()` treats either physical slot as
-  valid for it in `CharacterEquipment.SetGearServerRpc`'s placement
-  check, and `MainMenu.TargetSlotFor` picks whichever physical ring slot
-  is free (Ring1 first) when equipping one from the inventory grid. No
-  terrain by design. Disc/blip textures are generated at runtime.
+  12** (`GearSlot` — no Belt, and `Ring1`/`Ring2` only, no Ring3/4).
+  Rings are **interchangeable**: a ring item's `Slot` is just the
+  `Ring1` category, `GearSlotExtensions.IsRing()` treats either physical
+  slot as valid for it in `CharacterEquipment.SetGearServerRpc`'s
+  placement check, and `MainMenu.TargetSlotFor` picks whichever physical
+  ring slot is free (Ring1 first) when equipping one from the inventory
+  grid. `GearSlot.Legs` is pinned to its old underlying value (`= 6`)
+  so removing Belt didn't shift every later slot's serialized value out
+  from under existing item assets. No terrain by design. Disc/blip
+  textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,

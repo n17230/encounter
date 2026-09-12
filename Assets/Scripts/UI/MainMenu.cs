@@ -463,7 +463,7 @@ public class MainMenu : MonoBehaviour
     // Indexed by GearSlot.
     private static readonly string[] SlotShortNames =
     {
-        "Head", "Neck", "Chest", "Cape", "Gloves", "Belt", "Legs", "Boots",
+        "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots",
         "Ring 1", "Ring 2", "Trinket", "Main", "Off",
     };
 

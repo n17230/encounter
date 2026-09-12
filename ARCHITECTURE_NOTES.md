@@ -202,7 +202,6 @@ can equip at most **one item per slot**:
 - Chest
 - Cape
 - Gloves
-- Belt
 - Legs
 - Boots
 - Ring x2 (interchangeable — any ring can go in either slot; decided
@@ -211,7 +210,7 @@ can equip at most **one item per slot**:
 - Main hand
 - Off hand
 
-That's **13 gear slots** per character.
+That's **12 gear slots** per character.
 
 - **Two-handed weapons**: a two-handed main-hand item occupies both the
   main hand and off hand slots, locking out off hand while equipped —
@@ -313,3 +312,4 @@ Open questions:
   hardcoded constant.
 - 2026-09-11: Cut ring slots from 4 to 2, and made those 2 interchangeable
   (resolves the open question above) — 15 gear slots become 13.
+- 2026-09-12: Removed the Belt slot entirely — 13 gear slots become 12.

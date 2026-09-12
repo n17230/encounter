@@ -23,7 +23,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Armored Boots | +5 Armor |
-| Boots of Lightness | Press Jump again while airborne to hover in place for 2s (WASD still steers) — once per airtime |
+| Boots of Lightness | Press Jump again while airborne to suspend falling for 2s, freely steerable with WASD the whole time (not stationary) — once per airtime |
 | Ice Cleats | Immune to Slow from ground patches (a direct hit can still slow you) |
 | Swift Boots | +3% Run Speed |
 
@@ -62,4 +62,4 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 ## Slots with nothing yet
 
-Helmet, Cape, Gloves, Belt, Legs.
+Helmet, Cape, Gloves, Legs.
