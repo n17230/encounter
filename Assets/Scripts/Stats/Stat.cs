@@ -4,13 +4,17 @@ using System.Linq;
 public class Stat
 {
     private readonly float baseValue;
+    // No floor by default (matches every stat's existing behavior); a
+    // stat that should never go negative (e.g. Armor) passes 0 here.
+    private readonly float minValue;
     private readonly List<StatModifier> modifiers = new List<StatModifier>();
     private float cachedValue;
     private bool dirty = true;
 
-    public Stat(float baseValue)
+    public Stat(float baseValue, float minValue = float.NegativeInfinity)
     {
         this.baseValue = baseValue;
+        this.minValue = minValue;
     }
 
     public float Value
@@ -46,7 +50,7 @@ public class Stat
     {
         float flatSum = modifiers.Where(m => m.Type == StatModifierType.Flat).Sum(m => m.Value);
         float percentSum = modifiers.Where(m => m.Type == StatModifierType.PercentAdditive).Sum(m => m.Value);
-        cachedValue = (baseValue + flatSum) * (1f + percentSum);
+        cachedValue = System.Math.Max(minValue, (baseValue + flatSum) * (1f + percentSum));
         dirty = false;
     }
 }

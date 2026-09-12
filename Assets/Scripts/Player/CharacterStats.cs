@@ -78,7 +78,7 @@ public class CharacterStats : NetworkBehaviour
         MaxMana = new Stat(baseMaxMana);
         ManaRegenRate = new Stat(baseManaRegenRate);
         RunSpeed = new Stat(baseRunSpeed);
-        Armor = new Stat(baseArmor);
+        Armor = new Stat(baseArmor, minValue: 0f);
         ManaCostMultiplier = new Stat(1f);
         ThreatMultiplier = new Stat(1f);
         DamageMultiplier = new Stat(1f);

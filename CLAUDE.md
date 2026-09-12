@@ -289,7 +289,11 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   HitInfo)` is the *only* way anything hostile reaches a character —
   projectile impact, instant cast, mob melee, ground-patch refresh and
   DoT ticks all build a `HitInfo {Damage, ExtraThreat, AttackerClientId,
-  Effect, EffectDuration}`. Damage is armor-mitigated (`1 - Armor/100`),
+  Effect, EffectDuration}`. Damage is armor-mitigated (`1 - Armor/100`,
+  `Armor` floored at 0 — `Stat`'s optional `minValue` constructor
+  parameter, defaulting to no floor for every other stat — so stacked
+  Armor-reducing debuffs like Armorbreaker's can't push it negative and
+  invert the mitigation formula into bonus damage taken),
   1 threat per point of mitigated damage goes to the target's optional
   `ThreatTable`, `ExtraThreat` is added on top (taunts), then the effect
   is applied. `HitInfo.Source` (`Melee`/`Ability`/`GroundPatch`) says
