@@ -22,6 +22,9 @@ MonoBehaviour:
   - Stat: 12
     ModifierType: 0
     Value: 0.03
+  - Stat: 13
+    ModifierType: 0
+    Value: 0.05
   HpThresholdEffects: []
   Immunities: []
   Auras: []

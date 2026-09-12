@@ -62,11 +62,4 @@ public class StatusEffectData : ScriptableObject
     // Cleanse) - see CharacterStats.RemoveOneNegativeEffect. False (the
     // default) for buffs/auras, which a dispel should never touch.
     public bool IsNegative = false;
-
-    // While active, this fraction of incoming HitSource.Melee hits are
-    // blocked outright (0 damage - see CharacterStats.ReceiveHit). Only
-    // the strongest active block chance applies; multiple such effects
-    // don't stack. 0 (the default) means no block chance. E.g. Aegis of
-    // the Ancient.
-    public float BlockChancePercent = 0f;
 }

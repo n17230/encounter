@@ -9,20 +9,29 @@ whole file once it's empty.
 
 ## 0. Aegis of the Ancient (block chance), Aegis of Reflection (damage reflect), Shield renamed
 
+- **Block chance is now additive, not a flat set** (per your follow-up):
+  both shields (Aegis of the Unstoppable, Aegis of Reflection) passively
+  give +5% block chance just from being equipped, and Aegis of the
+  Ancient adds +25% on top of that for its 12s duration - so with a
+  shield worn and the buff active, total block chance is 30%, not 25%.
+  This is implemented as a proper stat now (`StatType.BlockChancePercent`)
+  that gear and effects both just add `Flat` modifiers to, same as every
+  other stat in the game - no more special-casing. **Please confirm**:
+  with a shield equipped and the buff NOT active, roughly 1 in 20 melee
+  hits should block (5%); with the buff active, roughly 3 in 10 should
+  (30%). Also confirm the 5% passive block works even without ever
+  casting the spell (just from wearing a shield).
 - **Aegis of the Ancient** (new mechanic, `[requires a shield]`) - equip
   a shield (Aegis of the Unstoppable or Aegis of Reflection, both now
   count), cast it, then have something melee you repeatedly for the
-  next 12 seconds. **Confirm**: roughly 1 in 4 hits should land for 0
-  damage (blocked) - this is a per-hit dice roll, not a guaranteed
-  pattern, so test with enough swings to see the ~25% rate rather than
-  judging off 2-3 hits. Confirm it does NOT block spell/ability damage
-  (e.g. a mob or player's Firebolt should never be blocked - only
+  next 12 seconds. Confirm it does NOT block spell/ability damage (e.g.
+  a mob or player's Firebolt should never be blocked - only
   melee/basic-attack-sourced hits count as "physical" here, that's an
   interpretation call since "physical" wasn't defined further). Confirm
   casting it WITHOUT a shield equipped is rejected ("Requires a
-  shield"). 100 mana / 60s cooldown / 12s duration / 25% chance all came
-  from you; instant cast and range are placeholders (it's self-only, no
-  target needed).
+  shield"). 100 mana / 60s cooldown / 12s duration / +25% came from you;
+  instant cast and range are placeholders (it's self-only, no target
+  needed).
 - **Aegis of Reflection** (new item, new mechanic: `StatType
   .DamageReflectPercent`) - +10 Armor, and now reflects 3% of incoming
   damage back at whoever hit you. **This needed a small architecture

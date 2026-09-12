@@ -19,8 +19,10 @@ MonoBehaviour:
   TickDamage: 0
   TickHeal: 0
   TickInterval: 1
-  Modifiers: []
+  Modifiers:
+  - Stat: 13
+    ModifierType: 0
+    Value: 0.25
   DamageRedirectPercent: 0
   IsStun: 0
   IsNegative: 0
-  BlockChancePercent: 0.25

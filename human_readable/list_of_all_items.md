@@ -56,8 +56,8 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Effect |
 |---|---|
-| Aegis of the Unstoppable | +20 Armor. Counts as a shield (Aegis of the Ancient requires this) |
-| Aegis of Reflection | +10 Armor, reflects 3% of incoming damage back at the attacker. Counts as a shield |
+| Aegis of the Unstoppable | +20 Armor, +5% chance to block melee attacks |
+| Aegis of Reflection | +10 Armor, +5% chance to block melee attacks, reflects 3% of incoming damage back at the attacker |
 | Tomb of the Magi | +50 Max Mana, +0.4 Mana Regen/sec (+2 per 5s tick) |
 
 ## Slots with nothing yet

@@ -40,7 +40,7 @@ retuned — it's a snapshot, not auto-generated.
 
 | Spell | Mana | Cooldown | Cast | Effect |
 |---|---|---|---|---|
-| Aegis of the Ancient [requires a shield] | 100 | 60s | Instant | For 12s, 25% chance to block incoming physical (melee) attacks entirely — a blocked hit deals 0 damage |
+| Aegis of the Ancient [requires a shield] | 100 | 60s | Instant | For 12s, increases your chance to block incoming physical (melee) attacks by 25 percentage points on top of whatever you already have from gear — a blocked hit deals 0 damage |
 
 ## Utility / mobility
 

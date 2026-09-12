@@ -193,12 +193,14 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     is applied directly to the caster's own `CharacterStats`. Distinct
     from `AreaAroundCaster` (hits every ally in radius) and aura spells
     (permanent, gear-less) — this is just a plain timed buff on whoever
-    cast it. **Block chance**: `StatusEffectData.BlockChancePercent` —
-    while an effect with this set is active, `CharacterStats.ReceiveHit`
-    rolls it against any `HitSource.Melee` hit and zeroes the damage
-    outright on a hit (only the strongest active block chance applies,
-    no stacking). Aegis of the Ancient (`RequiresShield`, `SelfBuff`)
-    grants it.
+    cast it. **Block chance**: `StatType.BlockChancePercent` — rolled in
+    `CharacterStats.RollBlock` against any `HitSource.Melee` hit,
+    zeroing the damage outright on success. Gear and effects both just
+    add `Flat` `StatModifier`s to it like any other stat, so they stack
+    additively through the normal `Stat` machinery (e.g. a 5%-from-gear
+    shield plus a 25%-from-effect buff nets 30%) rather than one
+    overriding the other. Aegis of the Ancient (`RequiresShield`,
+    `SelfBuff`) grants +25% for its duration.
   - **Caster-facing AoEs**: `AbilityData.EnemiesAroundCaster`/
     `ConeAroundCaster` hit every non-player `Targetable` within
     `GroundEffectRadius` (the cone variant also filtered by `ConeAngle`

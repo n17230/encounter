@@ -34,6 +34,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat DamageTakenMultiplier { get; private set; }
     public Stat WeaponDamageBonus { get; private set; }
     public Stat DamageReflectPercent { get; private set; }
+    public Stat BlockChancePercent { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -85,6 +86,7 @@ public class CharacterStats : NetworkBehaviour
         DamageTakenMultiplier = new Stat(1f);
         WeaponDamageBonus = new Stat(0f);
         DamageReflectPercent = new Stat(0f);
+        BlockChancePercent = new Stat(0f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -109,6 +111,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.DamageTakenMultiplier: return DamageTakenMultiplier;
             case StatType.WeaponDamageBonus: return WeaponDamageBonus;
             case StatType.DamageReflectPercent: return DamageReflectPercent;
+            case StatType.BlockChancePercent: return BlockChancePercent;
             default: return null;
         }
     }
@@ -161,17 +164,14 @@ public class CharacterStats : NetworkBehaviour
         if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
     }
 
-    // The strongest currently-active BlockChancePercent on THIS character,
-    // if any - e.g. Aegis of the Ancient. Multiple such effects don't
-    // stack their chances.
+    // Gear (e.g. Aegis of the Unstoppable, Aegis of Reflection) and
+    // effects (e.g. Aegis of the Ancient) both just add Flat StatModifiers
+    // to BlockChancePercent, so they stack additively through the normal
+    // Stat machinery - no special-casing needed here.
     private bool RollBlock()
     {
-        float bestChance = 0f;
-        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
-        {
-            if (active.Data.BlockChancePercent > bestChance) bestChance = active.Data.BlockChancePercent;
-        }
-        return bestChance > 0f && UnityEngine.Random.value < bestChance;
+        float chance = BlockChancePercent.Value;
+        return chance > 0f && UnityEngine.Random.value < chance;
     }
 
     // Replaces any existing shield outright - two shields don't stack,

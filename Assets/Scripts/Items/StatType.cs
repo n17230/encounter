@@ -27,5 +27,11 @@ public enum StatType
     // Fraction of incoming (post-armor-mitigation) damage dealt straight
     // back to the attacker (base 0; e.g. Aegis of Reflection). See
     // CharacterStats.DealDamage.
-    DamageReflectPercent
+    DamageReflectPercent,
+    // Chance to block an incoming HitSource.Melee hit outright, 0 damage
+    // (base 0). Gear and effects both just add Flat modifiers here, so
+    // they stack additively (e.g. a 0.05 shield + a 0.25 effect = 0.30
+    // total) rather than one overriding the other. See
+    // CharacterStats.RollBlock.
+    BlockChancePercent
 }
