@@ -45,7 +45,7 @@ MonoBehaviour:
   ConeAroundCaster: 0
   ConeAngle: 90
   RequiresMeleeWeapon: 0
-  UseWeaponDamage: 0
+  WeaponDamagePercent: 0
   ChargeForwardDistance: 0
   ChargeToTarget: 1
   ChargeSpeed: 20

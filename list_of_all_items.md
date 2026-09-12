@@ -37,6 +37,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Fire Trinket | +10% damage dealt; wearer is permanently Burning (self-inflicted, no threat) |
+| The Everflow | +1 Mana Regen/sec (+5 per 5s tick) |
 
 ## Main Hand
 

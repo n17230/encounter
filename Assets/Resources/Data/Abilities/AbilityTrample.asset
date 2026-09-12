@@ -16,11 +16,11 @@ MonoBehaviour:
   AbilityName: Trample
   RequiresTarget: 0
   Range: 0
-  Cooldown: 15
+  Cooldown: 30
   CastTime: 0
   ManaCost: 75
   ThreatValue: 0
-  Damage: 75
+  Damage: 30
   HealAmount: 0
   ShieldAmount: 0
   MissileSpeed: 15
@@ -45,7 +45,7 @@ MonoBehaviour:
   ConeAroundCaster: 0
   ConeAngle: 90
   RequiresMeleeWeapon: 0
-  UseWeaponDamage: 0
+  WeaponDamagePercent: 0
   ChargeForwardDistance: 10
   ChargeToTarget: 0
   ChargeSpeed: 20

@@ -287,10 +287,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `CharacterEquipment.MainHandWeapon` is non-null (fists don't count) —
     checked client-side (via the profile's own gear) and
     server-authoritatively.
-    `AbilityData.UseWeaponDamage` (new): ability's dealt damage is
-    `PlayerAutoAttack.ResolvedWeapon.Damage` (new public property —
-    equipped main hand, or the unarmed fallback) instead of the asset's
-    own `Damage`.
+    `AbilityData.WeaponDamagePercent` (added as a bool `UseWeaponDamage`
+    2026-09-11, generalized to a float 2026-09-12 so Crippling Blow/
+    Seismic Slam could add a *fraction* of a weapon hit rather than
+    all-or-nothing): total damage on resolve is `Damage + WeaponDamage ×
+    WeaponDamagePercent`, computed once in the new shared
+    `PlayerAbilities.ResolveTotalDamage` and used everywhere `ability
+    .Damage` used to be read directly (weapon damage itself comes from
+    `PlayerAutoAttack.ResolvedWeapon.Damage` — equipped main hand, or the
+    unarmed fallback). 0 (default) = no weapon scaling at all.
     `AbilityData.ChargeForwardDistance` / `ChargeToTarget` (new, both
     self-movement via the existing `PlayerMovement.ServerBeginPull` rail
     — no new movement code): the former drives the caster straight
@@ -314,8 +319,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     The abilities/item themselves: **Reaper's Wheel** (`reapers_wheel`,
     melee-required, 8s cd, 50 mana, instant, `EnemiesAroundCaster` radius
     8, weapon damage, `EffectBleed` — 10 dmg/sec for 5s).
-    **Trample** (`trample`, 15s cd, 75 mana, instant, charges forward 10
-    units at an assumed 20 units/sec, 75 damage + `EffectStun` (3s) to
+    **Trample** (`trample`, 30s cd — was 15s, changed 2026-09-12 — 75
+    mana, instant, charges forward 10 units at an assumed 20 units/sec,
+    30 damage — was 75, changed 2026-09-12 — + `EffectStun` (3s) to
     everything near the path). **Cleave** (`cleave`, melee-required, 2s
     cd, 15 mana, instant, `ConeAroundCaster` radius 8 (assumed) / 120°
     (set explicitly by the user 2026-09-12), weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
@@ -323,9 +329,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     — −10% `DamageTakenMultiplier` for 15s — to the target). **Crippling
     Blow** (`crippling_blow`, melee-required, 0s cd, 15 mana, instant,
     unit-targeted, `EffectCripplingBlow` — −50% `RunSpeed` for 10s, same
-    pattern as `EffectSlow`). **Seismic Slam** (`seismic_slam`,
-    melee-required, 30s cd, 75 mana, 1s cast, `EnemiesAroundCaster`
-    radius 8, reuses `EffectStun`). **Barbarian's Mantle**
+    pattern as `EffectSlow` — plus 25% weapon damage, added 2026-09-12).
+    **Seismic Slam** (`seismic_slam`, melee-required, 30s cd, 75 mana, 1s
+    cast, `EnemiesAroundCaster` radius 8, reuses `EffectStun`, plus 10%
+    weapon damage, added 2026-09-12). **Barbarian's Mantle**
     (`GearBarbariansMantle`, Id `barbarians_mantle`, assumed **Chest**
     slot — "(armor)" read as body armor despite the "mantle" name — a
     `HpThresholdEffects` entry at 50%: above it −15%
@@ -353,6 +360,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     OffHand, added 2026-09-12): flat `+50 MaxMana` and `+0.4
     ManaRegenRate` (same "+2 mp5" convention as Amulet of the Magi) — an
     OffHand counterpart to it, smaller mana bonus, no threat/armor.
+  - **The Everflow** (`GearTheEverflow`, Id `the_everflow`, Trinket,
+    added 2026-09-12): flat `+1 ManaRegenRate` (the user's "5 mp5" ÷ 5,
+    same conversion as the other mp5 items). Nothing else.
   - **Global cooldown** (added 2026-09-12, per explicit user request —
     also flagged on `review_with_fable.md`'s list): starting ANY cast
     (instant or with `CastTime`) locks out starting a different one for

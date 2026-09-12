@@ -612,7 +612,7 @@ public class PlayerAbilities : NetworkBehaviour
 
             target.Stats.ReceiveHit(new HitInfo
             {
-                Damage = ability.Damage,
+                Damage = ResolveTotalDamage(ability),
                 Heal = ability.HealAmount,
                 ShieldAmount = ability.ShieldAmount,
                 ExtraThreat = ability.ThreatValue,
@@ -672,11 +672,21 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     // What this caster actually swings with right now (equipped main hand,
-    // or fists) - for UseWeaponDamage abilities.
+    // or fists).
     private float ResolveWeaponDamage()
     {
         WeaponData weapon = autoAttack.ResolvedWeapon;
         return weapon != null ? weapon.Damage : 0f;
+    }
+
+    // Damage + a fraction of the caster's current weapon damage - see
+    // AbilityData.WeaponDamagePercent. The single place every damage
+    // source (flat, weapon-scaled, or both) is combined.
+    private float ResolveTotalDamage(AbilityData ability)
+    {
+        float damage = ability.Damage;
+        if (ability.WeaponDamagePercent > 0f) damage += ResolveWeaponDamage() * ability.WeaponDamagePercent;
+        return damage;
     }
 
     // Full circle around the caster's own position, hitting every enemy
@@ -696,7 +706,7 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        float damage = ability.UseWeaponDamage ? ResolveWeaponDamage() : ability.Damage;
+        float damage = ResolveTotalDamage(ability);
 
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
@@ -731,7 +741,7 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        float damage = ability.UseWeaponDamage ? ResolveWeaponDamage() : ability.Damage;
+        float damage = ResolveTotalDamage(ability);
 
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {

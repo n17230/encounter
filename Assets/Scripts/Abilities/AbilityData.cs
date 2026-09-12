@@ -93,11 +93,14 @@ public class AbilityData : ScriptableObject
     // (precheck) and server-side (authoritative).
     public bool RequiresMeleeWeapon = false;
 
-    // Damage is the caster's currently equipped weapon's Damage (or the
-    // unarmed fallback) instead of this asset's own Damage field - for
-    // melee abilities meant to scale with your weapon (e.g. Reaper's
-    // Wheel, Cleave).
-    public bool UseWeaponDamage = false;
+    // Total damage on resolve is Damage (above) PLUS this fraction of the
+    // caster's currently equipped weapon's Damage (or the unarmed
+    // fallback) - e.g. 1 = adds a full weapon hit (Reaper's Wheel,
+    // Cleave, both with Damage 0, so it's the whole hit), 0.25 = adds a
+    // quarter of a weapon hit on top of Damage (Crippling Blow). 0 (the
+    // default) means no weapon scaling at all - see
+    // PlayerAbilities.ResolveTotalDamage.
+    public float WeaponDamagePercent = 0f;
 
     // Self-movement, no targeting: on resolve the caster charges straight
     // forward (their own current facing) for this many units, hitting
