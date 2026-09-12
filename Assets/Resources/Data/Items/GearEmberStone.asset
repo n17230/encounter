@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
-  m_Name: GearFireTrinket
-  m_EditorClassIdentifier: 
-  Id: fire_trinket
-  ItemName: Fire Trinket
+  m_Name: GearEmberStone
+  m_EditorClassIdentifier:
+  Id: ember_stone
+  ItemName: Ember Stone
   Slot: 10
   Bonuses:
   - Stat: 8

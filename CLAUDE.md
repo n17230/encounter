@@ -457,9 +457,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   basic attack) gives −10% mana cost and +250 max mana (`StatType.MaxMana`,
   flat). **`StatType.DamageMultiplier`** scales all
   damage a player deals (applied in `DealDamage` via the attacker's
-  stats, so DoT ticks count too). `GearFireTrinket` (Trinket, Id
-  `fire_trinket`): +10% damage dealt, and a Range-0 aura of `burn` —
-  i.e. the wearer is permanently Burning at the fire-patch rate (self-
+  stats, so DoT ticks count too). `GearEmberStone` (Trinket, Id
+  `ember_stone`, was `GearFireTrinket`/`fire_trinket` until renamed
+  2026-09-12 — "Ember Stone"): +10% damage dealt, and a Range-0 aura of
+  `burn` — i.e. the wearer is permanently Burning at the fire-patch rate (self-
   inflicted, no threat). Put new combat
   features (combat log, downed state, damage numbers) here, not at
   call sites.

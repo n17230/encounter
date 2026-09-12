@@ -372,7 +372,7 @@ treat all of it as unverified:
   Ring 1 is already full, does a second ring correctly fall into Ring 2
   instead of failing?
 - Check Main Hand / Off Hand / Trinket items (Broad Sword, Staff,
-  Shield, Fire Trinket) still equip into the right slot — their slot
+  Shield, Ember Stone) still equip into the right slot — their slot
   index shifted when Ring3/Ring4 were removed and I renumbered them by
   hand.
 - If you had gear equipped in a saved profile from before that change,
