@@ -14,5 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   WeaponName: 2H Axe
   Damage: 80
-  SwingInterval: 2.5
+  SwingInterval: 3
   Effect: {fileID: 0}

@@ -45,7 +45,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 |---|---|---|
 | Broad Sword | 40 damage / 2s swing | +40% threat generated, +100 Max Health |
 | Staff | 20 damage / 2s swing | −10% mana cost, +250 Max Mana |
-| 2H Axe | 80 damage / 2.5s swing | Two-handed — occupies Off Hand too, no other bonus |
+| 2H Axe | 80 damage / 3s swing | Two-handed — occupies Off Hand too, no other bonus |
 | Holy Scepter | none (caster stat-stick) | +10% healing done |
 
 ## Off Hand

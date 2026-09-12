@@ -71,11 +71,10 @@ whole file once it's empty.
 - **Broad Sword**: threat-generation bonus changed from +20% to +40%
   (`ThreatMultiplier`) - straightforward number change, low risk.
 - **2H Axe** (new item, `two_handed_axe`, MainHand, `TwoHanded: true`,
-  80 weapon damage): swing interval was never specified - assumed **2.5s**
-  (slower than Broad Sword's 2s / Fists' 1.5s, since two-handers reading
-  as slower-but-harder-hitting felt like the reasonable default). No
-  other bonuses were requested, so it has none (no threat/HP/armor bonus
-  like Broad Sword has) - confirm that's intended, not an oversight.
+  80 weapon damage, 3s swing interval - set by the user 2026-09-12, no
+  longer a guess). No other bonuses were requested, so it has none (no
+  threat/HP/armor bonus like Broad Sword has) - confirm that's intended,
+  not an oversight.
 - **Two-handed/off-hand mutual exclusivity** (new mechanic,
   `ItemData.TwoHanded`): equipping the 2H Axe into MainHand auto-clears
   whatever's in OffHand (e.g. unequips Shield), and equipping something

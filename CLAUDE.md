@@ -664,8 +664,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     null there if MainHand resolved to a two-handed item, an
     unconditional backstop regardless of what the client sent). First
     (and only) two-handed item: **2H Axe** (`GearTwoHandedAxe`, Id
-    `two_handed_axe`, MainHand, 80 weapon damage, no other bonuses) -
-    its 2.5s swing interval was never specified, a placeholder.
+    `two_handed_axe`, MainHand, 80 weapon damage, 3s swing interval —
+    set explicitly by the user 2026-09-12, was a 2.5s placeholder — no
+    other bonuses).
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no
