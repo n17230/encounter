@@ -18,6 +18,27 @@ public class CharacterEquipment : NetworkBehaviour
     private bool initialGearApplied;
     private float nextAuraPulse;
 
+    // Server-wide item uniqueness: at most one connected player may have a
+    // given item Id equipped at a time. Static (one server process, not
+    // per-instance) and server-only - clients have no visibility into who
+    // else holds what.
+    private static readonly Dictionary<string, ulong> globalItemOwners = new Dictionary<string, ulong>();
+
+    private static bool TryClaimItem(ItemData item, ulong clientId)
+    {
+        if (globalItemOwners.TryGetValue(item.Id, out ulong owner) && owner != clientId) return false;
+        globalItemOwners[item.Id] = clientId;
+        return true;
+    }
+
+    private static void ReleaseItem(ItemData item, ulong clientId)
+    {
+        if (item != null && globalItemOwners.TryGetValue(item.Id, out ulong owner) && owner == clientId)
+        {
+            globalItemOwners.Remove(item.Id);
+        }
+    }
+
     // Which side (above/below) of each equipped item's HP-threshold
     // effect(s) is currently applied - see UpdateHpThresholds. Keyed by
     // (physical slot, index into that item's HpThresholdEffects).
@@ -67,6 +88,10 @@ public class CharacterEquipment : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        if (IsServer)
+        {
+            foreach (ItemData item in equippedItems) ReleaseItem(item, OwnerClientId);
+        }
         if (!IsOwner) return;
         MainMenu.Closed -= SyncGearToServer;
     }
@@ -101,6 +126,11 @@ public class CharacterEquipment : NetworkBehaviour
             {
                 item = null;
             }
+
+            // Server-wide: someone else already wearing this item Id blocks
+            // equipping it here. Claiming your own already-held item is a
+            // harmless no-op.
+            if (item != null && !TryClaimItem(item, OwnerClientId)) item = null;
 
             Equip(physicalSlot, item);
         }
@@ -207,6 +237,8 @@ public class CharacterEquipment : NetworkBehaviour
 
         if (previous != null)
         {
+            ReleaseItem(previous, OwnerClientId);
+
             foreach (StatType type in Enum.GetValues(typeof(StatType)))
             {
                 stats.GetStat(type)?.RemoveAllModifiersFromSource(previous);

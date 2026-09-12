@@ -399,6 +399,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `ClampToMax()` (no free mid-fight heal). Wrong-slot items are rejected
   server-side. `CharacterStats.GetStat(StatType)` is the shared stat
   lookup.
+  - **Server-wide item uniqueness**: at most one connected player may
+    have a given item Id equipped at a time — `CharacterEquipment
+    .globalItemOwners` (`static`, server-only, keyed by item Id) is
+    claimed in `SetGearServerRpc` and released whenever that item
+    leaves a slot (`Equip`) or its owner disconnects
+    (`OnNetworkDespawn`). Losing the race just silently drops that item
+    from the requester's loadout, the same way an item in the wrong
+    slot already does — there's no client-side awareness of who else
+    holds what, so the Gear menu can't warn you before you try, and if
+    you lose the race your menu will keep showing it equipped locally
+    (from `Profile`) until you reopen the Gear page after the rejected
+    sync.
 - **Enemy targeting**: `TargetingMode` (`Proximity`/`HighestThreat`/
   `LowestThreat`/`FarthestPlayer`) and the pure `TargetSelector.Select`
   live in `Scripts/Enemy/TargetSelector.cs`; `EnemyAI` just builds
