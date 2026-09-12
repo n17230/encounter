@@ -236,16 +236,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     Every buff/aura effect defaults `IsNegative` to false and is never
     dispellable.
   - **Aura spells**: `AbilityData.IsAuraSpell` + `AuraRange` +
-    `AuraReveals` — cast once (no target), grants a permanent, gear-less
-    aura that never expires. `CharacterEquipment` tracks at most one
-    active cast-aura per caster (`SetActiveAura`), so casting a
-    different aura spell always replaces the previous one; pulsed every
-    `FixedUpdate` tick the same way an item's own `Auras` are
-    (`PulseAura`). A reveal-only aura is carried via
-    `NetworkVariable<bool> CastAuraRevealsMobs`, read by `PlayerHUD`
+    `AuraReveals` — no cast, no keybind, no mana cost: simply having one
+    slotted in the loadout (`PlayerAbilities.SetLoadoutServerRpc`) keeps
+    it continuously active via `CharacterEquipment.SetActiveAuras`,
+    which replaces its whole tracked set to match the current loadout
+    every time it changes. Any number can be active at once (slot more
+    than one), pulsed every `FixedUpdate` tick the same way an item's
+    own `Auras` are (`PulseAura`) — including always passing
+    `CharacterStats.NoAttacker` as the caster, same as item auras, which
+    is what makes two different players both running the same aura
+    spell collapse onto one shared effect instance per bystander rather
+    than stacking (see Status effects below). A reveal-only aura is
+    carried via `NetworkVariable<bool> CastAuraRevealsMobs` (true if
+    *any* active aura ability reveals mobs), read by `PlayerHUD`
     alongside `ItemData.Reveals`. Echolocation is the reveal-only case
     (`AuraReveals`, no `Effect`); Aura of Replenishment/Regeneration
-    each pulse an `Effect` instead.
+    each pulse an `Effect` instead. The ability-slot key-press loop and
+    `ResolveAbility` both explicitly skip `IsAuraSpell` abilities, since
+    they're never cast through that path at all.
   - **Global cooldown**: starting any cast locks out starting a
     different one for 1.5s, on top of that ability's own cooldown — one
     shared gate across every slot. Same predict-on-client/
@@ -351,7 +359,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (distinct dictionary key), so two different players' heal-over-times
     on the same target both tick independently — recasting by the
     *same* caster still just extends their own instance, per the
-    `RefreshExtendOnly` rule.
+    `RefreshExtendOnly` rule. `EffectRejuvenation` is also what Aura of
+    Regeneration pulses — since every aura pulse (item or spell) always
+    passes the same `CharacterStats.NoAttacker` id regardless of which
+    player is actually pulsing it, `StackPerCaster`'s per-caster key
+    never differentiates between aura-casters in practice, so two
+    different players both running that aura still collapse onto one
+    shared instance for a bystander (no double-dipping) — it only
+    genuinely splits per-caster for a real targeted cast like Everliving
+    Touch, which passes each caster's own `OwnerClientId`.
   - `StackUpToLimit` (`EffectArmorbreakerSunder`): one shared instance
     like `RefreshExtendOnly` (the whole stack shares one timer — a
     reapplication always resets it, doesn't add a second timer), but

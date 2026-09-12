@@ -58,10 +58,10 @@ retuned — it's a snapshot, not auto-generated.
 | Earthen Bastion | 175 | 10s | Instant | 30 | Raises a 25-unit-wide impassable wall at the target point. No damage. Lasts until you cast it again. **Not yet playable, see review_with_fable.md** |
 | Arctic Winds | 150 | 30s | Instant | 30 | Creates a 25-unit-wide dome that follows the target for 8s, slowing everyone inside by 10% (not you, the caster). **Not yet playable, see review_with_fable.md** |
 
-## Auras (permanent once cast; casting a different one replaces it)
+## Auras (no cast, no keybind - always active for as long as it's in your kit; you can slot more than one at once)
 
-| Spell | Mana | Cooldown | Cast | Effect |
-|---|---|---|---|---|
-| Aura of Replenishment | 25 | 0s | Instant | You and allies within 40 units gain +3 mana per 5s |
-| Aura of Regeneration | 25 | 0s | Instant | You and allies within 40 units gain a heal-over-time (+10 hp per 5s) |
-| Echolocation | 25 | 0s | Instant | Reveals every mob on your minimap |
+| Spell | Effect |
+|---|---|
+| Aura of Replenishment | You and allies within 40 units gain +3 mana per 5s |
+| Aura of Regeneration | You and allies within 40 units gain a heal-over-time (+10 hp per 5s) |
+| Echolocation | Reveals every mob on your minimap |

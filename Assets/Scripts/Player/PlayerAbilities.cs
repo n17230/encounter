@@ -118,6 +118,10 @@ public class PlayerAbilities : NetworkBehaviour
         {
             serverSlotAbilities[i] = i < ids.Length ? GameDatabase.GetAbility(ids[i]) : null;
         }
+
+        // Aura spells need no cast/keybind - having one slotted is enough to
+        // keep it continuously active, so the set just tracks the loadout.
+        equipment.SetActiveAuras(Array.FindAll(serverSlotAbilities, a => a != null && a.IsAuraSpell));
     }
 
     private void Update()
@@ -148,6 +152,9 @@ public class PlayerAbilities : NetworkBehaviour
         for (int slot = 0; slot < PlayerProfile.AbilitySlots; slot++)
         {
             AbilityData ability = profile.GetSlotAbility(slot);
+            // Aura spells have no cast/keybind - they're always active once
+            // slotted (see SetLoadoutServerRpc/CharacterEquipment.SetActiveAuras).
+            if (ability != null && ability.IsAuraSpell) continue;
             KeyBindingOption? key = profile.GetSlotKey(slot);
             if (ability == null || !key.HasValue) continue;
             if (!key.Value.WasPressedThisFrame()) continue;
@@ -383,8 +390,10 @@ public class PlayerAbilities : NetworkBehaviour
             if (ability == null) continue;
 
             GUI.Label(new Rect(rect.x, rect.y + 4f, rect.width, 28f), ability.AbilityName, small);
-            KeyBindingOption? key = profile.GetSlotKey(i);
-            GUI.Label(new Rect(rect.x, rect.yMax - 16f, rect.width, 14f), key.HasValue ? key.Value.DisplayName : "-", small);
+            string keyText = ability.IsAuraSpell ? "Always On" : (profile.GetSlotKey(i)?.DisplayName ?? "-");
+            GUI.Label(new Rect(rect.x, rect.yMax - 16f, rect.width, 14f), keyText, small);
+
+            if (ability.IsAuraSpell) continue; // no cooldown to show - always active
 
             float remaining = PredictedCooldownRemaining(ability);
             if (remaining <= 0f) continue;
@@ -516,11 +525,6 @@ public class PlayerAbilities : NetworkBehaviour
 
     private void ResolveAbility(AbilityData ability, ulong targetNetworkObjectId)
     {
-        if (ability.IsAuraSpell)
-        {
-            ResolveAuraSpell(ability);
-            return;
-        }
         if (ability.EnemiesAroundCaster)
         {
             ResolveEnemiesAroundCaster(ability);
@@ -702,20 +706,6 @@ public class PlayerAbilities : NetworkBehaviour
         stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
     }
 
-    // No targeting: grants (or replaces) this caster's one permanent active
-    // aura - see CharacterEquipment.SetActiveAura. No effect/reveal ever
-    // gets removed independently; casting a DIFFERENT aura spell just
-    // overwrites the single active slot.
-    private void ResolveAuraSpell(AbilityData ability)
-    {
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
-
-        equipment.SetActiveAura(ability.Effect, ability.AuraRange, ability.AuraReveals);
-    }
 
     // What this caster actually swings with right now (equipped main hand,
     // or fists), including flat gear bonuses (StatType.WeaponDamageBonus -

@@ -227,6 +227,15 @@ public class MainMenu : MonoBehaviour
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.AppendLine(ability.AbilityName);
+
+        if (ability.IsAuraSpell)
+        {
+            sb.AppendLine("Always active once slotted - no cast, no keybind, no mana cost.");
+            if (ability.Effect != null) sb.AppendLine(DescribeEffect(ability.Effect, ability.Effect.Duration));
+            if ((ability.AuraReveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Reveals every mob on your minimap.");
+            return sb.ToString().TrimEnd();
+        }
+
         if (ability.Damage > 0f) sb.AppendLine($"Damage: {ability.Damage}");
         if (ability.HealAmount > 0f) sb.AppendLine($"Heals: {ability.HealAmount}");
         if (ability.ShieldAmount > 0f) sb.AppendLine($"Shields for: {ability.ShieldAmount}");
@@ -420,7 +429,9 @@ public class MainMenu : MonoBehaviour
         {
             AbilityData slotAbility = Profile.GetSlotAbility(i);
             KeyBindingOption? slotKey = Profile.GetSlotKey(i);
-            string keyLabel = slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound";
+            string keyLabel = slotAbility != null && slotAbility.IsAuraSpell
+                ? "Always On"
+                : (slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound");
             string label = slotAbility != null ? $"{i + 1}. {slotAbility.AbilityName} [{keyLabel}]" : $"{i + 1}. (empty)";
 
             if (slotAbility == null)
@@ -444,7 +455,8 @@ public class MainMenu : MonoBehaviour
                     Profile.SetSlotKey(i, null);
                     selectedSlot = -1;
                 }
-                if (GUILayout.Button(awaitingKeyForSlot == i ? "Press a key..." : "Set Key Binding"))
+                if (!slotAbility.IsAuraSpell
+                    && GUILayout.Button(awaitingKeyForSlot == i ? "Press a key..." : "Set Key Binding"))
                 {
                     awaitingKeyForSlot = awaitingKeyForSlot == i ? -1 : i;
                 }

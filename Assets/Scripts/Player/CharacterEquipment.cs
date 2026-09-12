@@ -49,22 +49,27 @@ public class CharacterEquipment : NetworkBehaviour
     public readonly NetworkVariable<bool> BroadcastsLocation =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // The permanent aura currently granted by an AbilityData.IsAuraSpell
-    // cast (see SetActiveAura) - not gear, so not part of equippedItems;
-    // pulsed the exact same way an item's own Auras would be. At most one
-    // at a time: a new SetActiveAura call replaces whichever was active.
-    private StatusEffectData castAuraEffect;
-    private float castAuraRange;
+    // AbilityData.IsAuraSpell abilities currently in this caster's loadout -
+    // not gear, so not part of equippedItems. No cast/keybind needed: each
+    // one pulses continuously (the same way an item's own Auras would) for
+    // as long as it stays slotted, and any number can be active at once -
+    // see SetActiveAuras, called by PlayerAbilities.SetLoadoutServerRpc
+    // whenever the loadout changes.
+    private readonly List<AbilityData> activeAuraAbilities = new List<AbilityData>();
     public readonly NetworkVariable<bool> CastAuraRevealsMobs =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // Called by PlayerAbilities when an IsAuraSpell cast resolves.
-    public void SetActiveAura(StatusEffectData effect, float range, MinimapReveal reveals)
+    public void SetActiveAuras(IEnumerable<AbilityData> auraAbilities)
     {
         if (!IsServer) return;
-        castAuraEffect = effect;
-        castAuraRange = range;
-        CastAuraRevealsMobs.Value = (reveals & MinimapReveal.Mobs) != 0;
+        activeAuraAbilities.Clear();
+        bool revealsMobs = false;
+        foreach (AbilityData ability in auraAbilities)
+        {
+            activeAuraAbilities.Add(ability);
+            revealsMobs |= (ability.AuraReveals & MinimapReveal.Mobs) != 0;
+        }
+        CastAuraRevealsMobs.Value = revealsMobs;
     }
 
     // Server-side view of what the main hand swings with (null = unarmed).
@@ -163,7 +168,11 @@ public class CharacterEquipment : NetworkBehaviour
             foreach (ItemAura aura in item.Auras) PulseAura(aura);
         }
 
-        if (castAuraEffect != null) PulseAura(new ItemAura { Effect = castAuraEffect, Range = castAuraRange });
+        foreach (AbilityData auraAbility in activeAuraAbilities)
+        {
+            if (auraAbility.Effect == null) continue;
+            PulseAura(new ItemAura { Effect = auraAbility.Effect, Range = auraAbility.AuraRange });
+        }
 
         UpdateHpThresholds();
     }
