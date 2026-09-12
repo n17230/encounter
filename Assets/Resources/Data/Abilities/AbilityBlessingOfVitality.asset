@@ -21,7 +21,7 @@ MonoBehaviour:
   ManaCost: 100
   ThreatValue: 0
   Damage: 0
-  HealAmount: 350
+  HealAmount: 438
   ShieldAmount: 0
   MissileSpeed: 15
   ProjectilePrefab: {fileID: 0}

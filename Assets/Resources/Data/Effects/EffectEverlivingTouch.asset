@@ -17,7 +17,7 @@ MonoBehaviour:
   Duration: 18
   StackingMode: 2
   TickDamage: 0
-  TickHeal: 100
+  TickHeal: 125
   TickInterval: 3
   Modifiers: []
   DamageRedirectPercent: 0
