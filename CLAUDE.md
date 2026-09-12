@@ -290,7 +290,11 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `Application.persistentDataPath/profile.json` on first access and
   `Save()` is called when leaving a menu panel / closing the Escape menu
   / entering the testing area. `Normalize()` repairs array lengths so
-  old files stay loadable. Local-only, not the account-backed
+  old files stay loadable, and clears any `SlotAbilityIds` entry whose
+  Id no longer resolves in `GameDatabase` (a renamed/removed ability) —
+  otherwise that slot would render as empty but still not accept a new
+  ability, since "assign to the first empty slot" searches the raw
+  string array, not what the UI displays. Local-only, not the account-backed
   unlock-gated profile `DESIGN_IDEAS.md` describes — but it's the shape
   that will grow into it.
 - **Combat pipeline** (`Scripts/Combat/`): `CharacterStats.ReceiveHit(in

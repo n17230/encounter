@@ -79,6 +79,18 @@ public class PlayerProfile
         Array.Resize(ref SlotKeys, AbilitySlots);
         Array.Resize(ref SlotKeyShift, AbilitySlots);
         Array.Resize(ref GearIds, GearSlotCount);
+
+        // A slot holding an Id that no longer resolves (the ability was
+        // renamed or removed since this profile was saved) would otherwise
+        // render as "(empty)" in the UI while still blocking that slot from
+        // being treated as available - clear it so the two agree.
+        for (int i = 0; i < SlotAbilityIds.Length; i++)
+        {
+            if (!string.IsNullOrEmpty(SlotAbilityIds[i]) && GameDatabase.GetAbility(SlotAbilityIds[i]) == null)
+            {
+                SlotAbilityIds[i] = null;
+            }
+        }
         // A profile saved before an action was added keeps its existing
         // bindings and takes the default for the new ones.
         if (MovementKeys == null) MovementKeys = new KeyCode[0];
