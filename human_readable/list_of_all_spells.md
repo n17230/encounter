@@ -36,6 +36,12 @@ retuned — it's a snapshot, not auto-generated.
 | Cleanse | 150 | 6s | Instant | 30 | Removes one active negative effect from the target |
 | One For All | 50 | 5s | Instant | 30 | 10% of all damage the target takes is redirected to you instead, for 30 minutes |
 
+## Defense
+
+| Spell | Mana | Cooldown | Cast | Effect |
+|---|---|---|---|---|
+| Aegis of the Ancient [requires a shield] | 100 | 60s | Instant | For 12s, 25% chance to block incoming physical (melee) attacks entirely — a blocked hit deals 0 damage |
+
 ## Utility / mobility
 
 | Spell | Mana | Cooldown | Cast | Range | Effect |

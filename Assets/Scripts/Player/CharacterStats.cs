@@ -33,6 +33,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat HealingMultiplier { get; private set; }
     public Stat DamageTakenMultiplier { get; private set; }
     public Stat WeaponDamageBonus { get; private set; }
+    public Stat DamageReflectPercent { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -83,6 +84,7 @@ public class CharacterStats : NetworkBehaviour
         HealingMultiplier = new Stat(1f);
         DamageTakenMultiplier = new Stat(1f);
         WeaponDamageBonus = new Stat(0f);
+        DamageReflectPercent = new Stat(0f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -106,6 +108,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.HealingMultiplier: return HealingMultiplier;
             case StatType.DamageTakenMultiplier: return DamageTakenMultiplier;
             case StatType.WeaponDamageBonus: return WeaponDamageBonus;
+            case StatType.DamageReflectPercent: return DamageReflectPercent;
             default: return null;
         }
     }
@@ -149,12 +152,26 @@ public class CharacterStats : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        if (hit.Damage > 0f) DealDamage(hit.Damage, hit.AttackerClientId);
+        bool blocked = hit.Damage > 0f && hit.Source == HitSource.Melee && RollBlock();
+        if (hit.Damage > 0f && !blocked) DealDamage(hit.Damage, hit.AttackerClientId, hit.Attacker);
         if (hit.Heal > 0f) Heal(hit.Heal, hit.AttackerClientId);
         if (hit.ShieldAmount > 0f) GrantShield(hit.ShieldAmount);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
 
         if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
+    }
+
+    // The strongest currently-active BlockChancePercent on THIS character,
+    // if any - e.g. Aegis of the Ancient. Multiple such effects don't
+    // stack their chances.
+    private bool RollBlock()
+    {
+        float bestChance = 0f;
+        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+        {
+            if (active.Data.BlockChancePercent > bestChance) bestChance = active.Data.BlockChancePercent;
+        }
+        return bestChance > 0f && UnityEngine.Random.value < bestChance;
     }
 
     // Replaces any existing shield outright - two shields don't stack,
@@ -237,13 +254,24 @@ public class CharacterStats : NetworkBehaviour
         }
     }
 
-    private void DealDamage(float rawDamage, ulong attackerClientId)
+    private void DealDamage(float rawDamage, ulong attackerClientId, CharacterStats directAttacker = null)
     {
-        CharacterStats attacker = AttackerStats(attackerClientId);
+        CharacterStats attacker = directAttacker != null ? directAttacker : AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
 
         float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
         mitigated *= DamageTakenMultiplier.Value;
+
+        // Reflected damage is based on the full mitigated hit, independent
+        // of whether a shield later absorbs it - dealt straight to the
+        // attacker's health, no re-mitigation, no further reflect/redirect
+        // chains (same reasoning ApplyRawDamage already uses for
+        // redirected damage below - avoids infinite loops between two
+        // reflect-wearers hitting each other).
+        if (DamageReflectPercent.Value > 0f && attacker != null && attacker != this)
+        {
+            attacker.ApplyRawDamage(mitigated * DamageReflectPercent.Value);
+        }
 
         // An absorb shield (e.g. Aegis of Arcane) intercepts damage before
         // it can be redirected or reduce health - "the next N damage" is

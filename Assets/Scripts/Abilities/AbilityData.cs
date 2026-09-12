@@ -93,6 +93,11 @@ public class AbilityData : ScriptableObject
     // (precheck) and server-side (authoritative).
     public bool RequiresMeleeWeapon = false;
 
+    // Casting requires an equipped OffHand item with ItemData.IsShield set
+    // (CharacterEquipment.HasShieldEquipped). Checked both client-side
+    // (precheck) and server-side (authoritative). E.g. Aegis of the Ancient.
+    public bool RequiresShield = false;
+
     // Total damage on resolve is Damage (above) PLUS this fraction of the
     // caster's currently equipped weapon's Damage (or the unarmed
     // fallback) - e.g. 1 = adds a full weapon hit (Reaper's Wheel,
@@ -157,4 +162,10 @@ public class AbilityData : ScriptableObject
     // E.g. Arctic Winds.
     public bool IsFollowingZone = false;
     public GameObject FollowingZonePrefab;
+
+    // No targeting at all: on resolve, Effect is applied directly to the
+    // CASTER's own CharacterStats - not an ally/enemy AoE, not a
+    // permanent aura, just a plain timed self-buff. RequiresTarget
+    // should be false. E.g. Aegis of the Ancient.
+    public bool SelfBuff = false;
 }

@@ -127,6 +127,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     uses `EffectStackingMode.Override` so a different caster's cast
     takes the bond over outright instead of the two applications racing
     on remaining duration.
+  - **Damage reflection**: `StatType.DamageReflectPercent` (gear-driven,
+    unlike the effect-driven redirect above) — in `DealDamage`, a
+    fraction of the mitigated hit is dealt straight back to the attacker
+    via `ApplyRawDamage` (same no-remitigation, no-chain reasoning as
+    redirect). Resolving *who* the attacker is normally goes through
+    `AttackerClientId` (a real clientId, so it only ever resolves
+    players) — `HitInfo.Attacker` is an optional direct `CharacterStats`
+    reference added specifically so this also works against mobs, which
+    have no clientId at all; `EnemyAI`'s melee hit is the only source
+    that currently sets it. Aegis of Reflection grants this stat.
   - **Healing and shields**: `HitInfo` carries `Heal` and `ShieldAmount`
     alongside `Damage`, all handled in `ReceiveHit`.
     `CharacterStats.Heal(amount, healerClientId)` scales by the healer's
@@ -177,7 +187,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **Melee-only gating**: `AbilityData.RequiresMeleeWeapon` blocks
     casting unless `CharacterEquipment.MainHandWeapon` is non-null
     (fists don't count) — checked client-side (via the profile) and
-    server-side.
+    server-side. `AbilityData.RequiresShield` is the same pattern for
+    `ItemData.IsShield` in OffHand (`CharacterEquipment.HasShieldEquipped`).
+  - **Self-buffs**: `AbilityData.SelfBuff` — no targeting at all, `Effect`
+    is applied directly to the caster's own `CharacterStats`. Distinct
+    from `AreaAroundCaster` (hits every ally in radius) and aura spells
+    (permanent, gear-less) — this is just a plain timed buff on whoever
+    cast it. **Block chance**: `StatusEffectData.BlockChancePercent` —
+    while an effect with this set is active, `CharacterStats.ReceiveHit`
+    rolls it against any `HitSource.Melee` hit and zeroes the damage
+    outright on a hit (only the strongest active block chance applies,
+    no stacking). Aegis of the Ancient (`RequiresShield`, `SelfBuff`)
+    grants it.
   - **Caster-facing AoEs**: `AbilityData.EnemiesAroundCaster`/
     `ConeAroundCaster` hit every non-player `Targetable` within
     `GroundEffectRadius` (the cone variant also filtered by `ConeAngle`

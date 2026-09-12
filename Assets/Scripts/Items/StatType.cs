@@ -23,5 +23,9 @@ public enum StatType
     // 0) - read wherever weapon damage is read: PlayerAutoAttack's basic
     // swing and PlayerAbilities.ResolveWeaponDamage (weapon-scaling
     // abilities like Reaper's Wheel, Cleave, Crippling Blow, Seismic Slam).
-    WeaponDamageBonus
+    WeaponDamageBonus,
+    // Fraction of incoming (post-armor-mitigation) damage dealt straight
+    // back to the attacker (base 0; e.g. Aegis of Reflection). See
+    // CharacterStats.DealDamage.
+    DamageReflectPercent
 }

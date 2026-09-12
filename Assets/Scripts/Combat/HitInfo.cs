@@ -12,6 +12,13 @@ public struct HitInfo
     public float ShieldAmount;
     public float ExtraThreat;
     public ulong AttackerClientId;
+    // Optional direct reference to the attacker's own CharacterStats, for
+    // callers that have no clientId at all (mobs - AttackerClientId is
+    // NoAttacker for them). Currently only used so reflect damage
+    // (StatType.DamageReflectPercent) has somewhere to land when a mob is
+    // the attacker; everything else still resolves the attacker via
+    // AttackerClientId as before, which is sufficient for players.
+    public CharacterStats Attacker;
     public HitSource Source;
     public StatusEffectData Effect;
     // 0 or less = use Effect.Duration.

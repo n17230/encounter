@@ -46,4 +46,9 @@ public class ItemData : ScriptableObject
     // (gravity suspended, WASD still steers) for a few seconds - see
     // PlayerMovement.hoverDuration. E.g. Boots of Lightness.
     public bool GrantsAirHover = false;
+
+    // An OffHand item that counts as a shield for AbilityData
+    // .RequiresShield gating (e.g. Aegis of the Ancient) - see
+    // CharacterEquipment.HasShieldEquipped.
+    public bool IsShield = false;
 }

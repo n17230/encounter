@@ -285,6 +285,11 @@ public class PlayerAbilities : NetworkBehaviour
             ItemData mainHand = ProfileStore.Current.GetGear(GearSlot.MainHand);
             if (mainHand == null || mainHand.Weapon == null) return "Requires a melee weapon";
         }
+        if (ability.RequiresShield)
+        {
+            ItemData offHand = ProfileStore.Current.GetGear(GearSlot.OffHand);
+            if (offHand == null || !offHand.IsShield) return "Requires a shield";
+        }
 
         if (!ability.RequiresTarget) return null;
 
@@ -465,6 +470,11 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastRejectedClientRpc(ability.Id, "Requires a melee weapon");
             return;
         }
+        if (ability.RequiresShield && !equipment.HasShieldEquipped)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Requires a shield");
+            return;
+        }
 
         // Mana is only actually spent once the cast succeeds - see
         // ResolveAbility - not here at cast start. This check just stops an
@@ -529,6 +539,11 @@ public class PlayerAbilities : NetworkBehaviour
         if (ability.AreaAroundCaster)
         {
             ResolveAreaAroundCaster(ability);
+            return;
+        }
+        if (ability.SelfBuff)
+        {
+            ResolveSelfBuff(ability);
             return;
         }
 
@@ -671,6 +686,20 @@ public class PlayerAbilities : NetworkBehaviour
                 EffectDuration = ability.DirectHitEffectDuration,
             });
         }
+    }
+
+    // No targeting: applies Effect directly to the caster's own
+    // CharacterStats - a plain timed self-buff, not an AoE and not a
+    // permanent aura. E.g. Aegis of the Ancient.
+    private void ResolveSelfBuff(AbilityData ability)
+    {
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
     }
 
     // No targeting: grants (or replaces) this caster's one permanent active

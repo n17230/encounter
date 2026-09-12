@@ -49,6 +49,9 @@ public class CharacterEquipment : NetworkBehaviour
     // Server-side view of what the main hand swings with (null = unarmed).
     public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
 
+    // Server-side check for AbilityData.RequiresShield gating.
+    public bool HasShieldEquipped => equippedItems[(int)GearSlot.OffHand] != null && equippedItems[(int)GearSlot.OffHand].IsShield;
+
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
