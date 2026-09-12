@@ -12,7 +12,7 @@ retuned — it's a snapshot, not auto-generated.
 |---|---|---|---|---|---|
 | Firebolt | 60 | 0s | 2s | 50 | 175 damage, applies Burning (10 dmg/sec for 5s) + fire ground patches |
 | Icebolt | 60 | 0s | 2s | 50 | 140 damage, applies Slowed (−66% run speed, 5s on direct hit) + ice ground patches |
-| Soul Siphon | 125 | 3s | Instant | 30 | 50 damage every 3s for 18s, healing you for 10% of each tick's damage |
+| Soul Siphon | 125 | 3s | Instant | 30 | 50 damage every 3s for 18s, healing you for 20% of each tick's damage |
 
 ## Warrior / melee
 

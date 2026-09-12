@@ -19,7 +19,7 @@ MonoBehaviour:
   TickDamage: 50
   TickHeal: 0
   TickInterval: 3
-  TickLifestealPercent: 0.1
+  TickLifestealPercent: 0.2
   Modifiers: []
   MaxStacks: 1
   DamageRedirectPercent: 0
