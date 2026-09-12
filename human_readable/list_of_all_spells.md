@@ -35,6 +35,11 @@ retuned — it's a snapshot, not auto-generated.
 | Aegis of Arcane | 175 | 18s | Instant | 30 | Shields target for 350 |
 | Seraph's Grace | 450 | 0s | 3s | self (50-unit radius) | Heals everyone within 50 units of you, yourself included, for 350 |
 | Cleanse | 150 | 6s | Instant | 30 | Removes one active negative effect from the target |
+
+## Buffs
+
+| Spell | Mana | Cooldown | Cast | Range | Effect |
+|---|---|---|---|---|---|
 | One For All | 50 | 5s | Instant | 30 | 10% of all damage the target takes is redirected to you instead, for 30 minutes |
 
 ## Defense
