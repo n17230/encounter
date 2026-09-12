@@ -43,7 +43,7 @@ MonoBehaviour:
   AreaAroundCaster: 0
   EnemiesAroundCaster: 0
   ConeAroundCaster: 1
-  ConeAngle: 90
+  ConeAngle: 120
   RequiresMeleeWeapon: 1
   UseWeaponDamage: 1
   ChargeForwardDistance: 0

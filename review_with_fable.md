@@ -27,11 +27,10 @@ treat all of it as unverified:
   (`EnemiesAroundCaster`) and Cleave (`ConeAroundCaster`) all use this.
   Confirm they hit mobs but never other players.
 - **Assumed AoE radius: 8 units** for Reaper's Wheel, Cleave, and Seismic
-  Slam's "around you" reach - not specified in the request. Also assumed
-  **Cleave's cone angle: 90°** (narrower than the 120° facing cone
-  abilities already use, since a "cleave" reads as tighter). Both are
-  just `AbilityData` fields (`GroundEffectRadius`, `ConeAngle`) - trivial
-  to retune.
+  Slam's "around you" reach - not specified in the request; still just a
+  placeholder (`AbilityData.GroundEffectRadius`) - trivial to retune.
+  Cleave's cone angle was set by the user directly: **120°** (matches
+  the facing cone other abilities already use).
 - **"[require melee weapon]" was interpreted as a hard cast-blocking
   gate**: `AbilityData.RequiresMeleeWeapon` fizzles/rejects the cast if
   `CharacterEquipment.MainHandWeapon` is null (fists don't count),

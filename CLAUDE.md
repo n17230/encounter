@@ -317,8 +317,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     **Trample** (`trample`, 15s cd, 75 mana, instant, charges forward 10
     units at an assumed 20 units/sec, 75 damage + `EffectStun` (3s) to
     everything near the path). **Cleave** (`cleave`, melee-required, 2s
-    cd, 15 mana, instant, `ConeAroundCaster` radius 8 / assumed 90°,
-    weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
+    cd, 15 mana, instant, `ConeAroundCaster` radius 8 (assumed) / 120°
+    (set explicitly by the user 2026-09-12), weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
     assumed range 25, `ChargeToTarget`, applies `EffectTeamUpProtection`
     — −10% `DamageTakenMultiplier` for 15s — to the target). **Crippling
     Blow** (`crippling_blow`, melee-required, 0s cd, 15 mana, instant,
