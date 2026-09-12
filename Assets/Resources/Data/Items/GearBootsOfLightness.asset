@@ -10,18 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
-  m_Name: GearAmuletOfVitality
+  m_Name: GearBootsOfLightness
   m_EditorClassIdentifier:
-  Id: amulet_of_vitality
-  ItemName: Amulet of Vitality
-  Slot: 1
-  Bonuses:
-  - Stat: 0
-    ModifierType: 0
-    Value: 150
-  - Stat: 5
-    ModifierType: 0
-    Value: 5
+  Id: boots_of_lightness
+  ItemName: Boots of Lightness
+  Slot: 7
+  Bonuses: []
   HpThresholdEffects: []
   Immunities: []
   Auras: []
@@ -29,3 +23,4 @@ MonoBehaviour:
   BroadcastsLocation: 0
   Weapon: {fileID: 0}
   TwoHanded: 0
+  GrantsAirHover: 1

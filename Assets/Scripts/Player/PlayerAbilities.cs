@@ -672,11 +672,14 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     // What this caster actually swings with right now (equipped main hand,
-    // or fists).
+    // or fists), including flat gear bonuses (StatType.WeaponDamageBonus -
+    // e.g. Amulet of the Berserker) - same total PlayerAutoAttack's basic
+    // swing deals.
     private float ResolveWeaponDamage()
     {
         WeaponData weapon = autoAttack.ResolvedWeapon;
-        return weapon != null ? weapon.Damage : 0f;
+        float baseDamage = weapon != null ? weapon.Damage : 0f;
+        return baseDamage + stats.WeaponDamageBonus.Value;
     }
 
     // Damage + a fraction of the caster's current weapon damage - see

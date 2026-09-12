@@ -349,7 +349,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     placeholders — mana cost and instant cast came from the user.
   - **Amulet of Vitality** (`GearAmuletOfVitality`, Id
     `amulet_of_vitality`, Necklace, added 2026-09-12): flat `+150
-    MaxHealth`, nothing else.
+    MaxHealth`, plus `+5 Armor` (added later the same day).
   - **Amulet of the Magi** (`GearAmuletOfTheMagi`, Id
     `amulet_of_the_magi`, Necklace, added 2026-09-12): flat `+100
     MaxMana` and `+0.4 ManaRegenRate` (the user's "+2 mp5" — 2 mana per
@@ -363,6 +363,32 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **The Everflow** (`GearTheEverflow`, Id `the_everflow`, Trinket,
     added 2026-09-12): flat `+1 ManaRegenRate` (the user's "5 mp5" ÷ 5,
     same conversion as the other mp5 items). Nothing else.
+  - **Armored Boots** (`GearArmoredBoots`, Id `armored_boots`, Boots,
+    added 2026-09-12): flat `+5 Armor`, nothing else.
+  - **Boots of Lightness + air hover** (`GearBootsOfLightness`, Id
+    `boots_of_lightness`, Boots, added 2026-09-12, new movement
+    mechanic): `ItemData.GrantsAirHover` — while airborne, pressing Jump
+    again (once per airtime, re-armed on landing — tracked by
+    `PlayerMovement.hoverAvailable`) suspends gravity for `hoverDuration`
+    (2s) while WASD keeps steering normally, unlike a plain fall/jump
+    (which locks in launch-time momentum — see the `airborneVelocity`
+    comment). Fully owner-local, like the rest of `PlayerMovement`: the
+    owner reads its own equipped Boots straight from `ProfileStore
+    .Current.GetGear(GearSlot.Boots)` (no server round trip) — consistent
+    with the existing trust model (this is a friends-only game; the
+    `MovementValidator`'s only checks, horizontal speed and below-ground,
+    are both unaffected by hovering in place, so no validator changes
+    were needed here at all, unlike the pull/teleport abilities).
+  - **`StatType.WeaponDamageBonus`** (new stat, base 0, added
+    2026-09-12): a flat bonus added wherever weapon damage is actually
+    read — `PlayerAutoAttack`'s basic swing (`weapon.Damage + stats
+    .WeaponDamageBonus.Value`) and `PlayerAbilities.ResolveWeaponDamage`
+    (so it also flows into `WeaponDamagePercent` abilities — Reaper's
+    Wheel, Cleave, Crippling Blow, Seismic Slam — proportionally to
+    their percentage, same as the base weapon damage does). **Amulet of
+    the Berserker** (`GearAmuletOfTheBerserker`, Id
+    `amulet_of_the_berserker`, Necklace, added 2026-09-12): flat `+5
+    WeaponDamageBonus`, nothing else.
   - **Global cooldown** (added 2026-09-12, per explicit user request —
     also flagged on `review_with_fable.md`'s list): starting ANY cast
     (instant or with `CastTime`) locks out starting a different one for

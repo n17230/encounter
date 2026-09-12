@@ -17,6 +17,13 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float gravity = -20f;
     [SerializeField] private float jumpSpeed = 8f;
 
+    // Boots of Lightness: pressing Jump again while airborne (once per
+    // airtime - resets on landing) suspends gravity for this long, with
+    // WASD still steering normally the whole time (unlike a normal jump/
+    // fall, which locks in launch-time momentum - see the FixedUpdate
+    // horizontal-velocity branch below).
+    [SerializeField] private float hoverDuration = 2f;
+
     // Server-side policing of the replicated transform (see MovementValidator).
     // A violation snaps the client back; repeated ones get it disconnected.
     [SerializeField] private int maxStrikes = 5;
@@ -48,6 +55,14 @@ public class PlayerMovement : NetworkBehaviour
     private float strafeInput;
     private float pendingLookDeltaYaw;
     private bool pendingJump;
+    private bool pendingHoverActivation;
+
+    // Owner-local hover state (see Boots of Lightness above).
+    // hoverAvailable resets the instant the player lands, so it can only
+    // be triggered once per time spent airborne, not chained repeatedly.
+    private bool isHovering;
+    private bool hoverAvailable = true;
+    private float hoverEndTime;
 
     // Horizontal momentum locked in at the moment of leaving the ground -
     // turning mid-air changes facing, not trajectory, same as real jumping
@@ -123,7 +138,11 @@ public class PlayerMovement : NetworkBehaviour
         if (MovementInput.IsHeld(MovementAction.StrafeRight)) strafeInput += 1f;
         if (MovementInput.IsHeld(MovementAction.StrafeLeft)) strafeInput -= 1f;
 
-        if (MovementInput.WasPressed(MovementAction.Jump)) pendingJump = true;
+        if (MovementInput.WasPressed(MovementAction.Jump))
+        {
+            pendingJump = true; // only takes effect next FixedUpdate if grounded
+            pendingHoverActivation = true; // only takes effect if airborne and eligible
+        }
 
         if (Input.GetMouseButton(1))
         {
@@ -139,6 +158,27 @@ public class PlayerMovement : NetworkBehaviour
         if (!IsOwner) return;
 
         bool grounded = controller.isGrounded;
+
+        if (grounded)
+        {
+            hoverAvailable = true;
+            isHovering = false;
+        }
+
+        // Resolved before horizontal velocity below, since hovering changes
+        // how that's computed this same tick.
+        if (pendingHoverActivation && !grounded && !isHovering && hoverAvailable && HasHoverBoots)
+        {
+            isHovering = true;
+            hoverAvailable = false;
+            hoverEndTime = Time.time + hoverDuration;
+        }
+        pendingHoverActivation = false;
+
+        if (isHovering && Time.time >= hoverEndTime)
+        {
+            isHovering = false;
+        }
 
         // The body always turns with look input, grounded or airborne.
         if (pendingLookDeltaYaw != 0f)
@@ -163,8 +203,11 @@ public class PlayerMovement : NetworkBehaviour
             }
             airborneVelocity = horizontalVelocity;
         }
-        else if (grounded)
+        else if (grounded || isHovering)
         {
+            // Hovering steers exactly like being grounded (Boots of
+            // Lightness - "player maintains WASD controls") instead of the
+            // launch-momentum lock a normal fall uses below.
             Vector3 moveDirection = transform.forward * forwardInput + transform.right * strafeInput;
             if (moveDirection.sqrMagnitude > 1f) moveDirection.Normalize();
 
@@ -173,8 +216,8 @@ public class PlayerMovement : NetworkBehaviour
         }
         else
         {
-            // Airborne: keep whatever momentum existed at liftoff, ignoring
-            // subsequent turning/input changes to direction.
+            // Airborne, not hovering: keep whatever momentum existed at
+            // liftoff, ignoring subsequent turning/input changes to direction.
             horizontalVelocity = airborneVelocity;
         }
 
@@ -189,11 +232,24 @@ public class PlayerMovement : NetworkBehaviour
         }
         pendingJump = false;
 
-        verticalVelocity += gravity * Time.fixedDeltaTime;
+        if (isHovering)
+        {
+            verticalVelocity = 0f; // suspended - no gravity while hovering
+        }
+        else
+        {
+            verticalVelocity += gravity * Time.fixedDeltaTime;
+        }
 
         Vector3 motion = horizontalVelocity + Vector3.up * verticalVelocity;
         controller.Move(motion * Time.fixedDeltaTime);
     }
+
+    // Owner-local check of the player's own known loadout - matches the
+    // same "the owner already trusts itself for movement" model as every
+    // other input this script reads (RunSpeed, jump, etc.); no server
+    // round trip needed since movement here is owner-authoritative.
+    private bool HasHoverBoots => ProfileStore.Current.GetGear(GearSlot.Boots)?.GrantsAirHover ?? false;
 
     // Called server-side (e.g. by a resolving ground-targeted ability) to
     // drive this player straight toward towardPosition for up to duration

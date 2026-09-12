@@ -8,8 +8,9 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Effect |
 |---|---|
-| Amulet of Vitality | +150 Max Health |
+| Amulet of Vitality | +150 Max Health, +5 Armor |
 | Amulet of the Magi | +100 Max Mana, +0.4 Mana Regen/sec (+2 per 5s tick) |
+| Amulet of the Berserker | +5 Weapon Damage (basic attacks and weapon-scaling abilities) |
 
 ## Chest
 
@@ -21,6 +22,8 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Effect |
 |---|---|
+| Armored Boots | +5 Armor |
+| Boots of Lightness | Press Jump again while airborne to hover in place for 2s (WASD still steers) — once per airtime |
 | Ice Cleats | Immune to Slow from ground patches (a direct hit can still slow you) |
 | Swift Boots | +3% Run Speed |
 

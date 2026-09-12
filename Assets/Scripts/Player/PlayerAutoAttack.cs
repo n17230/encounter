@@ -16,6 +16,7 @@ public class PlayerAutoAttack : NetworkBehaviour
 
     private PlayerTargeting targeting;
     private CharacterEquipment equipment;
+    private CharacterStats stats;
 
     // Owner-side state, mirrored to the server via SetAutoAttackServerRpc.
     public bool IsArmed { get; private set; }
@@ -29,6 +30,7 @@ public class PlayerAutoAttack : NetworkBehaviour
     {
         targeting = GetComponent<PlayerTargeting>();
         equipment = GetComponent<CharacterEquipment>();
+        stats = GetComponent<CharacterStats>();
     }
 
     public override void OnNetworkSpawn()
@@ -143,7 +145,7 @@ public class PlayerAutoAttack : NetworkBehaviour
         nextSwingTime = Time.time + weapon.SwingInterval;
         target.Stats.ReceiveHit(new HitInfo
         {
-            Damage = weapon.Damage,
+            Damage = weapon.Damage + stats.WeaponDamageBonus.Value,
             AttackerClientId = OwnerClientId,
             Source = HitSource.Melee,
             Effect = weapon.Effect,

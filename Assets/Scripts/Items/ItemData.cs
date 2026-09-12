@@ -41,4 +41,9 @@ public class ItemData : ScriptableObject
     // CharacterEquipment.SetGearServerRpc (authoritative) and MainMenu's
     // gear-equip click handler (mirrors it for immediate UX).
     public bool TwoHanded = false;
+
+    // Wearer can press Jump again while airborne to hover in place
+    // (gravity suspended, WASD still steers) for a few seconds - see
+    // PlayerMovement.hoverDuration. E.g. Boots of Lightness.
+    public bool GrantsAirHover = false;
 }

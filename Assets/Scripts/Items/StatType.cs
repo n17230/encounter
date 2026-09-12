@@ -18,5 +18,10 @@ public enum StatType
     HealingMultiplier,
     // Multiplier on all damage this character TAKES, applied after armor
     // mitigation (base 1.0; e.g. Team Up, Barbarian's Mantle).
-    DamageTakenMultiplier
+    DamageTakenMultiplier,
+    // Flat bonus added to this character's current weapon's Damage (base
+    // 0) - read wherever weapon damage is read: PlayerAutoAttack's basic
+    // swing and PlayerAbilities.ResolveWeaponDamage (weapon-scaling
+    // abilities like Reaper's Wheel, Cleave, Crippling Blow, Seismic Slam).
+    WeaponDamageBonus
 }

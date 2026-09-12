@@ -32,6 +32,7 @@ public class CharacterStats : NetworkBehaviour
     public Stat DamageMultiplier { get; private set; }
     public Stat HealingMultiplier { get; private set; }
     public Stat DamageTakenMultiplier { get; private set; }
+    public Stat WeaponDamageBonus { get; private set; }
 
     public readonly NetworkVariable<float> CurrentHealth =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -81,6 +82,7 @@ public class CharacterStats : NetworkBehaviour
         DamageMultiplier = new Stat(1f);
         HealingMultiplier = new Stat(1f);
         DamageTakenMultiplier = new Stat(1f);
+        WeaponDamageBonus = new Stat(0f);
         threatTable = GetComponent<ThreatTable>();
 
         effects.Applied += HandleEffectApplied;
@@ -103,6 +105,7 @@ public class CharacterStats : NetworkBehaviour
             case StatType.DamageMultiplier: return DamageMultiplier;
             case StatType.HealingMultiplier: return HealingMultiplier;
             case StatType.DamageTakenMultiplier: return DamageTakenMultiplier;
+            case StatType.WeaponDamageBonus: return WeaponDamageBonus;
             default: return null;
         }
     }
