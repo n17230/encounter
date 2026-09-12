@@ -133,4 +133,19 @@ public class AbilityData : ScriptableObject
     // active negative effect (StatusEffectData.IsNegative) from the target,
     // chosen arbitrarily if more than one is active - e.g. Cleanse.
     public bool RemovesNegativeEffect = false;
+
+    // Ground-targeted (IsGroundTargeted should also be set), no damage: on
+    // resolve, spawns StructurePrefab (a PlacedStructure - a real,
+    // non-trigger obstacle, not a GroundPatch hazard trigger) at the aimed
+    // point, oriented so its width axis is perpendicular to the caster's
+    // facing at that moment (i.e. "across" whatever's directly ahead of
+    // them). It has no lifetime of its own - it stays until THIS caster
+    // casts this same ability again, which despawns the old one first (at
+    // most one such structure per caster per ability - see
+    // PlayerAbilities.activeStructures). E.g. Earthen Bastion.
+    public bool IsPersistentStructure = false;
+    public GameObject StructurePrefab;
+    public float StructureWidth = 0f;
+    public float StructureHeight = 5f;
+    public float StructureThickness = 2f;
 }

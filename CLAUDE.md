@@ -326,7 +326,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     cd, 15 mana, instant, `ConeAroundCaster` radius 8 (assumed) / 120°
     (set explicitly by the user 2026-09-12), weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
     assumed range 25, `ChargeToTarget`, applies `EffectTeamUpProtection`
-    — −10% `DamageTakenMultiplier` for 15s — to the target). **Crippling
+    to the target — **100% `DamageRedirectPercent` for 3s** (changed
+    2026-09-12, was −10% `DamageTakenMultiplier` for 15s; reuses the
+    exact same redirect mechanism One For All already uses, just a full
+    redirect on a short timer instead of a partial one on a long timer)
+    — so the target takes zero net damage for 3s and it all lands on the
+    Team Up caster instead). **Crippling
     Blow** (`crippling_blow`, melee-required, 0s cd, 15 mana, instant,
     unit-targeted, `EffectCripplingBlow` — −50% `RunSpeed` for 10s, same
     pattern as `EffectSlow` — plus 25% weapon damage, added 2026-09-12).
@@ -405,6 +410,43 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     mana-affordability check, not before). No dedicated GCD UI element —
     a blocked cast just shows the existing transient "Global cooldown"
     notice, same as any other rejection reason.
+  - **Earthen Bastion + `PlacedStructure`** (added 2026-09-12, new
+    mechanic — **the one piece of this that still needs Editor work, see
+    "Not yet done" below**): `AbilityData.IsPersistentStructure` +
+    `StructurePrefab`/`StructureWidth`/`StructureHeight`/
+    `StructureThickness`. Ground-targeted (reuses the existing aim-
+    reticle/`IsGroundTargeted` system unchanged — `GroundEffectRadius`
+    is only borrowed here to size the aim reticle, it plays no role in
+    the actual placement logic) — on resolve,
+    `PlayerAbilities.ResolvePersistentStructure` spawns `StructurePrefab`
+    at the aimed point (`Instantiate` → `Spawn()` → `Initialize`, the
+    same three-step pattern `GroundPatch` already uses), rotated so its
+    width axis is perpendicular to the caster's current facing (a
+    ground-targeted cast only ever gives a point, not a direction, so
+    the caster's own yaw at resolve time stands in for "which way the
+    wall faces" — same idiom `ResolveChargeForward`/`ResolveConeAroundCaster`
+    already use for caster-facing-dependent shapes). New component
+    `PlacedStructure` (`Scripts/Abilities/PlacedStructure.cs`,
+    `RequireComponent(BoxCollider)`): `Initialize(width, height,
+    thickness)` just sets `transform.localScale` (a Cube's default
+    extents are already 1 unit, so the `BoxCollider`'s default size
+    always matches the visual with zero extra math — simpler than
+    `GroundPatch`'s radius handling, which needed to rescale for a
+    Cylinder's non-1-unit default radius). Unlike `GroundPatch`, this
+    collider is **not** a trigger — it's a real obstacle on the Default
+    layer, so `CharacterController.Move` is blocked by it exactly like
+    terrain, no new collision-layer work needed (Characters↔Characters
+    is off, but Characters↔Default was always on). No lifetime of its
+    own; `ServerDespawn()` only ever gets called by
+    `PlayerAbilities.activeStructures` (mirrors `exclusiveTargets`'
+    per-caster-per-ability dictionary pattern) when the SAME caster
+    casts Earthen Bastion again — that's the ability's literal "lasts
+    until recast" requirement, needing no timer at all. **Earthen
+    Bastion** (`earthen_bastion`, MainHand-independent utility spell):
+    350 mana, 10s cd, instant, 25×5×2 (width×height×thickness — only
+    the width was specified, height/thickness are placeholders), no
+    damage/effect. `AbilityEarthenBastion.StructurePrefab` is
+    deliberately left `{fileID: 0}` (null) — see "Not yet done".
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
@@ -750,6 +792,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
    as fallback when no path exists); the user adds a `NavMeshSurface` to
    the terrain and bakes in the Editor (rebake after terrain/prop
    changes). Decided 2026-09-11, not started.
+6. **Earthen Bastion's wall prefab** — all the gameplay logic is built
+   (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
+   ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
+   so the spell currently just fizzles with "Structure not configured
+   yet" — a prefab with a `NetworkObject` (correct `GlobalObjectIdHash`)
+   and mesh/material references can't be safely hand-authored as text
+   the way a plain ScriptableObject `.asset` can (same reasoning as the
+   Decal Projector item above — not verifiable without the Editor
+   actually re-serializing it), so this is deliberately left as an
+   Editor step: (1) create a Cube GameObject, (2) add a `NetworkObject`
+   component, (3) add `PlacedStructure` (`Scripts/Abilities/
+   PlacedStructure.cs` — its `RequireComponent(BoxCollider)` adds the
+   `BoxCollider` automatically, leave it as a non-trigger), (4) save as
+   a prefab, (5) register it in `DefaultNetworkPrefabs.asset` like every
+   other spawned prefab (`FireBolt`, `PatchFire`, etc.), (6) drag it
+   onto `AbilityEarthenBastion`'s `StructurePrefab` field. No script
+   changes needed once that's done — `Initialize` already scales
+   whatever's dropped in to 25×5×2 on spawn.
 
 ## Notes for future sessions
 

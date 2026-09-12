@@ -22,7 +22,7 @@ retuned — it's a snapshot, not auto-generated.
 | Trample | No | 75 | 30s | Instant | Charge forward 10 units: 30 damage + 3s Stun to everything near the path |
 | Seismic Slam | Yes | 75 | 30s | 1s | 10% weapon damage + 3s Stun to every enemy in an 8-unit circle around you |
 | Crippling Blow | Yes | 15 | 0s | Instant | 25% weapon damage + −50% run speed on the target for 10s |
-| Team Up | No | 150 | 30s | Instant | Charge to an ally (25 range) and cut the damage *they* take by 10% for 15s |
+| Team Up | No | 150 | 30s | Instant | Charge to an ally (25 range) and redirect all damage *they* take to you instead, for 3s |
 
 ## Healing / support
 
@@ -43,6 +43,7 @@ retuned — it's a snapshot, not auto-generated.
 | Recall | 200 | 30s | Instant | 40 | Teleports the target instantly to your position |
 | Force Compression | 240 | 25s | Instant | 30 (cast range) | Pulls everyone within a 15-unit radius of the target point toward its center |
 | Force Expansion | 240 | 25s | Instant | 30 (cast range) | Blasts everyone within a 15-unit radius of the target point outward, away from its center |
+| Earthen Bastion | 350 | 10s | Instant | 30 (cast range) | Raises a 25-unit-wide impassable wall at the target point, facing across your current direction. No damage. Lasts until you cast it again (replaces the old wall) — **not yet playable, needs a wall prefab built in the Editor, see review_with_fable.md** |
 
 ## Auras (cast once, permanently active, gear-less)
 

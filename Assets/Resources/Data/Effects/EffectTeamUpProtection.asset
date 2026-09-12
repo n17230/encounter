@@ -14,14 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   Id: team_up_protection
   DisplayName: Team Up
-  Duration: 15
+  Duration: 3
   StackingMode: 0
   TickDamage: 0
   TickHeal: 0
   TickInterval: 1
-  Modifiers:
-  - Stat: 10
-    ModifierType: 1
-    Value: -0.1
-  DamageRedirectPercent: 0
+  Modifiers: []
+  DamageRedirectPercent: 1
   IsStun: 0

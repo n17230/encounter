@@ -65,6 +65,12 @@ public class PlayerAbilities : NetworkBehaviour
     // it (see ResolveAbility). Per-caster, not global.
     private readonly Dictionary<AbilityData, Targetable> exclusiveTargets = new Dictionary<AbilityData, Targetable>();
 
+    // Server-authoritative: for an AbilityData.IsPersistentStructure
+    // ability, the structure THIS caster's last cast of it placed, if
+    // still standing - see ResolvePersistentStructure. Per-caster, not
+    // global (mirrors exclusiveTargets above).
+    private readonly Dictionary<AbilityData, NetworkObject> activeStructures = new Dictionary<AbilityData, NetworkObject>();
+
     // Server-authoritative cast lock - while Time.time is before this, no
     // new cast (instant or otherwise) can start, regardless of which
     // ability/slot. Client-side isCasting only gates the local UI/input;
@@ -901,6 +907,12 @@ public class PlayerAbilities : NetworkBehaviour
     // later - e.g. a re-check - doesn't cost mana on fizzle).
     private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition)
     {
+        if (ability.IsPersistentStructure)
+        {
+            ResolvePersistentStructure(ability, groundPosition);
+            return;
+        }
+
         if (!stats.TrySpendMana(ability.ManaCost))
         {
             NotifyCastFizzledClientRpc("Not enough mana");
@@ -950,6 +962,41 @@ public class PlayerAbilities : NetworkBehaviour
                 enemyAi.ServerBeginPull(forceTarget, ability.ForceSpeed, duration);
             }
         }
+    }
+
+    // Ground-targeted, no combat effect: spawns/replaces this caster's one
+    // active StructurePrefab instance for this ability - e.g. Earthen
+    // Bastion's wall. Oriented so its width axis is perpendicular to the
+    // caster's current facing (i.e. "across" whatever's directly ahead),
+    // since a ground-targeted cast only ever gives a point, not a facing.
+    private void ResolvePersistentStructure(AbilityData ability, Vector3 groundPosition)
+    {
+        if (ability.StructurePrefab == null)
+        {
+            NotifyCastFizzledClientRpc("Structure not configured yet");
+            return;
+        }
+        if (!stats.TrySpendMana(ability.ManaCost))
+        {
+            NotifyCastFizzledClientRpc("Not enough mana");
+            return;
+        }
+
+        if (activeStructures.TryGetValue(ability, out NetworkObject previous) && previous != null)
+        {
+            if (previous.TryGetComponent(out PlacedStructure previousStructure)) previousStructure.ServerDespawn();
+        }
+
+        Vector3 flatForward = transform.forward;
+        flatForward.y = 0f;
+        flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
+        Quaternion rotation = Quaternion.LookRotation(flatForward, Vector3.up);
+
+        GameObject instance = Instantiate(ability.StructurePrefab, groundPosition, rotation);
+        instance.GetComponent<NetworkObject>().Spawn();
+        instance.GetComponent<PlacedStructure>().Initialize(ability.StructureWidth, ability.StructureHeight, ability.StructureThickness);
+
+        activeStructures[ability] = instance.GetComponent<NetworkObject>();
     }
 
     private bool IsWithinFacingCone(NetworkObject targetObject)
