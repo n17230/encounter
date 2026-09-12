@@ -509,7 +509,24 @@ public class MainMenu : MonoBehaviour
 
             if (GUI.Button(rect, new GUIContent("X", BuildItemTooltip(item) + "\n(click to equip)"), icon))
             {
-                Profile.SetGear(TargetSlotFor(item), item);
+                GearSlot targetSlot = TargetSlotFor(item);
+
+                // A two-handed weapon and an off-hand item can't coexist -
+                // equipping either one auto-clears whichever conflicts with
+                // it, mirroring CharacterEquipment.SetGearServerRpc's
+                // authoritative rule (so the server never has to silently
+                // reject what this menu just showed as equipped).
+                if (targetSlot == GearSlot.MainHand && item.TwoHanded)
+                {
+                    Profile.SetGear(GearSlot.OffHand, null);
+                }
+                else if (targetSlot == GearSlot.OffHand)
+                {
+                    ItemData mainHand = Profile.GetGear(GearSlot.MainHand);
+                    if (mainHand != null && mainHand.TwoHanded) Profile.SetGear(GearSlot.MainHand, null);
+                }
+
+                Profile.SetGear(targetSlot, item);
             }
         }
         if (index == 0) GUI.Label(new Rect(inventoryX, 24f, 300f, 20f), "(nothing left to equip)");

@@ -583,9 +583,22 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   main-hand weapon (its own `attackInterval` is only the unarmed
   fallback). `ItemData.Weapon` links a MainHand item to its weapon
   (`GearBroadSword` → `WeaponBroadSword`, 40 dmg / 2 s, +100 max health
-  flat, and +20% threat generated via `StatType.ThreatMultiplier`,
-  applied to the attacker's threat in `CharacterStats.AddThreat`; Fists
-  are 15 dmg / 1.5 s).
+  flat, and +40% threat generated via `StatType.ThreatMultiplier`
+  (was +20%, changed 2026-09-12), applied to the attacker's threat in
+  `CharacterStats.AddThreat`; Fists are 15 dmg / 1.5 s).
+  - **Two-handed weapons** (`ItemData.TwoHanded`, added 2026-09-12): a
+    two-handed MainHand item occupies OffHand too - enforced both in
+    `MainMenu`'s gear-equip click handler (equipping either one
+    auto-clears whatever conflicts with it, for instant UX) and
+    authoritatively in `CharacterEquipment.SetGearServerRpc` (MainHand,
+    slot index 11, is always processed before OffHand, slot 12, in the
+    per-slot loop, so `equippedItems[MainHand]` already reflects the
+    sync's result by the time OffHand is reached - OffHand is forced
+    null there if MainHand resolved to a two-handed item, an
+    unconditional backstop regardless of what the client sent). First
+    (and only) two-handed item: **2H Axe** (`GearTwoHandedAxe`, Id
+    `two_handed_axe`, MainHand, 80 weapon damage, no other bonuses) -
+    its 2.5s swing interval was never specified, a placeholder.
 - **Testing lobby scope** (still placeholders, not the real designs):
   instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
   `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no

@@ -70,6 +70,17 @@ public class CharacterEquipment : NetworkBehaviour
             bool validPlacement = item != null && (item.Slot.IsRing() ? physicalSlot.IsRing() : item.Slot == physicalSlot);
             if (!validPlacement) item = null;
 
+            // A two-handed main-hand weapon occupies the off hand too - since
+            // MainHand (slot 11) is always processed before OffHand (slot 12)
+            // in this loop, equippedItems[MainHand] already reflects this
+            // sync's result by the time OffHand is reached.
+            if (physicalSlot == GearSlot.OffHand
+                && equippedItems[(int)GearSlot.MainHand] != null
+                && equippedItems[(int)GearSlot.MainHand].TwoHanded)
+            {
+                item = null;
+            }
+
             Equip(physicalSlot, item);
         }
 

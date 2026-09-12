@@ -10,16 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
-  m_Name: GearBroadSword
-  m_EditorClassIdentifier: 
-  Id: broad_sword
-  ItemName: Broad Sword
+  m_Name: GearTwoHandedAxe
+  m_EditorClassIdentifier:
+  Id: two_handed_axe
+  ItemName: 2H Axe
   Slot: 11
-  Bonuses:
-  - Stat: 7
-    ModifierType: 1
-    Value: 0.4
-  - Stat: 0
-    ModifierType: 0
-    Value: 100
-  Weapon: {fileID: 11400000, guid: 9509a205fc4d68e98996ae002c0db0e3, type: 2}
+  Bonuses: []
+  HpThresholdEffects: []
+  Immunities: []
+  Auras: []
+  Reveals: 0
+  BroadcastsLocation: 0
+  Weapon: {fileID: 11400000, guid: dc65942e244d40f786e2dcb27baa3742, type: 2}
+  TwoHanded: 1

@@ -35,4 +35,10 @@ public class ItemData : ScriptableObject
     // For MainHand items: what the player's auto-attack swings with. Null on
     // anything that isn't a weapon (the unarmed Fists profile is used then).
     public WeaponData Weapon;
+
+    // Only meaningful on a MainHand item: occupies OffHand too, so the two
+    // can never both be equipped at once - see
+    // CharacterEquipment.SetGearServerRpc (authoritative) and MainMenu's
+    // gear-equip click handler (mirrors it for immediate UX).
+    public bool TwoHanded = false;
 }
