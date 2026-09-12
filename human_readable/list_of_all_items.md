@@ -22,7 +22,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Effect |
 |---|---|
-| Champion's Cloak | −10% damage dealt, +20% threat generated |
+| Champion's Cloak | −10% damage dealt, +20% threat generated, +50 Max Health |
 
 ## Boots
 
