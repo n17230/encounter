@@ -11,8 +11,7 @@
    (a bug, a refactor, a cleanup), write it down and ask the user; do not
    touch it unless they say so.
 
-These come from the user directly (2026-09-11) after unrequested sample
-items were added. They override any general helpfulness instinct.
+These are absolute — they override any general helpfulness instinct.
 
 A 3D multiplayer game (working title "encounter"; the working directory is
 still named `reallyfungame`), built in Unity, hosted on a VPS the user
@@ -22,431 +21,207 @@ controls so they and friends can play together. Git: `github.com/n17230/encounte
 ## Tech baseline
 
 - Unity **6.3 LTS** (`6000.3.23f1`), URP 17.3.0, Netcode for GameObjects
-  2.13.2, Unity Transport 2.7.4, Multiplayer Play Mode 2.0.2 (the reason
-  for the Unity 6 move — MPPM doesn't support 2022.3).
+  2.13.2, Unity Transport 2.7.4, Multiplayer Play Mode 2.0.2 (needed for
+  testing multiple clients in-editor — MPPM requires 2023.1+).
 - Product name `encounter` (`ProjectSettings/ProjectSettings.asset`).
 - **Git + LFS**: images/models/audio/fonts plus TerrainData `.asset`s go
   through LFS (`.gitattributes`). The four imported Asset Store packs
   (`Assets/PolysplitGames`, `Assets/Shinabro`, `Assets/Spells Pack`,
   `Assets/TriForge Assets`) are **gitignored and stay local** — 3.9 GB.
-  The subset the game actually references (288 files, ~1 GB, found by a
-  GUID-dependency crawl from our scene/prefabs/settings) was moved to
+  The subset the game actually references (288 files, ~1 GB) lives in
   `Assets/External/<Pack>/<original relative path>` with their `.meta`
-  files, so every GUID reference survived. **If you start using another
-  file from a pack, move it (plus `.meta`) into `Assets/External/`
-  under the same relative path, or it won't be in the repo.** A fresh
-  clone therefore builds without the packs installed. `Assets/_Recovery/`
-  (Unity crash-recovery scenes) and `SERVER_INFO.md` (VPS access details)
-  are also ignored.
+  files, so every GUID reference resolves. **If you start using another
+  file from a pack, move it (plus `.meta`) into `Assets/External/` under
+  the same relative path, or it won't be in the repo.** A fresh clone
+  builds without the packs installed. `Assets/_Recovery/` and
+  `SERVER_INFO.md` (VPS access details) are also gitignored.
 - `.gitattributes` uses `[[:space:]]` globs for paths with spaces.
 
 ## Compile-checking without the Editor
 
 The Unity Editor is usually open on this project, which locks it for a
 second Unity instance, so scripts are compile-checked with a throwaway
-SDK-style csproj that globs `Assets/Scripts/**` + `Assets/Tests/**` and
-references the Editor's `UnityEngine/*.dll`, `Library/ScriptAssemblies/`
-(`Unity.Netcode.Runtime`, `Unity.Collections`, `Unity.Mathematics`,
-`Unity.Networking.Transport`, `UnityEngine.TestRunner`) and the
-`nunit.framework.dll` from `Library/PackageCache/com.unity.ext.nunit@*`.
-`dotnet build` (SDK 10 is installed) on that passes when Unity would
-compile. It does not run tests or ILPP; EditMode tests run from the
-Editor's Test Runner. New `.cs`/`.asmdef`/folders committed from outside
-the Editor need hand-written `.meta` files (generate a random 32-hex GUID).
+SDK-style csproj (`Tools/CompileCheck.csproj`) that globs
+`Assets/Scripts/**` + `Assets/Tests/**` and references the Editor's
+`UnityEngine/*.dll`, `Library/ScriptAssemblies/` (`Unity.Netcode.Runtime`,
+`Unity.Collections`, `Unity.Mathematics`, `Unity.Networking.Transport`,
+`UnityEngine.TestRunner`) and the `nunit.framework.dll` from
+`Library/PackageCache/com.unity.ext.nunit@*`. `dotnet build` on that
+passes when Unity would compile. It does not run tests or ILPP; EditMode
+tests run from the Editor's Test Runner. New `.cs`/`.asmdef`/folders
+committed from outside the Editor need hand-written `.meta` files
+(generate a random 32-hex GUID). A **prefab** with a `NetworkObject`
+cannot be safely hand-authored this way — its `GlobalObjectIdHash` and
+mesh/material references need the Editor to actually serialize them;
+that kind of asset is left as an Editor step for the user (see "Not yet
+done").
 
-## Architecture (as of 2026-09-11)
+## Architecture
 
 Scripts live in `Assets/Scripts/` (assembly `Encounter`, see
 `Encounter.asmdef`); tests in `Assets/Tests/EditMode/` (`Encounter.Tests`).
 Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 
-- **Authority split**: *movement is owner-authoritative, combat is
-  server-authoritative*. `Player.prefab`'s `NetworkTransform` is in
+- **Authority split**: movement is owner-authoritative, combat is
+  server-authoritative. `Player.prefab`'s `NetworkTransform` is
   `AuthorityMode: Owner`; `PlayerMovement` runs the `CharacterController`
-  on the owning client only (input gathered per rendered frame, consumed
-  per `FixedUpdate`; mouse yaw is summed and jump latched so nothing is
-  dropped between physics steps). There is no movement RPC at all. The
-  server reads replicated position/rotation for range/facing/LoS checks.
-  Chosen over server-auth + prediction deliberately: friends-only game,
-  instant feel matters, position cheating doesn't. Every damage/mana/
-  cooldown/effect decision still happens only on the server.
-  `PlayerRespawn`: server decides (`OnDeath` → `RestoreFull` +
-  `PlayerMovement.ServerTeleportTo`, same path Recall uses — server-
-  initiated, pre-arms the validator before the owner moves), the owner
-  executes via `TeleportTo` → `NetworkTransform.Teleport` (only the
-  authority may teleport). Mobs (`EnemyAI`) stay fully server-driven.
-  - **Server-side movement validation** ("the MMO way" — decided
-    2026-09-11 with going public in mind): `MovementValidator` (pure C#,
-    tested) watches each *remote* owner's replicated transform in
-    windows of 0.5 s — horizontal distance vs. `RunSpeed × elapsed × 1.3
-    + 1 m` (using the max of the window's start/end speed so a fresh
-    slow the client hasn't received yet can't trip it), ×3 that =
-    teleport, feet more than 1 m under the terrain = below ground. A
-    violation snaps the owner back (`CorrectPositionClientRpc` →
-    `TeleportTo`), pauses checks for 1 s so in-flight states don't
-    double-count, and 5 strikes within 30 s → `DisconnectClient`. The
-    host's own player is exempt. Tunables are `[SerializeField]`s on
-    `PlayerMovement`.
-    - **Bug fixed 2026-09-11 — remote players falling through the map on
-      spawn**: `ValidateReplicatedMovement` had no grace period, so a
-      remote (non-host) player's very first tick could get judged
-      against the prefab's raw baked spawn position — before
-      `PlayerRespawn`'s owner-side terrain snap had round-tripped back
-      to the server — which on a since-resculpted terrain can look
-      below-ground, triggering a "correction" back to that same bad,
-      genuinely-below-ground position. Fixed two ways: (1)
-      `PlayerMovement.OnNetworkSpawn` now sets `validationResumeTime`
-      `spawnGraceSeconds` (2s, longer than `correctionGraceSeconds`'s 1s
-      on purpose — a fresh spawn has more to settle than a single
-      correction) out, giving the owner-initiated snap time to land
-      before the server judges anything; (2) `PlayerRespawn.HandleDeath`
-      switched from its own `RespawnClientRpc` to
-      `PlayerMovement.ServerTeleportTo` (the same path Recall uses) —
-      death is server-detected, so it can pre-arm the validator
-      *before* telling the owner to move, needing no grace period at
-      all. Never seen actually fail in the Editor, only reasoned from
-      the code — the host being exempt from validation is what explains
-      the bug only ever showing up for the second (non-host) player.
+  on the owning client only, no movement RPC exists. The server reads
+  replicated position/rotation for range/facing/LoS checks; every
+  damage/mana/cooldown/effect decision happens only on the server.
+  Chosen for a friends-only game where instant feel matters more than
+  position-cheat resistance. `PlayerRespawn` calls `RestoreFull()` then
+  `PlayerMovement.ServerTeleportTo` (server-initiated, pre-arms the
+  movement validator before the owner moves); the owner executes via
+  `TeleportTo` → `NetworkTransform.Teleport` (only the authority may
+  teleport). Mobs (`EnemyAI`) are fully server-driven.
+  - **Movement validation**: `MovementValidator` (pure C#, tested)
+    watches each *remote* owner's replicated transform in 0.5s windows —
+    horizontal distance vs. `RunSpeed × elapsed × 1.3 + 1m` (teleport
+    threshold is 3× that), feet more than 1m under terrain = below
+    ground. A violation snaps the owner back, pauses checks for 1s, and
+    5 strikes within 30s disconnects the client. The host's own player
+    is exempt. `PlayerMovement.OnNetworkSpawn` opens a `spawnGraceSeconds`
+    (2s) window before validation starts, since a remote player's
+    owner-side terrain snap needs a round trip to reach the server
+    first.
   - **Client-side cast prediction**: `PlayerAbilities` pre-checks
-    cooldown / mana (`CurrentMana` NetworkVariable) / target / range /
-    facing locally and shows the reason instantly ("Out of range", …),
-    starts the cooldown on key press (`predictedCooldownReady`, drives
-    the new bottom-centre 8-slot ability bar with a cooldown sweep), and
-    the server's start-of-cast rejections come back as
-    `NotifyCastRejectedClientRpc(abilityId, reason)` which rolls the
-    predicted cooldown/cast bar back. Cooldowns are otherwise never
-    synced — the prediction is the client's only view of them.
-  - **Mana is spent on successful cast, not on cast start** (changed
-    2026-09-11): `CharacterStats.HasEnoughMana` (read-only) gates
-    whether a cast is even allowed to start, in both
-    `CastAbilityServerRpc` and `CastGroundTargetedAbilityServerRpc` —
-    same rejection ("Not enough mana") as before, just no longer
-    deducts anything. The actual `TrySpendMana` deduction moved into
-    `ResolveAbility` (after every fizzle check — target lost/range/
-    facing/LoS — has passed, right before the effect/projectile/recall
-    actually happens) and the top of `ResolveGroundAbility`. A cast
-    that fizzles during its cast-time window now costs nothing; only a
-    cast that actually lands is charged. For instant-cast abilities
-    this is a no-op in timing (resolve happens the same tick), but for
-    Firebolt/Icebolt's 2 s cast it means the mana bar visibly drops
-    when the cast *completes*, not when it starts.
-  - **Ground-targeted abilities + forced movement** (WoW "Blizzard"-
-    style, added 2026-09-11): `AbilityData.IsGroundTargeted` +
-    `GroundEffectRadius` + `ForceSpeed` + `PushAway`. Pressing the
-    hotkey doesn't cast immediately — it arms
-    `PlayerAbilities.IsAimingGroundTarget`, which draws an owner-local
-    `GroundTargetReticle` (a `TargetRingIndicator`-style procedural
-    ring, never networked) following a mouse raycast that ignores the
-    `Characters` layer so it hits terrain through players/mobs.
-    Left-click (within `Range` of the caster) confirms and sends
-    `CastGroundTargetedAbilityServerRpc(slot, worldPoint)`; the same
-    hotkey again, or opening the menu, cancels aiming. `PlayerTargeting`
-    ignores clicks entirely while aiming (`abilities.IsAimingGroundTarget`
-    guard) so placement clicks can't also reselect your target. On
-    resolve (after `CastTime`, same coroutine pattern as unit-targeted
-    casts, no facing/LoS check — there's no single target to lose sight
-    of), every alive `Targetable` (player or mob, caster included)
-    within `GroundEffectRadius` of the point is driven toward a force
-    target point at `ForceSpeed` via `PlayerMovement.ServerBeginPull` /
-    `EnemyAI.ServerBeginPull`: for a pull (`PushAway` false) that point
-    is the cast location itself; for a push (`PushAway` true) it's
-    computed per-victim, radially outward past the edge of the radius —
-    same underlying "drive toward a point" method either way, so the
-    push/pull split lives entirely in `ResolveGroundAbility`'s target-
-    point math, not in the movement code. For players this needed two
-    things to actually work: a `ClientRpc` so the *owning* client
-    (which alone may move its own `CharacterController`) performs the
-    drag, and — the part that would otherwise silently break it —
-    `MovementValidator` is fed a continuous `Reset` for the duration in
-    `ValidateReplicatedMovement`, since the forced movement is faster
-    than `RunSpeed` and would otherwise itself get read as a speed
-    violation and snapped back. **Force Compression** (Id
-    `force_compression`, was named Vacuum until renamed 2026-09-11) and
-    **Force Expansion** (Id `force_expansion`, its opposite) are
-    otherwise identical assets — 15-unit radius (the requested 30-unit
-    diameter), instant cast, 25s cooldown, 240 mana, 15/s force speed,
-    no damage/effect — differing only in `PushAway`. Range 30 and the
-    force speed are still placeholder numbers, never specified beyond
-    the diameter — flagged for tuning.
-  - **Recall** (Id `recall`, added 2026-09-11): a plain unit-targeted
-    spell (`RequiresTarget`, same click/Tab selection and range/facing/
-    LoS checks as Firebolt/Icebolt) whose resolve does
-    `AbilityData.RecallTarget` instead of damage — instantly teleports
-    the *target* to the *caster's* position via the new
-    `PlayerMovement.ServerTeleportTo` / `EnemyAI.ServerTeleportTo`
-    (checked in that priority order ahead of `ProjectilePrefab` in
-    `ResolveAbility`). For a player target this needed the same
-    validator safety as a pull: `ServerTeleportTo` re-baselines
-    `MovementValidator` and sets `validationResumeTime` *before* sending
-    the `ClientRpc`, exactly like an existing movement-violation
-    correction does — otherwise the server would read its own recall as
-    a teleport-cheat and try to snap the player back. Mobs need no such
-    care (server-driven already) — `EnemyAI.ServerTeleportTo` just
-    disables/repositions/re-enables the `CharacterController` directly.
-    Since players/mobs no longer collide with each other (see Character
-    collision below), teleporting the target onto the caster is safe —
-    no clipping/pushing. Cooldown 30s and mana cost 200 were set explicitly by the
-    user (2026-09-11), and so was Range 40; instant cast and no threat
-    generated are still unspecified placeholders.
-  - **Damage redirect + One For All** (added 2026-09-11):
-    `StatusEffectData.DamageRedirectPercent` (0 = none, the default) — if
-    the *victim* has an active effect with this set, `DealDamage` peels
-    that fraction off the already-armor-mitigated damage and hands it
-    straight to whoever *applied* the effect (`ActiveEffect
-    .AttackerClientId`, resolved via the existing `AttackerStats`
-    lookup), with no re-mitigation, no multipliers, and no threat of its
-    own — only the strongest single active redirect applies, stacking
-    multiple wasn't asked for. The redirected chunk goes through the new
-    `CharacterStats.ApplyRawDamage` (health loss + death-check only,
-    factored out of `DealDamage` so both the victim's own share and the
-    redirected share use identical death handling). Threat is still
-    calculated from the *full* mitigated amount against the original
-    victim, unaffected by where the HP loss actually lands.
-    `EffectOneForAll` uses `EffectStackingMode.Override` (see Status
-    effects below) so a *different* caster casting it on someone already
-    bonded takes the bond over outright, rather than the two casters'
-    applications racing on remaining duration. `AbilityData
-    .ExclusiveSingleTarget` (also new) enforces "only one target at a
-    time" **per caster** on top of that (not global — two different
-    casters can each have their own): `PlayerAbilities.exclusiveTargets`
-    (`Dictionary<AbilityData, Targetable>`) remembers who last received
-    it from *this* caster, and casting it on someone new calls the new
-    `StatusEffectTracker.Remove` / `CharacterStats.RemoveEffect` on the
-    old holder before applying to the new one — recasting on the same
-    current holder just refreshes, no strip happens. `AbilityOneForAll`
-    (Id `one_for_all`, its `EffectOneForAll` also Id `one_for_all` — no
-    collision, abilities and effects are separate `GameDatabase`
-    namespaces): 10% redirect, 1800 s (30 min) duration, instant cast,
-    50 mana, all set explicitly by the user; **Cooldown 5s and Range 30
-    are unconfirmed placeholders** — nothing was specified for either.
-  - **Healing, shields, and 5 new spells** (added 2026-09-11):
-    `HitInfo` gained `Heal` and `ShieldAmount`, handled in `ReceiveHit`
-    right alongside `Damage` — the single-target resolve path in
-    `ResolveAbility` now always passes all of `Damage`/`Heal`
-    /`ShieldAmount`/`Effect` through one `HitInfo`, so one ability could
-    in principle deal damage, heal, shield *and* apply an effect all at
-    once (none currently do). `CharacterStats.Heal(amount, healerClientId
-    = NoAttacker)` now takes an optional healer id and scales by that
-    healer's new `StatType.HealingMultiplier` stat (base 1, mirrors
-    `DamageMultiplier`) — both `ReceiveHit`'s `hit.Heal` and
-    `TickEffect`'s `TickHeal` pass their real attacker/caster id through,
-    so both instant heals and HoTs benefit; **aura-pulsed heals
-    (`CharacterEquipment.PulseAura`) deliberately still pass
-    `NoAttacker`**, so a healing-multiplier item boosts cast *spells*
-    only, not passive gear auras (a judgment call, not specified either
-    way). **Absorb shields**: `CharacterStats.ShieldAmount`
-    (`NetworkVariable<float>`, visible on the HUD) is granted via
-    `GrantShield` (replaces any remainder outright, doesn't stack — same
-    "override" philosophy as `EffectStackingMode.Override`) and consumed
-    in `DealDamage` *before* armor-mitigated damage can be redirected or
-    reduce health; threat is based on what's left *after* the shield
-    (a judgment call — a fully-absorbed hit generates none). Reset to 0
-    in `RestoreFull`. **No duration cap was specified** — a shield
-    persists until its amount is fully consumed, however long that
-    takes, not on a timer.
-    **`AbilityData.AreaAroundCaster`** (new): no unit/ground targeting at
-    all — resolves centered on the caster's *own* position the instant
-    the cast completes, hitting every player (caster included, mobs
-    excluded) within `GroundEffectRadius`; reuses that field name even
-    though there's no ground-aiming step. `ResolveAbility` branches to
-    the new `ResolveAreaAroundCaster` before its normal target-lookup.
-    The five new abilities: **Blessing of Vitality** (Id
-    `blessing_of_vitality`, 8s cd, 200 mana, 2s cast — cast time was
-    corrected from an initial 1.5s — 350 heal + `EffectVitalityWard`,
-    16s, −10% damage taken via a flat `+10 Armor` modifier, reusing the
-    existing armor-mitigation formula exactly like `GearShield` does,
-    rather than inventing a new "damage taken" stat). **Radiant
-    Embrace** (`radiant_embrace`, 0s cd, 150 mana, 1.5s cast, 350 heal,
-    no effect). **Aegis of Arcane** (`aegis_of_arcane`, 18s cd, 175
-    mana, instant, 350-point shield). **Everliving Touch**
-    (`everliving_touch`, 0s cd, 250 mana, instant, `EffectEverlivingTouch`
-    — 100 hp every 3s for 18s, `StackPerCaster` so two different
-    healers' casts on the same target both tick, per the same "HoTs
-    stack per caster" rule `EffectRejuvenation` already uses). **Seraph's
-    Grace** (`seraphs_grace`, `AreaAroundCaster`, 50 radius, 0s cd, 450
-    mana, 3s cast — corrected from an initial 2.5s — 350 heal to every
-    player in range). `Range` is unused/0 on Seraph's Grace since
-    `AreaAroundCaster` skips all range checking; `Range: 30` on the
-    other four was never specified, only the numbers given above — the
-    usual placeholder, flagged for tuning.
-  - **Holy Scepter** (`GearHolyScepter`, Id `holy_scepter`, MainHand, no
-    `Weapon` — a caster stat-stick, not something that swings): +10%
-    `HealingMultiplier`.
-  - **Seven warrior spells/item** (added 2026-09-11 — untested, see
-    `review_with_fable.md` §0 for the full assumption list):
-    **Stun** (new mechanic): `StatusEffectData.IsStun`, read via
-    `CharacterStats.IsStunned`; only `EnemyAI` obeys it so far (freezes
-    movement/attacks) — no ability stuns a player yet, so
-    `PlayerMovement`/`PlayerAbilities` aren't gated by it.
-    `AbilityData.EnemiesAroundCaster` / `ConeAroundCaster` (new): same
-    shape as `AreaAroundCaster` but the opposite audience — every
-    Targetable *without* `PlayerMovement` (i.e. a mob) within
-    `GroundEffectRadius`, the cone variant additionally filtered by a new
-    per-ability `ConeAngle` via `FacingCone.IsWithin`.
-    `AbilityData.RequiresMeleeWeapon` (new): hard-blocks casting unless
-    `CharacterEquipment.MainHandWeapon` is non-null (fists don't count) —
-    checked client-side (via the profile's own gear) and
-    server-authoritatively.
-    `AbilityData.WeaponDamagePercent` (added as a bool `UseWeaponDamage`
-    2026-09-11, generalized to a float 2026-09-12 so Crippling Blow/
-    Seismic Slam could add a *fraction* of a weapon hit rather than
-    all-or-nothing): total damage on resolve is `Damage + WeaponDamage ×
-    WeaponDamagePercent`, computed once in the new shared
-    `PlayerAbilities.ResolveTotalDamage` and used everywhere `ability
-    .Damage` used to be read directly (weapon damage itself comes from
-    `PlayerAutoAttack.ResolvedWeapon.Damage` — equipped main hand, or the
-    unarmed fallback). 0 (default) = no weapon scaling at all.
-    `AbilityData.ChargeForwardDistance` / `ChargeToTarget` (new, both
-    self-movement via the existing `PlayerMovement.ServerBeginPull` rail
-    — no new movement code): the former drives the caster straight
-    forward by a fixed distance with no target, hitting every enemy
-    within 2.5 units of that line (one-shot resolve-time check, not
-    continuous); the latter drives the caster to just short of a unit
-    target (2-unit clearance) and then applies `Effect` to the *target*,
-    not the caster — for support "peel" abilities.
-    `StatType.DamageTakenMultiplier` (new stat, base 1.0): multiplies
-    damage in `CharacterStats.DealDamage` right after armor mitigation —
-    needed for "reduce damage this character takes", which nothing
-    existing expressed (the existing `DamageMultiplier` is attacker-side,
-    outgoing).
-    `ItemData.HpThresholdEffects` (new mechanic): a list of
-    `{HealthPercentThreshold, AboveThresholdBonuses, BelowThresholdBonuses}`
-    — `CharacterEquipment` evaluates it once/sec (same cadence as auras)
-    per equipped item and swaps which side's `StatBonus`es are applied
-    only when the wearer's health fraction actually crosses the
-    threshold, keyed by `(item, index, above/below)` tuples as the
-    modifier source so both sides can be cleanly removed independently.
-    The abilities/item themselves: **Reaper's Wheel** (`reapers_wheel`,
-    melee-required, 8s cd, 50 mana, instant, `EnemiesAroundCaster` radius
-    8, weapon damage, `EffectBleed` — 10 dmg/sec for 5s).
-    **Trample** (`trample`, 30s cd — was 15s, changed 2026-09-12 — 75
-    mana, instant, charges forward 10 units at an assumed 20 units/sec,
-    30 damage — was 75, changed 2026-09-12 — + `EffectStun` (3s) to
-    everything near the path). **Cleave** (`cleave`, melee-required, 2s
-    cd, 15 mana, instant, `ConeAroundCaster` radius 8 (assumed) / 120°
-    (set explicitly by the user 2026-09-12), weapon damage). **Team Up** (`team_up`, 30s cd, 150 mana, instant,
-    assumed range 25, `ChargeToTarget`, applies `EffectTeamUpProtection`
-    to the target — **100% `DamageRedirectPercent` for 3s** (changed
-    2026-09-12, was −10% `DamageTakenMultiplier` for 15s; reuses the
-    exact same redirect mechanism One For All already uses, just a full
-    redirect on a short timer instead of a partial one on a long timer)
-    — so the target takes zero net damage for 3s and it all lands on the
-    Team Up caster instead). **Crippling
-    Blow** (`crippling_blow`, melee-required, 0s cd, 15 mana, instant,
-    unit-targeted, `EffectCripplingBlow` — −50% `RunSpeed` for 10s, same
-    pattern as `EffectSlow` — plus 25% weapon damage, added 2026-09-12).
-    **Seismic Slam** (`seismic_slam`, melee-required, 30s cd, 75 mana, 1s
-    cast, `EnemiesAroundCaster` radius 8, reuses `EffectStun`, plus 10%
-    weapon damage, added 2026-09-12). **Barbarian's Mantle**
-    (`GearBarbariansMantle`, Id `barbarians_mantle`, assumed **Chest**
-    slot — "(armor)" read as body armor despite the "mantle" name — a
-    `HpThresholdEffects` entry at 50%: above it −15%
-    `DamageTakenMultiplier`, below it +15% `DamageMultiplier`).
-  - **Cleanse** (`cleanse`, added 2026-09-12, `AbilityData
-    .RemovesNegativeEffect`, new mechanic): unit-targeted, instant, 150
-    mana, strips one currently active `StatusEffectData.IsNegative`
-    effect from the target via the new `CharacterStats
-    .RemoveOneNegativeEffect` (arbitrary pick if more than one is
-    active — no priority order requested). `IsNegative` was added and
-    set true on the 5 existing debuffs (`burn`, `slow`, `bleed`, `stun`,
-    `crippling_blow`); every buff/aura effect defaults to false and is
-    never dispellable. Range 30 and Cooldown 6s are unspecified
-    placeholders — mana cost and instant cast came from the user.
-  - **Amulet of Vitality** (`GearAmuletOfVitality`, Id
-    `amulet_of_vitality`, Necklace, added 2026-09-12): flat `+150
-    MaxHealth`, plus `+5 Armor` (added later the same day).
-  - **Amulet of the Magi** (`GearAmuletOfTheMagi`, Id
-    `amulet_of_the_magi`, Necklace, added 2026-09-12): flat `+100
-    MaxMana` and `+0.4 ManaRegenRate` (the user's "+2 mp5" — 2 mana per
-    5s tick — converted to the per-second unit `ManaRegenRate` actually
-    stores, same "mp5 ÷ 5" convention already used for the old Amulet of
-    Replenishment).
-  - **Tomb of the Magi** (`GearTombOfTheMagi`, Id `tomb_of_the_magi`,
-    OffHand, added 2026-09-12): flat `+50 MaxMana` and `+0.4
-    ManaRegenRate` (same "+2 mp5" convention as Amulet of the Magi) — an
-    OffHand counterpart to it, smaller mana bonus, no threat/armor.
-  - **The Everflow** (`GearTheEverflow`, Id `the_everflow`, Trinket,
-    added 2026-09-12): flat `+1 ManaRegenRate` (the user's "5 mp5" ÷ 5,
-    same conversion as the other mp5 items). Nothing else.
-  - **Armored Boots** (`GearArmoredBoots`, Id `armored_boots`, Boots,
-    added 2026-09-12): flat `+5 Armor`, nothing else.
-  - **Boots of Lightness + air hover** (`GearBootsOfLightness`, Id
-    `boots_of_lightness`, Boots, added 2026-09-12, new movement
-    mechanic): `ItemData.GrantsAirHover` — while airborne, pressing Jump
-    again (once per airtime, re-armed on landing — tracked by
-    `PlayerMovement.hoverAvailable`) suspends gravity for `hoverDuration`
-    (2s) while WASD keeps steering normally, unlike a plain fall/jump
-    (which locks in launch-time momentum — see the `airborneVelocity`
-    comment). Fully owner-local, like the rest of `PlayerMovement`: the
-    owner reads its own equipped Boots straight from `ProfileStore
-    .Current.GetGear(GearSlot.Boots)` (no server round trip) — consistent
-    with the existing trust model (this is a friends-only game; the
-    `MovementValidator`'s only checks, horizontal speed and below-ground,
-    are both unaffected by hovering in place, so no validator changes
-    were needed here at all, unlike the pull/teleport abilities).
-  - **`StatType.WeaponDamageBonus`** (new stat, base 0, added
-    2026-09-12): a flat bonus added wherever weapon damage is actually
-    read — `PlayerAutoAttack`'s basic swing (`weapon.Damage + stats
-    .WeaponDamageBonus.Value`) and `PlayerAbilities.ResolveWeaponDamage`
-    (so it also flows into `WeaponDamagePercent` abilities — Reaper's
-    Wheel, Cleave, Crippling Blow, Seismic Slam — proportionally to
-    their percentage, same as the base weapon damage does). **Amulet of
-    the Berserker** (`GearAmuletOfTheBerserker`, Id
-    `amulet_of_the_berserker`, Necklace, added 2026-09-12): flat `+5
-    WeaponDamageBonus`, nothing else.
-  - **Global cooldown** (added 2026-09-12, per explicit user request —
-    also flagged on `review_with_fable.md`'s list): starting ANY cast
-    (instant or with `CastTime`) locks out starting a different one for
-    `globalCooldownDuration` (1.5s, the standard MMO GCD length — not
-    specified, a placeholder), on top of that ability's own `Cooldown`.
-    One shared gate across every slot, not per-ability. Same
-    predict-on-client/confirm-or-rollback-via-server pattern as the
-    existing per-ability cooldown: `predictedGlobalCooldownReady`
-    (client) vs. `serverGlobalCooldownReadyTime` (server, authoritative)
-    in `PlayerAbilities`, checked in `ClientPrecheck` and both
-    `CastAbilityServerRpc`/`CastGroundTargetedAbilityServerRpc`, set the
-    moment a cast actually starts (mirrors where the per-ability
-    `cooldownReadyTime`/`predictedCooldownReady` are set, i.e. after the
-    mana-affordability check, not before). No dedicated GCD UI element —
-    a blocked cast just shows the existing transient "Global cooldown"
-    notice, same as any other rejection reason.
-  - **Earthen Bastion + `PlacedStructure`** (added 2026-09-12, new
-    mechanic — **the one piece of this that still needs Editor work, see
-    "Not yet done" below**): `AbilityData.IsPersistentStructure` +
+    cooldown/mana/target/range/facing locally, starts the predicted
+    cooldown on key press (drives the ability bar's cooldown sweep), and
+    rolls it back if the server rejects the cast
+    (`NotifyCastRejectedClientRpc`). Cooldowns are otherwise never
+    synced.
+  - **Mana is spent on successful cast, not cast start**:
+    `HasEnoughMana` (read-only) gates whether a cast can start;
+    `TrySpendMana` only fires in `ResolveAbility`/`ResolveGroundAbility`,
+    after every fizzle check has passed. A fizzled cast costs nothing.
+  - **Ground-targeted casting** (WoW "Blizzard"-style):
+    `AbilityData.IsGroundTargeted` + `GroundEffectRadius` + `ForceSpeed`
+    + `PushAway`. The hotkey arms `PlayerAbilities.IsAimingGroundTarget`,
+    drawing an owner-local `GroundTargetReticle` following a mouse
+    raycast that ignores the Characters layer; left-click within `Range`
+    confirms and sends `CastGroundTargetedAbilityServerRpc`. On resolve,
+    every alive `Targetable` within `GroundEffectRadius` is driven
+    toward a force target via `PlayerMovement.ServerBeginPull`/
+    `EnemyAI.ServerBeginPull` — a pull targets the cast point directly,
+    a push computes a point radially outward per-victim. For players
+    this needs `MovementValidator` fed a continuous `Reset` for the
+    duration, since forced movement exceeds `RunSpeed` and would
+    otherwise read as a violation. Force Compression and Force
+    Expansion are the same shape with `PushAway` flipped (a pull
+    targets the cast point; a push sends victims radially outward).
+  - **Recall**: unit-targeted, teleports the target to the caster's
+    position via `ServerTeleportTo`/`EnemyAI.ServerTeleportTo` (checked
+    ahead of `ProjectilePrefab` in `ResolveAbility`). Re-baselines
+    `MovementValidator` before the teleport lands so the server doesn't
+    read its own recall as cheating.
+  - **Damage redirect**: `StatusEffectData.DamageRedirectPercent` — if
+    the victim has an active effect with this set, `DealDamage` peels
+    that fraction off the already-mitigated damage and sends it to
+    whoever applied the effect, via `CharacterStats.ApplyRawDamage`
+    (shared health-loss/death-check helper). Only the strongest active
+    redirect applies; threat is still calculated from the full mitigated
+    amount against the original victim. `AbilityData.ExclusiveSingleTarget`
+    limits an ability to one currently-affected target **per caster**
+    (`PlayerAbilities.exclusiveTargets`), stripping the effect from the
+    previous holder when recast on someone new. One For All's effect
+    uses `EffectStackingMode.Override` so a different caster's cast
+    takes the bond over outright instead of the two applications racing
+    on remaining duration.
+  - **Healing and shields**: `HitInfo` carries `Heal` and `ShieldAmount`
+    alongside `Damage`, all handled in `ReceiveHit`.
+    `CharacterStats.Heal(amount, healerClientId)` scales by the healer's
+    `HealingMultiplier` stat and generates threat (see Enemy targeting
+    below); aura-pulsed healing passes `NoAttacker` so it gets neither
+    the multiplier nor the threat. `ShieldAmount`
+    (`NetworkVariable<float>`) absorbs damage before health in
+    `DealDamage`; a new grant replaces any remainder rather than
+    stacking, and it has no duration cap — it persists until consumed.
+    `AbilityData.AreaAroundCaster` resolves centered on the caster's own
+    position, hitting every player (not mobs) within `GroundEffectRadius`.
+  - **Persistent structures**: `AbilityData.IsPersistentStructure` +
     `StructurePrefab`/`StructureWidth`/`StructureHeight`/
-    `StructureThickness`. Ground-targeted (reuses the existing aim-
-    reticle/`IsGroundTargeted` system unchanged — `GroundEffectRadius`
-    is only borrowed here to size the aim reticle, it plays no role in
-    the actual placement logic) — on resolve,
+    `StructureThickness`, ground-targeted. On resolve,
     `PlayerAbilities.ResolvePersistentStructure` spawns `StructurePrefab`
-    at the aimed point (`Instantiate` → `Spawn()` → `Initialize`, the
-    same three-step pattern `GroundPatch` already uses), rotated so its
-    width axis is perpendicular to the caster's current facing (a
-    ground-targeted cast only ever gives a point, not a direction, so
-    the caster's own yaw at resolve time stands in for "which way the
-    wall faces" — same idiom `ResolveChargeForward`/`ResolveConeAroundCaster`
-    already use for caster-facing-dependent shapes). New component
-    `PlacedStructure` (`Scripts/Abilities/PlacedStructure.cs`,
-    `RequireComponent(BoxCollider)`): `Initialize(width, height,
-    thickness)` just sets `transform.localScale` (a Cube's default
-    extents are already 1 unit, so the `BoxCollider`'s default size
-    always matches the visual with zero extra math — simpler than
-    `GroundPatch`'s radius handling, which needed to rescale for a
-    Cylinder's non-1-unit default radius). Unlike `GroundPatch`, this
-    collider is **not** a trigger — it's a real obstacle on the Default
-    layer, so `CharacterController.Move` is blocked by it exactly like
-    terrain, no new collision-layer work needed (Characters↔Characters
-    is off, but Characters↔Default was always on). No lifetime of its
-    own; `ServerDespawn()` only ever gets called by
-    `PlayerAbilities.activeStructures` (mirrors `exclusiveTargets`'
-    per-caster-per-ability dictionary pattern) when the SAME caster
-    casts Earthen Bastion again — that's the ability's literal "lasts
-    until recast" requirement, needing no timer at all. **Earthen
-    Bastion** (`earthen_bastion`, MainHand-independent utility spell):
-    350 mana, 10s cd, instant, 25×5×2 (width×height×thickness — only
-    the width was specified, height/thickness are placeholders), no
-    damage/effect. `AbilityEarthenBastion.StructurePrefab` is
-    deliberately left `{fileID: 0}` (null) — see "Not yet done".
+    at the aimed point (rotated so its width axis is perpendicular to
+    the caster's current facing), scaled by `PlacedStructure`
+    (`Scripts/Abilities/PlacedStructure.cs`, `RequireComponent(BoxCollider)`,
+    non-trigger — a real obstacle, unlike `GroundPatch`'s trigger). It
+    has no lifetime; `PlayerAbilities.activeStructures` (per-caster,
+    per-ability) despawns the previous one when the same caster casts
+    the same ability again. Earthen Bastion uses this — its prefab
+    still needs Editor setup, see "Not yet done".
+  - **Weapon-scaling damage**: `AbilityData.WeaponDamagePercent` (0 =
+    none) — total damage is `Damage + WeaponDamage × WeaponDamagePercent`,
+    computed in `PlayerAbilities.ResolveTotalDamage` and used everywhere
+    an ability's damage is read. `StatType.WeaponDamageBonus` adds a
+    flat bonus to weapon damage itself, read by both
+    `PlayerAutoAttack`'s basic swing and `ResolveWeaponDamage`, so it
+    also flows proportionally into `WeaponDamagePercent` abilities.
+  - **Melee-only gating**: `AbilityData.RequiresMeleeWeapon` blocks
+    casting unless `CharacterEquipment.MainHandWeapon` is non-null
+    (fists don't count) — checked client-side (via the profile) and
+    server-side.
+  - **Caster-facing AoEs**: `AbilityData.EnemiesAroundCaster`/
+    `ConeAroundCaster` hit every non-player `Targetable` within
+    `GroundEffectRadius` (the cone variant also filtered by `ConeAngle`
+    via `FacingCone.IsWithin`) — used by Reaper's Wheel/Seismic Slam
+    (circle) and Cleave (cone). `ChargeForwardDistance`/`ChargeToTarget`
+    drive the caster via `PlayerMovement.ServerBeginPull`: the former
+    (Trample) charges straight forward a fixed distance, hitting every
+    enemy within 2.5 units of the line; the latter (Team Up) charges to
+    just short of a unit target and applies `Effect` to the *target*,
+    not the caster — a support "peel" ability, whose effect is a full
+    damage redirect to the caster (reuses the One For All redirect
+    mechanism, just short-duration and 100% instead of long-duration and
+    partial).
+  - **Stun**: `StatusEffectData.IsStun`, read via
+    `CharacterStats.IsStunned`. Only `EnemyAI` obeys it (freezes
+    movement/attacks) — no ability currently stuns a player.
+  - **HP-threshold item bonuses**: `ItemData.HpThresholdEffects` —
+    `CharacterEquipment` evaluates it once/sec and swaps which side's
+    `StatBonus`es are applied when the wearer's health fraction crosses
+    `HealthPercentThreshold`, keyed by `(item, index, above/below)`
+    tuples so both sides' modifiers can be independently removed.
+    Barbarian's Mantle uses this (armor above the threshold, damage
+    below it).
+  - **Two-handed weapons**: `ItemData.TwoHanded` — a two-handed MainHand
+    item occupies OffHand too. Enforced in `MainMenu`'s gear-equip click
+    handler (auto-clears the conflicting slot) and authoritatively in
+    `CharacterEquipment.SetGearServerRpc` (MainHand, slot 11, is always
+    processed before OffHand, slot 12, so OffHand is forced null if
+    MainHand resolved to a two-handed item).
+  - **Dispel**: `AbilityData.RemovesNegativeEffect` strips one active
+    `StatusEffectData.IsNegative` effect from the target (arbitrary pick
+    if more than one is active) via `CharacterStats.RemoveOneNegativeEffect`.
+    Every buff/aura effect defaults `IsNegative` to false and is never
+    dispellable.
+  - **Aura spells**: `AbilityData.IsAuraSpell` + `AuraRange` +
+    `AuraReveals` — cast once (no target), grants a permanent, gear-less
+    aura that never expires. `CharacterEquipment` tracks at most one
+    active cast-aura per caster (`SetActiveAura`), so casting a
+    different aura spell always replaces the previous one; pulsed every
+    `FixedUpdate` tick the same way an item's own `Auras` are
+    (`PulseAura`). A reveal-only aura is carried via
+    `NetworkVariable<bool> CastAuraRevealsMobs`, read by `PlayerHUD`
+    alongside `ItemData.Reveals`. Echolocation is the reveal-only case
+    (`AuraReveals`, no `Effect`); Aura of Replenishment/Regeneration
+    each pulse an `Effect` instead.
+  - **Global cooldown**: starting any cast locks out starting a
+    different one for 1.5s, on top of that ability's own cooldown — one
+    shared gate across every slot. Same predict-on-client/
+    confirm-or-rollback-via-server pattern as per-ability cooldowns
+    (`predictedGlobalCooldownReady` / `serverGlobalCooldownReadyTime` in
+    `PlayerAbilities`). No dedicated UI; a blocked cast shows the normal
+    transient rejection notice.
+  - **Air hover**: `ItemData.GrantsAirHover` — while airborne, pressing
+    Jump again (once per airtime, re-armed on landing) suspends gravity
+    for `hoverDuration` (2s) while WASD keeps steering normally, unlike
+    a normal fall (which locks in launch-time momentum). Fully
+    owner-local, consistent with the rest of `PlayerMovement`'s trust
+    model — no server round trip, and no interaction with
+    `MovementValidator` (hovering only affects vertical velocity; the
+    validator only polices horizontal speed and below-ground). **Boots
+    of Lightness** grants it.
 - **Data assets + stable Ids** (`Scripts/Data/GameDatabase.cs`):
   `AbilityData`, `ItemData`, `StatusEffectData` each carry a `string Id`
   and are discovered with `Resources.LoadAll` from
@@ -455,22 +230,21 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   reordering/renaming/adding assets can't rebind anything. Loadout/gear
   sync RPCs send `;`-joined Id strings. **Adding content = drop a new
   asset in the right `Resources/Data` folder with a unique `Id`; no code
-  or Inspector wiring.** Current Ids: abilities `firebolt`, `icebolt`;
-  item `shield`; effects `burn`, `slow`. `WeaponData` (mob melee) lives in
-  `Assets/Data/Weapons/` (referenced directly by mob prefabs, not looked
-  up by Id). `Create Asset` menu paths are all under `Encounter/`.
+  or Inspector wiring.** `WeaponData` (mob/player melee+ranged basic
+  attacks) lives in `Assets/Data/Weapons/` (referenced directly by mob
+  prefabs and `ItemData.Weapon`, not looked up by Id). `Create Asset`
+  menu paths are all under `Encounter/`.
 - **Player profile** (`Scripts/Settings/PlayerProfile.cs`): one
   `[Serializable]` object for everything the local player has chosen —
   skill slot Ids + hotkeys (`KeyCode` + shift flag), gear Ids per
   `GearSlot`, movement `KeyCode[]` indexed by `MovementAction`, UI scale.
   `ProfileStore.Current` loads it from
   `Application.persistentDataPath/profile.json` on first access and
-  `Save()` is called when leaving a menu panel / closing the Escape menu /
-  entering the testing area. `Normalize()` repairs array lengths so old
-  files stay loadable. This replaced the old `LoadoutSelection` /
-  `GearSelection` / `MovementBindings` / `UIScale.Value` statics. Still
-  local-only, not the account-backed unlock-gated profile from
-  `DESIGN_IDEAS.md` — but it's the shape that will grow into it.
+  `Save()` is called when leaving a menu panel / closing the Escape menu
+  / entering the testing area. `Normalize()` repairs array lengths so
+  old files stay loadable. Local-only, not the account-backed
+  unlock-gated profile `DESIGN_IDEAS.md` describes — but it's the shape
+  that will grow into it.
 - **Combat pipeline** (`Scripts/Combat/`): `CharacterStats.ReceiveHit(in
   HitInfo)` is the *only* way anything hostile reaches a character —
   projectile impact, instant cast, mob melee, ground-patch refresh and
@@ -483,55 +257,22 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   (`EffectImmunity {Effect, GroundOnly}`) are registered on
   `CharacterStats` by source (the item) on equip, like stat modifiers,
   and checked in `ReceiveHit` before an effect is applied —
-  `GearIceCleats` (Id `ice_cleats`, Boots) is immune to `slow` from
-  ground patches only; a direct Icebolt still slows. **Auras**:
-  `ItemData.Auras` (`ItemAura {Effect, Range}`) — `CharacterEquipment`
-  pulses the effect (via `CharacterStats.ApplyEffect`, the non-hostile
-  entry) onto every alive player within Range, self included, every 1 s
-  with a 2.5 s duration, so it lapses on leaving range and same-asset
-  auras don't stack.
-  - **Aura spells** (added 2026-09-12 — converted from the old amulet/
-    Echolocator gear items, which no longer exist): `AbilityData
-    .IsAuraSpell` + `AuraRange` + `AuraReveals` — cast once (no target,
-    instant, 50 mana, 0 cd — all unspecified placeholders), no gear
-    required, and it never expires on its own. `CharacterEquipment`
-    tracks at most **one** active cast-aura per caster
-    (`SetActiveAura`/`castAuraEffect`/`castAuraRange` — plain fields, not
-    a list, so casting a *different* aura spell always overwrites
-    whichever was active, WoW-Paladin-style — this was an explicit user
-    decision, asked via `AskUserQuestion`), pulsed every `FixedUpdate`
-    tick exactly like an item's own `Auras` would be (reuses `PulseAura`
-    directly). A reveal-only aura (no `Effect`) is carried via a new
-    `NetworkVariable<bool> CastAuraRevealsMobs`, read by `PlayerHUD`
-    alongside `ItemData.Reveals` when computing `minimapReveals`.
-    **Aura of Replenishment** (`aura_of_replenishment`, grants
-    `mana_aura` — unchanged effect asset/numbers, was the Amulet of
-    Replenishment). **Aura of Regeneration** (`aura_of_regeneration`,
-    grants `rejuvenation` — unchanged, was the Amulet of Regeneration).
-    **Echolocation** (`echolocation`, `AuraReveals: Mobs`, no `Effect` —
-    was the Echolocator item/Trinket). The party-wide pulse range (40,
-    same as the old amulets — confirmed explicitly, not guessed) and the
-    exclusivity rule both came from direct user answers to a clarifying
-    question; only the numbers (mana cost, cast time, cooldown) are
-    placeholders.
-  **Periodic healing**: `StatusEffectData.TickHeal` is the heal-side
-  counterpart to `TickDamage` (either or both can be set;
-  `StatusEffectTracker.Tick` schedules a tick if either is > 0) —
-  `rejuvenation` is 10 hp every 5 s, applied via `CharacterStats.Heal`
-  in `TickEffect`.
-  **`StatType.ManaCostMultiplier`** (base 1,
-  synced as `SyncedManaCostMultiplier`) is applied in
-  `CharacterStats.TrySpendMana`; `GearStaff` (MainHand, 20 dmg / 2 s
-  basic attack, **two-handed as of 2026-09-12**) gives −10% mana cost and
-  +250 max mana (`StatType.MaxMana`, flat). **`StatType.DamageMultiplier`** scales all
-  damage a player deals (applied in `DealDamage` via the attacker's
-  stats, so DoT ticks count too). `GearEmberStone` (Trinket, Id
-  `ember_stone`, was `GearFireTrinket`/`fire_trinket` until renamed
-  2026-09-12 — "Ember Stone"): +10% damage dealt, and a Range-0 aura of
-  `burn` — i.e. the wearer is permanently Burning at the fire-patch rate (self-
-  inflicted, no threat). Put new combat
-  features (combat log, downed state, damage numbers) here, not at
-  call sites.
+  `GearIceCleats` (Boots) is immune to `slow` from ground patches only;
+  a direct Icebolt still slows. **Auras**: `ItemData.Auras`
+  (`ItemAura {Effect, Range}`) — `CharacterEquipment` pulses the effect
+  (via `CharacterStats.ApplyEffect`, the non-hostile entry) onto every
+  alive player within Range, self included, every 1s with a 2.5s
+  duration, so it lapses on leaving range and same-asset auras don't
+  stack. **Periodic healing**: `StatusEffectData.TickHeal` is the
+  heal-side counterpart to `TickDamage` (either or both can be set;
+  `StatusEffectTracker.Tick` schedules a tick if either is > 0),
+  applied via `CharacterStats.Heal` in `TickEffect`.
+  `StatType.ManaCostMultiplier` (base 1, synced as
+  `SyncedManaCostMultiplier`) is applied in `CharacterStats.TrySpendMana`.
+  `StatType.DamageMultiplier` scales all damage a player deals (applied
+  in `DealDamage` via the attacker's stats, so DoT ticks count too). Put
+  new combat features (combat log, downed state, damage numbers) here,
+  not at call sites.
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,
   `Duration`, `StackingMode`, `TickDamage`/`TickInterval` (0 = no DoT),
   `List<StatBonus>` modifiers (same `StatBonus` struct gear uses;
@@ -540,29 +281,26 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   Different assets always stack independently; ticks catch up after a
   stall; callbacks run outside the dictionary walk so a tick that kills
   the target (→ `RestoreFull` → `ClearAll`) is safe.
-  **`EffectStackingMode`** (added 2026-09-11, generalized from what was
-  originally just "reapply extends") governs what happens when the
-  *same* effect asset is reapplied, keyed internally by a `(data,
-  casterId)` struct rather than the asset alone — for two of the three
-  modes `casterId` is pinned to 0 so every caster collides on one shared
-  slot, which is what makes them "one instance" at all:
-  - `RefreshExtendOnly` (default, unchanged behavior — Burn/Slow/the
-    aura effects): one shared instance; reapplying only ever **extends**
-    expiry, never shortens it, and never touches the tick schedule (a
-    due tick still fires even at the exact moment of a refresh).
+  `EffectStackingMode` governs what happens when the *same* effect asset
+  is reapplied, keyed internally by a `(data, casterId)` struct rather
+  than the asset alone — for two of the three modes `casterId` is
+  pinned to 0 so every caster collides on one shared slot, which is
+  what makes them "one instance" at all:
+  - `RefreshExtendOnly` (default — Burn/Slow/the aura effects): one
+    shared instance; reapplying only ever **extends** expiry, never
+    shortens it, and never touches the tick schedule (a due tick still
+    fires even at the exact moment of a refresh).
   - `Override` (`EffectOneForAll`): also one shared instance, but a
     reapplication **always wins outright** — new duration, new caster
-    attribution — regardless of what was left on the old one. For a
-    buff that represents a single exclusive bond: if caster B casts
-    something Override-mode onto a target caster A already has it on,
-    B simply takes over (`AttackerClientId` flips to B), rather than
-    the two casters' applications silently fighting over whichever
-    happens to have the longer remaining duration.
-  - `StackPerCaster` (`EffectRejuvenation`): each caster's application
-    is a genuinely separate `ActiveEffect` (distinct dictionary key), so
-    two different players' heal-over-times on the same target both tick
-    independently — recasting by the *same* caster still just extends
-    their own instance, per the `RefreshExtendOnly` rule.
+    attribution — regardless of what was left on the old one. If caster
+    B casts something Override-mode onto a target caster A already has
+    it on, B simply takes over (`AttackerClientId` flips to B).
+  - `StackPerCaster` (`EffectRejuvenation`, `EffectEverlivingTouch`):
+    each caster's application is a genuinely separate `ActiveEffect`
+    (distinct dictionary key), so two different players' heal-over-times
+    on the same target both tick independently — recasting by the
+    *same* caster still just extends their own instance, per the
+    `RefreshExtendOnly` rule.
   **Known, deliberate limitation, not fixed**: `CharacterStats
   .ActiveEffects` (the client-visible `NetworkList` used for the HUD)
   and `HandleEffectExpired`'s `RemoveAllModifiersFromSource` both still
@@ -570,156 +308,132 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   instances of the same effect only ever show **one** HUD entry, and if
   a `StackPerCaster` effect ever carried `Modifiers` too, one instance
   expiring would wrongly strip the other's stat bonus — inert today
-  since `EffectRejuvenation` (the only `StackPerCaster` effect) has no
-  `Modifiers`, but would need fixing before a future `StackPerCaster`
-  effect used them. `CharacterStats` mirrors active effects into a
+  since neither `StackPerCaster` effect has `Modifiers`, but would need
+  fixing before one did. `CharacterStats` mirrors active effects into a
   `NetworkList<ActiveEffectNet>` (`Id` + expiry in `ServerTime`) purely
   for UI; `PlayerHUD` shows "Burning 2.3s" under own bars and the target
-  frame. `DebuffType` enum is gone. Icebolt's direct hit uses
-  `AbilityData.DirectHitEffectDuration` (5s) vs. the patch's
-  `Effect.Duration` (3s).
+  frame. Icebolt's direct hit uses `AbilityData.DirectHitEffectDuration`
+  (5s) vs. the patch's `Effect.Duration` (3s).
 - **Character collision**: players and mobs live on physics layer 8
-  **Characters** (`TagManager.asset`), and Characters↔Characters is off in
-  the Physics collision matrix (`DynamicsManager.asset`), so characters
-  walk through each other while still colliding with everything on
-  Default (terrain, props). `Player.prefab` and `MobNPC.prefab` roots
-  carry the layer; mob variants inherit it. New character prefabs must
-  be put on Characters too.
-- **Resource numbers** (`Player.prefab`): 1000 health / 1000 mana. Regen
-  is **discrete**: every `regenTickInterval` (5 s) the character gains
-  rate × 5 — base mana regen 1/s → **5 mana per 5 s**, base health regen
-  1.25/s → 6.25 per 5 s; the dead don't regen. Rates stay per-second so
-  gear/aura bonuses read naturally (the Amulet's +1.5/s = +7.5 per tick).
-  Firebolt/Icebolt cost **120 mana** (no cooldown, 2 s cast), so a full
-  pool is ~8 casts and takes 1000/1 = ~17 min to refill from empty on
-  base regen alone — mana is meant to be a real constraint now.
+  **Characters** (`TagManager.asset`), and Characters↔Characters is off
+  in the Physics collision matrix (`DynamicsManager.asset`), so
+  characters walk through each other while still colliding with
+  everything on Default (terrain, props). `Player.prefab` and
+  `MobNPC.prefab` roots carry the layer; mob variants inherit it. New
+  character prefabs must be put on Characters too.
+- **Regen is discrete, not continuous**: every `regenTickInterval` (5s,
+  on `CharacterStats`) the character gains `rate × 5` in one step; the
+  dead don't regen. Rates stay defined in per-second units so gear/aura
+  bonuses read naturally against the base rate even though they're only
+  ever paid out in 5s lumps.
 - **Synced derived stats**: `Stat` modifiers (gear, effects) only exist
-  server-side, so `CharacterStats` mirrors `MaxHealth`/`MaxMana`/`RunSpeed`
-  into `SyncedMaxHealth`/`SyncedMaxMana`/`SyncedRunSpeed`
-  `NetworkVariable`s each server `FixedUpdate` (compare-then-write).
-  **UI and owner movement must read the `Synced*` values**, never the
-  `Stat.Value` on a client — that's the latent bug this fixed (a
-  +MaxHealth item would have shown the wrong bar everywhere).
+  server-side, so `CharacterStats` mirrors `MaxHealth`/`MaxMana`/
+  `RunSpeed` into `SyncedMaxHealth`/`SyncedMaxMana`/`SyncedRunSpeed`
+  `NetworkVariable`s each server `FixedUpdate` (compare-then-write). **UI
+  and owner movement must read the `Synced*` values**, never `Stat.Value`
+  on a client.
 - **Gear**: `CharacterEquipment` re-syncs on `MainMenu.Closed`; only the
   first server-side application calls `RestoreFull()`, later swaps
   `ClampToMax()` (no free mid-fight heal). Wrong-slot items are rejected
-  server-side. `CharacterStats.GetStat(StatType)` is the shared
-  stat lookup.
+  server-side. `CharacterStats.GetStat(StatType)` is the shared stat
+  lookup.
 - **Enemy targeting**: `TargetingMode` (`Proximity`/`HighestThreat`/
   `LowestThreat`/`FarthestPlayer`) and the pure `TargetSelector.Select`
   live in `Scripts/Enemy/TargetSelector.cs`; `EnemyAI` just builds
   `TargetCandidate`s (threat, distance) from connected alive players.
-  Whether a mob participates in threat is still purely "does it have a
+  Whether a mob participates in threat is purely "does it have a
   `ThreatTable` component" (ogres yes, goblins no).
-  - **Healing threat** (added 2026-09-12, per explicit user request):
-    `CharacterStats.Heal` now also generates threat — 15% of the amount
-    actually healed (after `HealingMultiplier`), for both an instant heal
-    and each individual HoT tick (both already funnel through this one
-    method, so no per-ability changes were needed — Radiant Embrace,
-    Blessing of Vitality, Everliving Touch's ticks, and Seraph's Grace
-    all pick this up automatically). Unlike damage threat, a heal never
-    hits one specific mob, so there's no single `ThreatTable` to credit —
-    `GenerateHealingThreat` instead scans every `ThreatTable` in the
-    scene (`FindObjectsByType`, same liberal-scan pattern
-    `PlayerAbilities`' AoE resolves already use) and adds threat for the
-    healer on every mob that **already has the healed character in its
-    own table** (i.e. every mob currently fighting them) — the standard
-    "healing pulls aggro off your tank" MMO convention, not "every mob
-    everywhere." Gated on `healerClientId != NoAttacker`, which — by
-    design, not by accident — excludes aura-pulsed healing entirely
-    (`Aura of Regeneration`'s `rejuvenation` ticks are always applied
-    with `NoAttacker`, same reasoning `HealingMultiplier` already uses
-    to tell cast spells apart from passive auras): only real cast spells
-    generate healing threat, not the always-on aura.
+  - **Healing threat**: `CharacterStats.Heal` also generates threat —
+    15% of the amount actually healed (after `HealingMultiplier`), for
+    both an instant heal and each individual HoT tick (both funnel
+    through this one method, so every healing ability picks it up
+    automatically). A heal never hits one specific mob, so there's no
+    single `ThreatTable` to credit — `GenerateHealingThreat` scans every
+    `ThreatTable` in the scene and adds threat for the healer on every
+    mob that **already has the healed character in its own table** (i.e.
+    every mob currently fighting them). Gated on
+    `healerClientId != NoAttacker`, which excludes aura-pulsed healing
+    entirely (same reasoning `HealingMultiplier` uses).
 - **Menus / dev UI** (`Scripts/UI/`, all IMGUI `OnGUI`, deliberately
   disposable — don't invest in it; real UI should be UI Toolkit): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
   and, after `TestingAreaGate.Entered`, the same panels as an **Escape
   menu** (`MainMenu.IsOpen`). The Gear page is a paper-doll: 3×5 grid of
-  equipment slots on the left, inventory grid (= every unequipped item in
+  equipment slots on the left, inventory grid (every unequipped item in
   the game, no real inventory yet) on the right; items are an "X"
-  placeholder with a hover tooltip until there's 2D art. While open, `PlayerMovement`, `PlayerCamera`,
-  `PlayerTargeting`, `PlayerAbilities` ignore gameplay input; on close
-  `MainMenu.Closed` triggers loadout/gear re-sync. Options page: UI scale
-  (−/+ 25% steps, 75–250%) and movement rebinding (any non-mouse key;
-  binding a key steals it from other movement actions *and* ability
-  slots, and vice versa). Ability hotkeys are limited to 1–5, Shift+1–5,
-  F1–F5, Q/E/R/T/F/G. `DevGui.Begin()` (UI scale) must be the first line of every
-  `OnGUI`, laying out against `UIScale.Width/Height`. The Escape menu
-  also has a **Summon Mobs** page (`PlayerSummon` on the local player
-  object does the spawning; the menu just drives it). **No text fields
-  in in-game panels**: IMGUI's native Tab focus traversal moves keyboard
-  focus into any focusable control even when the Tab event is `Use()`d,
-  and Tab is the tab-targeting key — the summon count is −/+ buttons
-  for exactly that reason. The only text field is the server-address
-  box, which is gone once connected.
+  placeholder with a hover tooltip until there's 2D art. While open,
+  `PlayerMovement`, `PlayerCamera`, `PlayerTargeting`, `PlayerAbilities`
+  ignore gameplay input; on close `MainMenu.Closed` triggers
+  loadout/gear re-sync. Options page: UI scale (−/+ 25% steps, 75–250%)
+  and movement rebinding (any non-mouse key; binding a key steals it
+  from other movement actions *and* ability slots, and vice versa).
+  Ability hotkeys are limited to 1–5, Shift+1–5, F1–F5, Q/E/R/T/F/G.
+  `DevGui.Begin()` (UI scale) must be the first line of every `OnGUI`,
+  laying out against `UIScale.Width/Height`. The Escape menu also has a
+  **Summon Mobs** page (`PlayerSummon` on the local player object does
+  the spawning; the menu just drives it). **No text fields in in-game
+  panels**: IMGUI's native Tab focus traversal moves keyboard focus into
+  any focusable control even when the Tab event is `Use()`d, and Tab is
+  the tab-targeting key — the summon count is −/+ buttons for exactly
+  that reason. The only text field is the server-address box, which is
+  gone once connected.
 - **Party frames** (`Scripts/UI/PartyFrames.cs`, drawn from `PlayerHUD`,
-  top-right, added 2026-09-11): a health+mana row for every *other*
-  connected player, WoW-party-style. No party system exists — this
-  simply lists every player with a `PlayerMovement` (all of them, since
-  it's a shared open lobby). Ordering is identical on every client with
-  no synced state at all: sort by `OwnerClientId` (server-assigned,
-  already known identically everywhere via each `CharacterStats`'
+  top-right): a health+mana row for every *other* connected player,
+  WoW-party-style. No party system exists — this simply lists every
+  player with a `PlayerMovement` (all of them, since it's a shared open
+  lobby). Ordering is identical on every client with no synced state at
+  all: sort by `OwnerClientId` (server-assigned, already known
+  identically everywhere via each `CharacterStats`'
   `NetworkBehaviour.OwnerClientId`), label by that sorted position
   ("Player 1", "Player 2", …) — that's `Slot.PartyNumber`, a *stable
   identity* every viewer agrees on. Each viewer's own entry is skipped —
   not left as a blank row — so the remaining rows stack up from the top
   with no gap. `CurrentHealth`/`CurrentMana`/`SyncedMaxHealth`/
-  `SyncedMaxMana` were already `NetworkVariable`s readable by everyone,
+  `SyncedMaxMana` are already `NetworkVariable`s readable by everyone,
   so this is pure client-side rendering — no new syncing needed.
-  - **F1–F5 party targeting** (fixed, not rebindable — added
-    2026-09-11): `PlayerTargeting` targets whoever is drawn in that
-    *row* on the viewer's own screen (F2 = second row), via
-    `PartyFrames.GetDisplayOrder`'s returned order — **not** the same
-    as `PartyNumber`. Row index is viewer-relative (depends on which
-    entry got skipped for being "you"); `PartyNumber` is the same for
-    everyone regardless of who's watching. Example: canonical order
-    P1,P2,P3,P4 — P2's screen shows rows [P1, P3, P4] labeled "Player
-    1"/"Player 3"/"Player 4"; P2's F2 hits row 1 → P3, even though P3's
-    own label says "Player 3", not "Player 2". **Known conflict, not
-    resolved**: F1–F5 are also selectable ability hotkeys in
-    `MainMenu.AllowedKeyBindings` — a player who binds an ability there
-    will trigger both the ability and party-targeting on the same
-    press. Flagged, not fixed.
+  - **F1–F5 party targeting** (fixed, not rebindable): `PlayerTargeting`
+    targets whoever is drawn in that *row* on the viewer's own screen
+    (F2 = second row), via `PartyFrames.GetDisplayOrder`'s returned
+    order — **not** the same as `PartyNumber`. Row index is
+    viewer-relative (depends on which entry got skipped for being
+    "you"); `PartyNumber` is the same for everyone regardless of who's
+    watching. Example: canonical order P1,P2,P3,P4 — P2's screen shows
+    rows [P1, P3, P4] labeled "Player 1"/"Player 3"/"Player 4"; P2's F2
+    hits row 1 → P3, even though P3's own label says "Player 3", not
+    "Player 2". **Known conflict, not resolved**: F1–F5 are also
+    selectable ability hotkeys in `MainMenu.AllowedKeyBindings` — a
+    player who binds an ability there will trigger both the ability and
+    party-targeting on the same press.
 - **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
   radar bottom-right, north-up, player at centre with a heading tick.
-  **Compass letters** (added 2026-09-11): N/E/S/W drawn at fixed screen
-  positions just inside the rim, tied to the same fixed world axes the
-  map's north-up orientation already used (+Z = N, +X = E) — since the
-  map never rotates to face the player, these need no per-player state
-  and are identical for everyone by construction.
-  **Blank by default**: blips only draw for what the local player's
-  equipped gear reveals (`ItemData.Reveals`, `MinimapReveal` flags
-  Players/Mobs, unioned across worn items, read client-side from the
-  profile). Revealed `Targetable`s within 50 world units draw as blips
-  (players green, mobs **always** red — mob pings never take the
-  target-highlight color even if the pinged mob is your current target;
-  that distinction was removed 2026-09-11 per explicit request, live
-  player blips still turn yellow on your target) - **Players reveal is
-  live**, but **Mobs reveal is a pulse, not a tracker**: `PlayerHUD`
-  snapshots every mob's position every `MobPingInterval` (5s) into
-  `mobPingPositions` (`List<Vector3>`, frozen — not the mob's live
-  transform; this used to carry the mob's `Targetable` too for the
-  highlight, simplified to plain positions once that was dropped),
-  fading the dots out over `MobPingFadeDuration` (4s) before the next
-  pulse, so there's a ~1s blind gap each cycle; `Minimap.Draw` takes
+  Compass letters (N/E/S/W) are drawn at fixed screen positions just
+  inside the rim, tied to the same fixed world axes the map's north-up
+  orientation uses (+Z = N, +X = E) — since the map never rotates to
+  face the player, these need no per-player state and are identical for
+  everyone by construction. **Blank by default**: blips only draw for
+  what the local player's equipped gear reveals (`ItemData.Reveals`,
+  `MinimapReveal` flags Players/Mobs, unioned across worn items, read
+  client-side from the profile). Revealed `Targetable`s within 50 world
+  units draw as blips — players green (turning yellow on your current
+  target), mobs always red. **Players reveal is live**, but **Mobs
+  reveal is a pulse, not a tracker**: `PlayerHUD` snapshots every mob's
+  position every `MobPingInterval` (5s) into `mobPingPositions`
+  (`List<Vector3>`, frozen, not the mob's live transform), fading the
+  dots out over `MobPingFadeDuration` (4s) before the next pulse, so
+  there's a ~1s blind gap each cycle; `Minimap.Draw` takes
   `mobPingPositions`/`mobPingAlpha` alongside the live `blips`/`reveals`.
-  The **Echolocation** aura spell (Id `echolocation`, see above — no
-  longer a Trinket item) grants the Mobs reveal, always on once cast. The
-  reverse direction is
-  `ItemData.BroadcastsLocation` → server-written
-  `CharacterEquipment.BroadcastsLocation` NetworkVariable on the wearer;
-  allies' minimaps draw a broadcasting player regardless of their own
-  reveals (`GearTransmittingBeacon`, Ring1, Id `transmitting_beacon`).
-  **Gear slots: 13, not 15** — `GearSlot` has `Ring1`/`Ring2` only
-  (`Ring3`/`Ring4` removed 2026-09-11), and those two are
-  **interchangeable**: a ring item's `Slot` is just the `Ring1` category,
-  `GearSlotExtensions.IsRing()` treats either physical slot as valid for
-  it in `CharacterEquipment.SetGearServerRpc`'s placement check, and
-  `MainMenu.TargetSlotFor` picks whichever physical ring slot is free
-  (Ring1 first) when equipping one from the inventory grid.
-  No terrain by design.
-  Disc/blip textures are generated at runtime.
+  The **Echolocation** aura spell grants the Mobs reveal, always on once
+  cast. The reverse direction is `ItemData.BroadcastsLocation` →
+  server-written `CharacterEquipment.BroadcastsLocation` NetworkVariable
+  on the wearer; allies' minimaps draw a broadcasting player regardless
+  of their own reveals (**Transmitting Beacon**, Ring1). **Gear slots:
+  13, not 15** — `GearSlot` has `Ring1`/`Ring2` only, and those two are
+  **interchangeable**: a ring item's `Slot` is just the `Ring1`
+  category, `GearSlotExtensions.IsRing()` treats either physical slot as
+  valid for it in `CharacterEquipment.SetGearServerRpc`'s placement
+  check, and `MainMenu.TargetSlotFor` picks whichever physical ring slot
+  is free (Ring1 first) when equipping one from the inventory grid. No
+  terrain by design. Disc/blip textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,
@@ -728,48 +442,21 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
   **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
   current target too — `MovementAction.AutoAttack`, rebindable on the
-  Options page): the server swings the equipped
-  MainHand item's `WeaponData` (or the `Fists` fallback wired on the
-  prefab) every `SwingInterval` while the target is within that weapon's
-  own `Range` and inside the facing cone, stays armed while closing
-  distance, follows Tab target changes, and disarms on untarget/death.
-  **`WeaponData.Range`** (was a shared `const BasicAttackRange = 2`
-  until made per-weapon 2026-09-12, for Hunter's Bow's 50-range basic
-  attack — `BasicAttackRange` still exists as the fallback default,
-  every weapon asset just sets its own `Range` now): `PlayerAutoAttack`
-  reads the equipped weapon's `Range` directly, `EnemyAI` reads its
-  main-hand weapon's `Range` (falling back to `BasicAttackRange` only if
-  unarmed); melee *abilities* are still unaffected, they carry their own
-  `AbilityData.Range`. `WeaponData` owns `SwingInterval`, and `EnemyAI`
-  reads it from its main-hand weapon (its own `attackInterval` is only
-  the unarmed fallback). `ItemData.Weapon` links a MainHand item to its
-  weapon (`GearBroadSword` → `WeaponBroadSword`, 40 dmg / 2 s / 2 range,
-  +100 max health flat, and +40% threat generated via
-  `StatType.ThreatMultiplier` (was +20%, changed 2026-09-12), applied to
-  the attacker's threat in `CharacterStats.AddThreat`; Fists are
-  15 dmg / 1.5 s / 2 range). **Hunter's Bow** (`GearHuntersBow`, Id
-  `hunters_bow`, MainHand, added 2026-09-12): 60 dmg / 2.5 s swing /
-  **50 range** — the first ranged basic attack, no other bonuses, **not**
-  marked two-handed (not requested, even though bows conventionally are
-  — flag if that should change).
-  - **Two-handed weapons** (`ItemData.TwoHanded`, added 2026-09-12): a
-    two-handed MainHand item occupies OffHand too - enforced both in
-    `MainMenu`'s gear-equip click handler (equipping either one
-    auto-clears whatever conflicts with it, for instant UX) and
-    authoritatively in `CharacterEquipment.SetGearServerRpc` (MainHand,
-    slot index 11, is always processed before OffHand, slot 12, in the
-    per-slot loop, so `equippedItems[MainHand]` already reflects the
-    sync's result by the time OffHand is reached - OffHand is forced
-    null there if MainHand resolved to a two-handed item, an
-    unconditional backstop regardless of what the client sent). First
-    (and only) two-handed item: **2H Axe** (`GearTwoHandedAxe`, Id
-    `two_handed_axe`, MainHand, 80 weapon damage, 3s swing interval —
-    set explicitly by the user 2026-09-12, was a 2.5s placeholder — no
-    other bonuses).
+  Options page): the server swings the equipped MainHand item's
+  `WeaponData` (or the `Fists` fallback wired on the prefab) every
+  `SwingInterval` while the target is within that weapon's own `Range`
+  and inside the facing cone, stays armed while closing distance,
+  follows Tab target changes, and disarms on untarget/death. Each
+  weapon sets its own `Range` (`WeaponData.Range`, default 2 for melee —
+  `BasicAttackRange` is the fallback constant); Hunter's Bow is the
+  first ranged weapon. `ItemData.Weapon` links a MainHand item to its
+  weapon; `Fists` is the unarmed fallback when nothing's equipped.
+  `StatType.ThreatMultiplier` scales all threat an attacker generates
+  (applied in `CharacterStats.AddThreat`) — gear can grant it.
 - **Testing lobby scope** (still placeholders, not the real designs):
-  instant respawn at map centre, `PlayerSummon` (Escape menu → Summon Mobs, spawning
-  `MobGoblin`/`MobOgre` variants on a circle of `mapHalfExtent`), no
-  wipe/reset encounter model, no loot, no unlocks.
+  instant respawn at map centre, `PlayerSummon` (Escape menu → Summon
+  Mobs, spawning `MobGoblin`/`MobOgre` variants on a circle of
+  `mapHalfExtent`), no wipe/reset encounter model, no loot, no unlocks.
 
 ## Asset layout
 
@@ -778,15 +465,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 `Assets/Data/Weapons`, `Assets/Scenes/SampleScene.unity`, `Assets/Settings`
 (URP), `Assets/External` (used third-party subset). Root-level
 `DefaultNetworkPrefabs.asset`, `New Terrain.asset` etc. are Unity-managed.
+`human_readable/` has hand-maintained snapshots (`list_of_all_items.md`,
+`list_of_all_spells.md`) — update these whenever content is added,
+renamed, or retuned.
 
 ## Networking / hosting
 
 - Dedicated Linux server on a VPS (`SERVER_INFO.md`, gitignored, has the
   details and a hard-won-lessons section: `ServerListenAddress` loopback
   default, `UNITY_SERVER` being defined in the Editor, Git-Bash `scp -r`
-  silently dropping files). Server still runs via manual `nohup`, not
-  systemd. The scene's `UnityTransport` is authored with the VPS IP (what
-  a shipped build dials by default); `NetworkBootstrap`'s panel has an
+  silently dropping files). Server runs via manual `nohup`, not systemd.
+  The scene's `UnityTransport` is authored with the VPS IP (what a
+  shipped build dials by default); `NetworkBootstrap`'s panel has an
   address field that defaults to `127.0.0.1` in the Editor (incl. MPPM
   virtual players) and remembers the last address in the profile.
 - A Windows Standalone build was sent to the user's brother and works
@@ -795,14 +485,14 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 ## Not yet done
 
 1. systemd unit for the dedicated server, and **redeploy a fresh server
-   build** — the VPS still runs the pre-refactor build, whose network
-   protocol no longer matches (new NetworkVariables/RPC signatures).
-2. Fire/ice ground patches as URP Decal Projectors (visual only; needs the
-   Decal renderer feature added to the three URP renderer assets in the
-   Editor first) and real particle VFX instead of coloured discs.
+   build** — the VPS still runs an old build, whose network protocol no
+   longer matches (NetworkVariables/RPC signatures have since changed).
+2. Fire/ice ground patches as URP Decal Projectors (visual only; needs
+   the Decal renderer feature added to the three URP renderer assets in
+   the Editor first) and real particle VFX instead of coloured discs.
 3. The designed systems in `DESIGN_IDEAS.md` / `ARCHITECTURE_NOTES.md`:
    loot, account-backed unlock-gated profile, encounter wipe/reset state
-   machine, taunt/threat reset on combat end, two-handed weapons.
+   machine, taunt/threat reset on combat end.
 4. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
 5. **Mob pathfinding via NavMesh** — `EnemyAI` currently steers straight
@@ -811,29 +501,22 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
    corners with the existing `CharacterController` (straight-line chase
    as fallback when no path exists); the user adds a `NavMeshSurface` to
    the terrain and bakes in the Editor (rebake after terrain/prop
-   changes). Decided 2026-09-11, not started.
-6. **Earthen Bastion's wall prefab** — all the gameplay logic is built
+   changes). Not started.
+6. **Earthen Bastion's wall prefab** — the gameplay logic is built
    (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
    ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
    so the spell currently just fizzles with "Structure not configured
-   yet" — a prefab with a `NetworkObject` (correct `GlobalObjectIdHash`)
-   and mesh/material references can't be safely hand-authored as text
-   the way a plain ScriptableObject `.asset` can (same reasoning as the
-   Decal Projector item above — not verifiable without the Editor
-   actually re-serializing it), so this is deliberately left as an
-   Editor step: (1) create a Cube GameObject, (2) add a `NetworkObject`
-   component, (3) add `PlacedStructure` (`Scripts/Abilities/
-   PlacedStructure.cs` — its `RequireComponent(BoxCollider)` adds the
-   `BoxCollider` automatically, leave it as a non-trigger), (4) save as
-   a prefab, (5) register it in `DefaultNetworkPrefabs.asset` like every
-   other spawned prefab (`FireBolt`, `PatchFire`, etc.), (6) drag it
-   onto `AbilityEarthenBastion`'s `StructurePrefab` field. No script
-   changes needed once that's done — `Initialize` already scales
-   whatever's dropped in to 25×5×2 on spawn.
+   yet". Editor steps: (1) create a Cube GameObject, (2) add a
+   `NetworkObject` component, (3) add `PlacedStructure`
+   (`Scripts/Abilities/PlacedStructure.cs` — its
+   `RequireComponent(BoxCollider)` adds the collider automatically,
+   leave it as a non-trigger), (4) save as a prefab, (5) register it in
+   `DefaultNetworkPrefabs.asset` like every other spawned prefab, (6)
+   drag it onto `AbilityEarthenBastion`'s `StructurePrefab` field. No
+   script changes needed once that's done.
 
 ## Notes for future sessions
 
 Treat the above as established direction. `DESIGN_IDEAS.md` is game
 design, `ARCHITECTURE_NOTES.md` is how the code must be shaped to serve
-it, `BOSS_DESIGN.md` is encounter design. The refactor on 2026-09-11 was
-done on branch `refactor/architecture` and merged to `main`.
+it, `BOSS_DESIGN.md` is encounter design.
