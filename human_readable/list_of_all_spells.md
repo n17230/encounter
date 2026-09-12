@@ -44,6 +44,7 @@ retuned — it's a snapshot, not auto-generated.
 | Force Compression | 240 | 25s | Instant | 30 (cast range) | Pulls everyone within a 15-unit radius of the target point toward its center |
 | Force Expansion | 240 | 25s | Instant | 30 (cast range) | Blasts everyone within a 15-unit radius of the target point outward, away from its center |
 | Earthen Bastion | 350 | 10s | Instant | 30 (cast range) | Raises a 25-unit-wide impassable wall at the target point, facing across your current direction. No damage. Lasts until you cast it again (replaces the old wall) — **not yet playable, needs a wall prefab built in the Editor, see review_with_fable.md** |
+| Arctic Winds | 300 | 30s | Instant | 30 | Creates a 25-unit-wide dome centered on the target that follows them for 8s, slowing everyone inside (except you, the caster) by 10%, refreshed continuously while they stay in it — **not yet playable, needs a zone prefab built in the Editor, see review_with_fable.md** |
 
 ## Auras (cast once, permanently active, gear-less)
 

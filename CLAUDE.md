@@ -150,6 +150,23 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     per-ability) despawns the previous one when the same caster casts
     the same ability again. Earthen Bastion uses this — its prefab
     still needs Editor setup, see "Not yet done".
+  - **Following zones**: `AbilityData.IsFollowingZone` +
+    `FollowingZonePrefab`, unit-targeted (not ground-targeted). On
+    resolve, `PlayerAbilities.ResolveFollowingZone` spawns
+    `FollowingZonePrefab` on the target and calls `Initialize` with the
+    target's `Transform`, `Effect`, and two fields reused from the
+    ground-patch system for their existing meaning — `GroundEffectRadius`
+    (zone radius) and `PatchDuration` (how long the zone lasts). The new
+    `FollowingZone` component (`Scripts/Abilities/FollowingZone.cs`,
+    `RequireComponent(SphereCollider)`) is `GroundPatch`'s trigger/
+    occupant-refresh logic with two additions: every `FixedUpdate` it
+    re-centers itself on the followed `Transform` (so the zone chases
+    its target instead of staying put), and it never affects the caster
+    themselves even if they end up standing inside it (matched by
+    `NetworkObjectId`, not `clientId`). Despawns itself once its own
+    duration elapses, independent of what happens to the target. Arctic
+    Winds uses this — its prefab still needs Editor setup, see "Not yet
+    done".
   - **Weapon-scaling damage**: `AbilityData.WeaponDamagePercent` (0 =
     none) — total damage is `Damage + WeaponDamage × WeaponDamagePercent`,
     computed in `PlayerAbilities.ResolveTotalDamage` and used everywhere
@@ -514,6 +531,16 @@ renamed, or retuned.
    `DefaultNetworkPrefabs.asset` like every other spawned prefab, (6)
    drag it onto `AbilityEarthenBastion`'s `StructurePrefab` field. No
    script changes needed once that's done.
+7. **Arctic Winds' zone prefab** — same situation as #6:
+   `AbilityArcticWinds.FollowingZonePrefab` is null, so the spell
+   currently fizzles with "Zone not configured yet". Editor steps: (1)
+   create a GameObject (a Sphere if you want it visible, or empty for
+   an invisible trigger), (2) add a `NetworkObject` component, (3) add
+   `FollowingZone` (`Scripts/Abilities/FollowingZone.cs` — its
+   `RequireComponent(SphereCollider)` adds the collider automatically;
+   `Initialize` sets its radius directly, no scaling needed), (4) save
+   as a prefab, (5) register it in `DefaultNetworkPrefabs.asset`, (6)
+   drag it onto `AbilityArcticWinds`'s `FollowingZonePrefab` field.
 
 ## Notes for future sessions
 

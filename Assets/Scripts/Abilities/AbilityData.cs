@@ -148,4 +148,13 @@ public class AbilityData : ScriptableObject
     public float StructureWidth = 0f;
     public float StructureHeight = 5f;
     public float StructureThickness = 2f;
+
+    // Unit-targeted (RequiresTarget), no damage: spawns FollowingZonePrefab
+    // centered on the target, which then tracks the target's position for
+    // PatchDuration seconds, reapplying Effect to everyone caught within
+    // GroundEffectRadius (both fields reused from the ground-patch system -
+    // same meaning, just driving a moving zone instead of a fixed one).
+    // E.g. Arctic Winds.
+    public bool IsFollowingZone = false;
+    public GameObject FollowingZonePrefab;
 }

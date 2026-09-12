@@ -561,6 +561,11 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Line of sight blocked");
             return;
         }
+        if (ability.IsFollowingZone && ability.FollowingZonePrefab == null)
+        {
+            NotifyCastFizzledClientRpc("Zone not configured yet");
+            return;
+        }
 
         // Every fizzle check above has passed - the cast is actually
         // succeeding, so this is where mana is spent (not at cast start;
@@ -574,6 +579,12 @@ public class PlayerAbilities : NetworkBehaviour
         if (ability.ChargeToTarget)
         {
             ResolveChargeToTarget(ability, target, targetObject);
+            return;
+        }
+
+        if (ability.IsFollowingZone)
+        {
+            ResolveFollowingZone(ability, targetObject);
             return;
         }
 
@@ -832,6 +843,18 @@ public class PlayerAbilities : NetworkBehaviour
         movement.ServerBeginPull(end, ability.ChargeSpeed, duration);
 
         target.Stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
+    }
+
+    // Unit-targeted: spawns a FollowingZone centered on the target that
+    // tracks their position for the ability's duration, reapplying Effect
+    // to everyone caught inside - e.g. Arctic Winds. Reuses GroundEffectRadius
+    // for the zone's radius and PatchDuration for how long it lasts (same
+    // fields ground patches use for their own radius/lifetime).
+    private void ResolveFollowingZone(AbilityData ability, NetworkObject targetObject)
+    {
+        GameObject instance = Instantiate(ability.FollowingZonePrefab, targetObject.transform.position, Quaternion.identity);
+        instance.GetComponent<NetworkObject>().Spawn();
+        instance.GetComponent<FollowingZone>().Initialize(targetObject.transform, ability.Effect, ability.PatchDuration, ability.GroundEffectRadius, OwnerClientId, NetworkObjectId);
     }
 
     private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 point)
