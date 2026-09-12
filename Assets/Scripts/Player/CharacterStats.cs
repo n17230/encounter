@@ -255,7 +255,11 @@ public class CharacterStats : NetworkBehaviour
         }
     }
 
-    private void DealDamage(float rawDamage, ulong attackerClientId, CharacterStats directAttacker = null)
+    // Returns the actual (post-mitigation) damage dealt - callers that
+    // need to know how much actually landed (e.g. TickEffect's lifesteal)
+    // use it; everyone else just ignores it, same as before this returned
+    // anything.
+    private float DealDamage(float rawDamage, ulong attackerClientId, CharacterStats directAttacker = null)
     {
         CharacterStats attacker = directAttacker != null ? directAttacker : AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
@@ -307,6 +311,8 @@ public class CharacterStats : NetworkBehaviour
 
         // 1 threat per 1 point of damage actually dealt (post-mitigation).
         AddThreat(mitigated, attackerClientId);
+
+        return mitigated;
     }
 
     // Reduces health and fires OnDeath if needed, with no mitigation,
@@ -360,7 +366,20 @@ public class CharacterStats : NetworkBehaviour
 
     private void TickEffect(StatusEffectTracker.ActiveEffect effect)
     {
-        if (effect.Data.TickDamage > 0f) DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+        if (effect.Data.TickDamage > 0f)
+        {
+            float dealt = DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+
+            // Lifesteal heals whoever applied the effect (the caster), not
+            // the effect's holder (the target) - a separate character, so
+            // this goes through the normal Heal() path (HealingMultiplier,
+            // healing threat, all apply exactly like any other heal) on
+            // THEIR CharacterStats, not this one. E.g. Soul Siphon.
+            if (effect.Data.TickLifestealPercent > 0f)
+            {
+                AttackerStats(effect.AttackerClientId)?.Heal(dealt * effect.Data.TickLifestealPercent, effect.AttackerClientId);
+            }
+        }
         if (effect.Data.TickHeal > 0f) Heal(effect.Data.TickHeal, effect.AttackerClientId);
     }
 

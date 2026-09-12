@@ -311,6 +311,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   heal-side counterpart to `TickDamage` (either or both can be set;
   `StatusEffectTracker.Tick` schedules a tick if either is > 0),
   applied via `CharacterStats.Heal` in `TickEffect`.
+  **Tick lifesteal**: `StatusEffectData.TickLifestealPercent` — a
+  fraction of each tick's actual (post-mitigation) `TickDamage` also
+  heals whoever applied the effect, via a normal `Heal()` call on
+  *their* `CharacterStats` (so it gets `HealingMultiplier` and healing
+  threat like any other heal, distinct from the target taking the
+  damage). Needed `DealDamage` to return the mitigated amount it
+  actually dealt, instead of just void. E.g. Soul Siphon.
   `StatType.ManaCostMultiplier` (base 1, synced as
   `SyncedManaCostMultiplier`) is applied in `CharacterStats.TrySpendMana`.
   `StatType.DamageMultiplier` scales all damage a player deals (applied

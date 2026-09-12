@@ -52,6 +52,12 @@ public class StatusEffectData : ScriptableObject
     public float TickHeal = 0f;
     public float TickInterval = 1f;
 
+    // If > 0 (and TickDamage is set), this fraction of the actual
+    // (post-mitigation) damage dealt on each tick also heals whoever
+    // applied the effect - a life-drain DoT, e.g. Soul Siphon. 0 (the
+    // default) means no lifesteal.
+    public float TickLifestealPercent = 0f;
+
     // Stat modifiers held for as long as the effect is active - see
     // StackUpToLimit above, one copy of these is added per stack.
     public List<StatBonus> Modifiers = new List<StatBonus>();
