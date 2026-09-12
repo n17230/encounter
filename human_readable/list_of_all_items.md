@@ -18,6 +18,12 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 |---|---|
 | Barbarian's Mantle | Above 50% HP: −15% damage taken. Below 50% HP: +15% damage dealt. |
 
+## Cape
+
+| Item | Effect |
+|---|---|
+| Champion's Cloak | −10% damage dealt, +20% threat generated |
+
 ## Boots
 
 | Item | Effect |
@@ -61,4 +67,4 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 ## Slots with nothing yet
 
-Helmet, Cape, Gloves, Legs.
+Helmet, Gloves, Legs.
