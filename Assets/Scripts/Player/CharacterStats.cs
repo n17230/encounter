@@ -398,7 +398,10 @@ public class CharacterStats : NetworkBehaviour
     // healerClientId (optional) looks up the healer's own HealingMultiplier
     // (gear) and scales the amount by it, mirroring how DealDamage applies
     // the attacker's DamageMultiplier. NoAttacker (the default) = no
-    // scaling, for regen ticks and other sourceless healing.
+    // scaling, for regen ticks and other sourceless healing - and also
+    // means no healing threat below, same reasoning as
+    // HealingMultiplier's own NoAttacker case (aura-pulsed healing is
+    // deliberately excluded, not just an oversight).
     public void Heal(float amount, ulong healerClientId = NoAttacker)
     {
         if (!IsServer) return;
@@ -406,6 +409,35 @@ public class CharacterStats : NetworkBehaviour
         if (healer != null) amount *= healer.HealingMultiplier.Value;
 
         CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + amount);
+
+        if (healerClientId != NoAttacker) GenerateHealingThreat(amount, healerClientId);
+    }
+
+    // Healing generates threat too (15% of the amount actually healed,
+    // post-HealingMultiplier) - but unlike damage, a heal doesn't hit any
+    // one mob directly, so there's no single ThreatTable to add to.
+    // Instead this adds threat for the healer on every mob that already
+    // has the HEALED character (this) in ITS OWN threat table - i.e.
+    // every mob currently fighting them - the standard "healing pulls
+    // aggro off whatever's attacking your target" MMO convention. Fires
+    // for both instant heals (ReceiveHit) and HoT ticks (TickEffect),
+    // since both funnel through this one method.
+    private const float HealingThreatPercent = 0.15f;
+
+    private void GenerateHealingThreat(float healAmount, ulong healerClientId)
+    {
+        if (healAmount <= 0f) return;
+
+        CharacterStats healer = AttackerStats(healerClientId);
+        float multiplier = healer != null ? healer.ThreatMultiplier.Value : 1f;
+        float threatAmount = healAmount * HealingThreatPercent * multiplier;
+
+        foreach (ThreatTable table in FindObjectsByType<ThreatTable>(FindObjectsSortMode.None))
+        {
+            if (table == null) continue;
+            if (!table.ThreatByClientId.TryGetValue(OwnerClientId, out float existingThreat) || existingThreat <= 0f) continue;
+            table.AddThreat(healerClientId, threatAmount);
+        }
     }
 
     // Read-only affordability check (ManaCostMultiplier applied), for

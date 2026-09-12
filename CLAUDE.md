@@ -611,6 +611,26 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `TargetCandidate`s (threat, distance) from connected alive players.
   Whether a mob participates in threat is still purely "does it have a
   `ThreatTable` component" (ogres yes, goblins no).
+  - **Healing threat** (added 2026-09-12, per explicit user request):
+    `CharacterStats.Heal` now also generates threat — 15% of the amount
+    actually healed (after `HealingMultiplier`), for both an instant heal
+    and each individual HoT tick (both already funnel through this one
+    method, so no per-ability changes were needed — Radiant Embrace,
+    Blessing of Vitality, Everliving Touch's ticks, and Seraph's Grace
+    all pick this up automatically). Unlike damage threat, a heal never
+    hits one specific mob, so there's no single `ThreatTable` to credit —
+    `GenerateHealingThreat` instead scans every `ThreatTable` in the
+    scene (`FindObjectsByType`, same liberal-scan pattern
+    `PlayerAbilities`' AoE resolves already use) and adds threat for the
+    healer on every mob that **already has the healed character in its
+    own table** (i.e. every mob currently fighting them) — the standard
+    "healing pulls aggro off your tank" MMO convention, not "every mob
+    everywhere." Gated on `healerClientId != NoAttacker`, which — by
+    design, not by accident — excludes aura-pulsed healing entirely
+    (`Aura of Regeneration`'s `rejuvenation` ticks are always applied
+    with `NoAttacker`, same reasoning `HealingMultiplier` already uses
+    to tell cast spells apart from passive auras): only real cast spells
+    generate healing threat, not the always-on aura.
 - **Menus / dev UI** (`Scripts/UI/`, all IMGUI `OnGUI`, deliberately
   disposable — don't invest in it; real UI should be UI Toolkit): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
