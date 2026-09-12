@@ -416,6 +416,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     every mob currently fighting them). Gated on
     `healerClientId != NoAttacker`, which excludes aura-pulsed healing
     entirely (same reasoning `HealingMultiplier` uses).
+  - **Mana orb drops**: every mob has a flat 5% chance
+    (`EnemyAI.ManaOrbDropChance`) on death to spawn a `ManaOrb`
+    (`Scripts/Enemy/ManaOrb.cs`) at its death position — a
+    trigger pickup that restores 250 mana (`CharacterStats.RestoreMana`,
+    a flat add with no `HealingMultiplier`, since it isn't healing) to
+    the first player who touches it, then despawns itself. The prefab is
+    loaded via `Resources.Load<GameObject>("Prefabs/ManaOrb")`
+    (`ManaOrb.TrySpawn`) rather than wired per-mob-prefab, so every
+    current and future mob picks it up automatically — the prefab still
+    needs Editor setup, see "Not yet done".
 - **Menus / dev UI** (`Scripts/UI/`, all IMGUI `OnGUI`, deliberately
   disposable — don't invest in it; real UI should be UI Toolkit): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
@@ -589,6 +599,18 @@ renamed, or retuned.
    `Initialize` sets its radius directly, no scaling needed), (4) save
    as a prefab, (5) register it in `DefaultNetworkPrefabs.asset`, (6)
    drag it onto `AbilityArcticWinds`'s `FollowingZonePrefab` field.
+8. **Mana orb pickup prefab** — the drop-chance roll and pickup logic
+   are built (`EnemyAI.HandleDeath`, `ManaOrb.cs`), but nothing exists
+   yet at `Resources/Prefabs/ManaOrb`, so `ManaOrb.TrySpawn` currently
+   just logs a warning and skips the drop. Editor steps: (1) create a
+   GameObject (whatever visual you want for the orb, or a placeholder
+   primitive), (2) add a `NetworkObject` component, (3) add `ManaOrb`
+   (`Scripts/Enemy/ManaOrb.cs` — its `RequireComponent(SphereCollider)`
+   adds the collider automatically; set it to `isTrigger`), (4) save it
+   as a prefab at exactly `Assets/Resources/Prefabs/ManaOrb.prefab`
+   (the path `Resources.Load` looks up — no field to wire it to), (5)
+   register it in `DefaultNetworkPrefabs.asset` like every other spawned
+   prefab.
 
 ## Notes for future sessions
 

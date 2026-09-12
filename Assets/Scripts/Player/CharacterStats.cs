@@ -184,6 +184,14 @@ public class CharacterStats : NetworkBehaviour
         ShieldAmount.Value = amount;
     }
 
+    // Flat mana restore (e.g. a mana orb pickup) - no HealingMultiplier,
+    // this isn't healing. Server-only.
+    public void RestoreMana(float amount)
+    {
+        if (!IsServer) return;
+        CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + amount);
+    }
+
     // Non-hostile application too (auras, buffs). duration <= 0 uses the
     // effect's own Duration. Server-only.
     public void ApplyEffect(StatusEffectData effect, float duration, ulong attackerClientId, HitSource source)

@@ -17,6 +17,8 @@ public class EnemyAI : NetworkBehaviour
     [SerializeField] private float gravity = -20f;
     [SerializeField] private float deathDespawnDelay = 2f;
 
+    private const float ManaOrbDropChance = 0.05f;
+
     private CharacterController controller;
     private CharacterStats stats;
     private ThreatTable threatTable;
@@ -68,6 +70,7 @@ public class EnemyAI : NetworkBehaviour
     {
         isDead = true;
         if (animator != null) animator.SetTrigger("death");
+        if (Random.value < ManaOrbDropChance) ManaOrb.TrySpawn(transform.position);
         StartCoroutine(DespawnAfterDelay());
     }
 
