@@ -36,6 +36,53 @@ Living document for boss encounter concepts, separate from
   - What "unconventional tank" archetypes exist in the game's kit that
     this boss is meant to showcase?
 
+## Boss 3 — "Skeleton Tactician" escort encounter
+
+A five-mob encounter: **the Tactician is the boss**, protected by four
+skeleton escorts (Warrior, Archer, Healer, Mage) who fight as a
+coordinated unit for as long as the Tactician is alive.
+
+- **The Tactician avoids melee.** It opens the fight as a kiting ranged
+  attacker, always trying to keep its distance from players, protected
+  behind its escort. It's only forced into melee once a player directly
+  engages it, or gets within 15 yards of it, or the escort is mostly
+  dead (fewer than 3 skeletons left) — at which point it stops kiting
+  and just fights.
+- **While the Tactician is alive, it broadcasts a coordination aura**
+  ("Tactical Instruction") to the rest of the escort: the Warriors focus
+  whoever's threatening the Tactician, the Mage focuses whoever's
+  closest to the Archers, the Archers focus whoever's farthest away, and
+  the whole escort gets a mana-regen boost plus immunity to slow effects
+  from ice spells. **The instant the Tactician dies, all of that goes
+  away** — the surviving escort reverts to plain threat-table AI, no
+  more coordinated targeting, no more mana sustain. This is the
+  fight's central tension: burn the Tactician first to make the escort
+  fall apart into disorganized trash, or clear the escort first to strip
+  its protection and force it into melee — either path works, they're
+  just different fights.
+- **Warrior**: the melee anchor. Tanky (copies the Goblin Brute's
+  stats), stuns periodically, and goes into a temporary enrage
+  (more damage, more armor, a heal) whenever a player gets close to the
+  Tactician — it's the thing punishing players for getting aggressive
+  toward the boss while the escort's still up.
+- **Archer**: ranged DPS. Slows whatever it's shooting, and protects
+  itself by falling back behind the Warriors (without losing its own
+  target) whenever the Mage has to intervene on its behalf. Also
+  punishes low-health targets with a follow-up shot.
+- **Healer**: pure support, no weapon of its own — keeps the escort
+  topped off with a heal-over-time and an emergency burst heal, and can
+  drain a player's mana to refill its own when it runs low.
+  Deliberately the priority-target of the group if left alone.
+- **Mage**: ranged caster and the escort's utility piece. Blinds
+  whoever's threatening an Archer, throws the player's own Icebolt
+  spell, and drops a protective dome around any escort member who's
+  dropped low that blocks ranged damage from reaching them.
+- **The "blinding" debuffs (Enshroud, Concussive Shot) are a new kind of
+  effect for the game** — they don't just apply a stat penalty, they
+  actually darken the affected player's own screen, so they can only
+  see what's within a shortened vision range. Purely a per-player visual
+  effect; nobody else's view is affected.
+
 ## Open questions / to flesh out
 
 - How many bosses total, and do they share a common structure (phases,
@@ -49,3 +96,6 @@ Living document for boss encounter concepts, separate from
 
 - 2026-09-07: Initial capture — Boss 1 (speed scales with DPS taken) and
   Boss 2 (%HP damage + damage-based self-heal, unconventional tank check).
+- 2026-09-13: Boss 3 captured — the Skeleton Tactician escort encounter,
+  fully designed (five mobs, coordination aura, vision-darkening debuffs);
+  implementation in progress.
