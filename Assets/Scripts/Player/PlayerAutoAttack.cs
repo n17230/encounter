@@ -142,6 +142,10 @@ public class PlayerAutoAttack : NetworkBehaviour
         if (toTarget.magnitude > weapon.Range) return; // armed, waiting to get in reach
         if (!FacingCone.IsWithin(transform, targetObject.transform.position, facingConeAngle)) return;
 
+        // A ranged weapon (e.g. Hunter's Bow) can't reach a target standing
+        // inside an active Arcane Shield dome - melee weapons are unaffected.
+        if (weapon.Range > WeaponData.BasicAttackRange && ArcaneShieldZones.Blocks(targetObject.transform.position)) return;
+
         nextSwingTime = Time.time + weapon.SwingInterval;
         target.Stats.ReceiveHit(new HitInfo
         {

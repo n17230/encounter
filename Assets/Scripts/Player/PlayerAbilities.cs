@@ -466,6 +466,15 @@ public class PlayerAbilities : NetworkBehaviour
                 NotifyCastRejectedClientRpc(ability.Id, "Target not in front of you");
                 return;
             }
+            // A ranged spell can't reach a target standing inside an active
+            // Arcane Shield dome - melee-range abilities are unaffected.
+            // Server-only knowledge (see ArcaneShieldZones), so this can't
+            // be predicted client-side the way the checks above are.
+            if (ability.Range > WeaponData.BasicAttackRange && ArcaneShieldZones.Blocks(startTargetObject.transform.position))
+            {
+                NotifyCastRejectedClientRpc(ability.Id, "Target is shielded");
+                return;
+            }
         }
 
         if (!stats.HasEnoughMana(ability.ManaCost))
