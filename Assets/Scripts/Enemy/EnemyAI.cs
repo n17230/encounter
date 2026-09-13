@@ -139,7 +139,16 @@ public class EnemyAI : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (IsServer) stats.OnDeath += HandleDeath;
+        if (!IsServer) return;
+        stats.OnDeath += HandleDeath;
+
+        // The Tactician itself is always chill-immune, not just its escort
+        // (which get it conditionally, via UpdateTacticalInstruction, while
+        // its aura reaches them).
+        if (mobRole == MobRole.SkeletonTactician && chillImmunityEffect != null)
+        {
+            stats.AddImmunity(new EffectImmunity { Effect = chillImmunityEffect, GroundOnly = false }, this);
+        }
     }
 
     public override void OnNetworkDespawn()
