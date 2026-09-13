@@ -82,4 +82,12 @@ public class StatusEffectData : ScriptableObject
     // Cleanse) - see CharacterStats.RemoveOneNegativeEffect. False (the
     // default) for buffs/auras, which a dispel should never touch.
     public bool IsNegative = false;
+
+    // If > 0, while active the holder's own view is darkened - they can
+    // only see the environment and other characters within this distance
+    // (everything past it fades to black on their own screen only; nobody
+    // else's view is affected). Purely a client-side rendering effect, no
+    // gameplay-stat component - see the owner-local fog toggle wherever
+    // this is read. 0 (the default) means no vision reduction.
+    public float VisionRange = 0f;
 }

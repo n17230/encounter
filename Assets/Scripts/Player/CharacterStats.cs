@@ -248,6 +248,27 @@ public class CharacterStats : NetworkBehaviour
         return found != null && effects.Remove(found);
     }
 
+    // Whether this specific effect asset is currently active, regardless of
+    // who applied it - e.g. so a mob ability can skip recasting a debuff
+    // another instance of itself already has up on the same target (Tendon
+    // Shot). Only meaningful for non-StackPerCaster effects, same caveat as
+    // StatusEffectTracker.TryGet itself.
+    public bool HasActiveEffect(StatusEffectData effect) => effects.TryGet(effect, out _);
+
+    // The currently active effect matching this asset, if any - for reading
+    // its remaining duration/expiry (e.g. UI, or an AI decision that cares
+    // not just whether but how long is left).
+    public bool TryGetActiveEffect(StatusEffectData effect, out float expireTime)
+    {
+        if (effects.TryGet(effect, out StatusEffectTracker.ActiveEffect active))
+        {
+            expireTime = active.ExpireTime;
+            return true;
+        }
+        expireTime = 0f;
+        return false;
+    }
+
     // True while any active effect (e.g. Trample, Seismic Slam) has
     // IsStun set - movement/casting/attacking should all be blocked. Only
     // EnemyAI currently checks this; no ability stuns a player yet.
