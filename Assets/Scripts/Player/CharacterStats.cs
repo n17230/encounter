@@ -192,6 +192,13 @@ public class CharacterStats : NetworkBehaviour
         CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + amount);
     }
 
+    // Flat mana loss (e.g. Mana Leech), floored at 0. Server-only.
+    public void DrainMana(float amount)
+    {
+        if (!IsServer) return;
+        CurrentMana.Value = Mathf.Max(0f, CurrentMana.Value - amount);
+    }
+
     // Non-hostile application too (auras, buffs). duration <= 0 uses the
     // effect's own Duration. Server-only.
     public void ApplyEffect(StatusEffectData effect, float duration, ulong attackerClientId, HitSource source)
