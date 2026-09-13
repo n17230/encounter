@@ -486,6 +486,41 @@ public class MainMenu : MonoBehaviour
         "Ring 1", "Ring 2", "Trinket", "Main", "Off",
     };
 
+    // Slot-category outline colors for the gear grid (both the equipment
+    // paper-doll and the inventory side, keyed by whichever slot an item
+    // actually belongs to - GearSlotExtensions.IsRing() means either ring
+    // slot maps the same way). Slots not listed here (Helmet, Cape,
+    // Gloves, Legs) get no colored outline.
+    private static Color? GetSlotOutlineColor(GearSlot slot)
+    {
+        if (slot.IsRing()) return Color.red;
+        switch (slot)
+        {
+            case GearSlot.Trinket: return Color.green;
+            case GearSlot.MainHand: return Color.cyan;
+            case GearSlot.OffHand: return new Color(0.6f, 0f, 1f);
+            case GearSlot.Necklace: return Color.yellow;
+            case GearSlot.Chest: return Color.blue;
+            case GearSlot.Boots: return Color.black;
+            default: return null;
+        }
+    }
+
+    // Drawn just before the slot's button, slightly larger than it, so the
+    // button's own opaque background covers the middle and only a border a
+    // little bolder than the default button bevel shows around the edge.
+    private static void DrawSlotOutline(Rect rect, GearSlot slot)
+    {
+        Color? color = GetSlotOutlineColor(slot);
+        if (!color.HasValue) return;
+
+        const float thickness = 2f;
+        Color previous = GUI.color;
+        GUI.color = color.Value;
+        GUI.DrawTexture(new Rect(rect.x - thickness, rect.y - thickness, rect.width + thickness * 2f, rect.height + thickness * 2f), Texture2D.whiteTexture);
+        GUI.color = previous;
+    }
+
     // Paper-doll on the left, inventory grid on the right. Items draw as an
     // "X" placeholder until there's 2D art; hovering tells you what it is.
     // "Inventory" is every item in the game that isn't equipped - there's
@@ -511,6 +546,7 @@ public class MainMenu : MonoBehaviour
             ItemData equipped = Profile.GetGear(slots[i]);
             string tooltip = equipped != null ? BuildItemTooltip(equipped) + "\n(click to unequip)" : $"{SlotShortNames[i]} (empty)";
 
+            DrawSlotOutline(rect, slots[i]);
             if (GUI.Button(rect, new GUIContent(equipped != null ? "X" : "", tooltip), icon) && equipped != null)
             {
                 Profile.SetGear(slots[i], null);
@@ -526,6 +562,7 @@ public class MainMenu : MonoBehaviour
             Rect rect = new Rect(inventoryX + (index % inventoryColumns) * (cell + gap), 24f + (index / inventoryColumns) * (cell + gap), cell, cell);
             index++;
 
+            DrawSlotOutline(rect, item.Slot);
             if (GUI.Button(rect, new GUIContent("X", BuildItemTooltip(item) + "\n(click to equip)"), icon))
             {
                 GearSlot targetSlot = TargetSlotFor(item);
