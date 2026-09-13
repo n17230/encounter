@@ -34,7 +34,7 @@ retuned — it's a snapshot, not auto-generated.
 | Everliving Touch | 125 | 0s | Instant | 30 | Heal over time: 125 every 3s for 18s |
 | Aegis of Arcane | 88 | 18s | Instant | 30 | Shields target for 350 |
 | Seraph's Grace | 225 | 0s | 3s | self (50-unit radius) | Heals everyone within 50 units of you, yourself included, for 438 |
-| Cleanse | 75 | 6s | Instant | 30 | Removes one active negative effect from the target |
+| Cleanse | 50 | 6s | Instant | 30 | Removes one active negative effect from the target |
 
 ## Buffs
 

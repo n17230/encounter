@@ -98,6 +98,11 @@ PrefabInstance:
       propertyPath: baseMaxHealth
       value: 800
       objectReference: {fileID: 0}
+    - target: {fileID: 8000000000000000009, guid: 1ec85ee26249d2246892f9a23cd25a54,
+        type: 3}
+      propertyPath: baseArmor
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 8000000000000000010, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: displayName
