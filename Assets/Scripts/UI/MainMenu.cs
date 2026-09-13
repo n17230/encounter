@@ -27,6 +27,7 @@ public class MainMenu : MonoBehaviour
     private int awaitingKeyForSlot = -1;
     private int awaitingKeyForMovement = -1;
     private Vector2 scrollPosition;
+    private Vector2 summonScrollPosition;
     private int summonMobIndex;
     private int summonCount = 1;
 
@@ -365,7 +366,7 @@ public class MainMenu : MonoBehaviour
     // any focusable control and Tab is the tab-targeting key.
     private void DrawSummonPanel()
     {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 120, UIScale.Height / 2f - 150, 240, 300));
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 120, UIScale.Height / 2f - 220, 240, 440));
         GUILayout.Label("Summon Mobs");
 
         PlayerSummon summon = LocalPlayer<PlayerSummon>();
@@ -375,11 +376,18 @@ public class MainMenu : MonoBehaviour
         }
         else
         {
+            // The mob-type list scrolls independently so it can keep
+            // growing (e.g. the Skeleton Tactician escort) without pushing
+            // the count controls / Summon / Back buttons below the fixed
+            // area and out of view - GUILayout.BeginArea clips silently
+            // instead of scrolling on its own.
+            summonScrollPosition = GUILayout.BeginScrollView(summonScrollPosition, GUILayout.Height(220));
             for (int i = 0; i < summon.SummonableMobs.Count; i++)
             {
                 string label = (i == summonMobIndex ? "> " : "") + PlayerSummon.MobLabel(summon.SummonableMobs[i]);
                 if (GUILayout.Button(label)) summonMobIndex = i;
             }
+            GUILayout.EndScrollView();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Count:", GUILayout.Width(50));
