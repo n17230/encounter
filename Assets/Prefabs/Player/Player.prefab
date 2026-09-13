@@ -413,6 +413,11 @@ MonoBehaviour:
   lookSensitivity: 45
   gravity: -20
   jumpSpeed: 8
+  hoverDuration: 2
+  maxStrikes: 5
+  strikeForgetSeconds: 30
+  correctionGraceSeconds: 1
+  spawnGraceSeconds: 2
 --- !u!114 &305210220721416078
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -432,6 +437,7 @@ MonoBehaviour:
   pitchSensitivity: 45
   minPitch: -40
   maxPitch: 75
+  freeLookYawSensitivity: 30
 --- !u!114 &3814996196443048637
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -451,6 +457,7 @@ MonoBehaviour:
   baseManaRegenRate: 1
   baseRunSpeed: 6
   baseArmor: 0
+  regenTickInterval: 5
 --- !u!114 &6829104506017181073
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -478,6 +485,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTargeting
   ShowTopMostFoldoutHeaderGroup: 1
   maxTargetDistance: 100
+  tabTargetRange: 70
+  clickMaxPixels: 5
+  clickMaxSeconds: 0.3
 --- !u!114 &1209163266940824263
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -504,10 +514,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerAbilities
   ShowTopMostFoldoutHeaderGroup: 1
-  abilityPool:
-  - {fileID: 11400000, guid: 07733fd43cda8f946820ecca2f4ec000, type: 2}
-  - {fileID: 11400000, guid: af09b114bb1688d42befbae94c781469, type: 2}
   facingConeAngle: 120
+  groundReticleColor: {r: 0.4, g: 0.8, b: 1, a: 0.6}
+  globalCooldownDuration: 1.5
 --- !u!114 &-8284927077314002535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -523,11 +532,27 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   summonableMobs:
   - {fileID: 3890796378276118879, guid: 0281e490d66af4c419142b983af17c99, type: 3}
-  - {fileID: 1018177955179529192, guid: d7f96adea3f70db4aabbb8caa6d23a55, type: 3}
-  - {fileID: 1018177955179530192, guid: 243271b8148baae449aa5364af33480b, type: 3}
   - {fileID: 1018177955179531192, guid: 69cdd4225df23984ea9b2bed0c28beef, type: 3}
-  mapHalfExtent: 25
+  - {fileID: 1018177955179530192, guid: 243271b8148baae449aa5364af33480b, type: 3}
+  - {fileID: 1018177955179529192, guid: d7f96adea3f70db4aabbb8caa6d23a55, type: 3}
+  - {fileID: 4064439118223071521, guid: 62d3d3362bc2f0e4ab4fca8c4c4507ce, type: 3}
+  - {fileID: 8866449040539460762, guid: bb2579cf4d6fe5a47940f3295599c9d0, type: 3}
+  - {fileID: 5618338672735851254, guid: 4d2e9ccfd96ba5548be414c2f0d1c6b1, type: 3}
+  - {fileID: 5504161804112135288, guid: cc58ecfb90d26f749a3e11ad466a94ff, type: 3}
+  - {fileID: 5140896755906972945, guid: 2fad8f205f1a0854792cb276b33d9438, type: 3}
+  summonRadius: 100
   maxSummonCount: 20
+  skeletonWarriorPrefab: {fileID: 5504161804112135288, guid: cc58ecfb90d26f749a3e11ad466a94ff,
+    type: 3}
+  skeletonArcherPrefab: {fileID: 4064439118223071521, guid: 62d3d3362bc2f0e4ab4fca8c4c4507ce,
+    type: 3}
+  skeletonHealerPrefab: {fileID: 8866449040539460762, guid: bb2579cf4d6fe5a47940f3295599c9d0,
+    type: 3}
+  skeletonMagePrefab: {fileID: 5618338672735851254, guid: 4d2e9ccfd96ba5548be414c2f0d1c6b1,
+    type: 3}
+  skeletonTacticianPrefab: {fileID: 5140896755906972945, guid: 2fad8f205f1a0854792cb276b33d9438,
+    type: 3}
+  encounterFormationSpacing: 3
 --- !u!114 &6082482177394902775
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -558,8 +583,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipment
   ShowTopMostFoldoutHeaderGroup: 1
-  itemPool:
-  - {fileID: 11400000, guid: c392878ae02893a4da28dec86ded20f5, type: 2}
 --- !u!114 &7777777777777770001
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -570,7 +593,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 688a00f91bba844498c7a40789b4daba, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRespawn
   ShowTopMostFoldoutHeaderGroup: 1
   respawnPoint: {x: 0, y: 1, z: 0}
@@ -586,5 +609,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 928b00ab4cc0d934128f4ec10ef0878a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
   unarmedWeapon: {fileID: 11400000, guid: d2ded500f3260885aaa58751ed9fb8ca, type: 2}
   facingConeAngle: 120
