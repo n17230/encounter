@@ -26,3 +26,4 @@ MonoBehaviour:
   DamageRedirectPercent: 0
   IsStun: 0
   IsNegative: 1
+  IsSlow: 1

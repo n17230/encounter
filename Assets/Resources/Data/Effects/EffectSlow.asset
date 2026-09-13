@@ -22,3 +22,4 @@ MonoBehaviour:
     ModifierType: 1
     Value: -0.66
   IsNegative: 1
+  IsSlow: 1

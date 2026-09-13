@@ -29,3 +29,4 @@ MonoBehaviour:
   IsStun: 0
   IsNegative: 1
   VisionRange: 0
+  IsSlow: 1

@@ -383,6 +383,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `RemoveAllModifiersFromSource` still strips every copy at once
     regardless of count, since they all share the same source
     (`effect.Data`).
+  **Slows are the one deliberate exception to "different effects always
+  stack independently"**: `StatusEffectData.IsSlow` marks any
+  `RunSpeed`-reducing effect, and `CharacterStats.ApplyEffect` only ever
+  lets the single strongest currently-active slow actually apply,
+  regardless of which effect assets are involved or who applied them —
+  a weaker slow landing while a stronger one is up is a complete no-op,
+  a strictly stronger one outright removes every other active slow.
+  Re-applying the *same* asset is untouched by this and still goes
+  through its own normal `StackingMode` rule. Currently tags Icebolt's
+  `slow`, Arctic Winds, Crippling Blow, and Tendon Shot.
   **Known, deliberate limitation, not fixed**: `CharacterStats
   .ActiveEffects` (the client-visible `NetworkList` used for the HUD)
   and `HandleEffectExpired`'s `RemoveAllModifiersFromSource` both still

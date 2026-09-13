@@ -205,8 +205,41 @@ public class CharacterStats : NetworkBehaviour
     {
         if (!IsServer || effect == null) return;
         if (IsImmune(effect, source)) return;
+        if (effect.IsSlow && !IsStrongestSlow(effect)) return;
 
         effects.Apply(effect, duration > 0f ? duration : effect.Duration, attackerClientId, Time.time);
+    }
+
+    // Slows never stack, no matter which effect assets are involved (unlike
+    // every other pair of different effects, which stack independently as
+    // normal) - only the single strongest one is ever actually applied. A
+    // new slow weaker than (or equal to) one already active is a no-op; a
+    // strictly stronger one replaces every other currently active slow
+    // outright. Re-applying the SAME asset is unaffected by this - that
+    // still goes through its own normal StackingMode rule.
+    private bool IsStrongestSlow(StatusEffectData incoming)
+    {
+        float incomingMagnitude = SlowMagnitude(incoming);
+        List<StatusEffectData> weaker = new List<StatusEffectData>();
+
+        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+        {
+            if (!active.Data.IsSlow || active.Data == incoming) continue;
+            if (SlowMagnitude(active.Data) >= incomingMagnitude) return false;
+            weaker.Add(active.Data);
+        }
+
+        foreach (StatusEffectData data in weaker) effects.Remove(data);
+        return true;
+    }
+
+    private static float SlowMagnitude(StatusEffectData effect)
+    {
+        foreach (StatBonus bonus in effect.Modifiers)
+        {
+            if (bonus.Stat == StatType.RunSpeed) return -bonus.Value;
+        }
+        return 0f;
     }
 
     // Immunities are keyed by source the same way modifiers are, so gear

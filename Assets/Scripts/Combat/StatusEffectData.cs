@@ -83,6 +83,13 @@ public class StatusEffectData : ScriptableObject
     // default) for buffs/auras, which a dispel should never touch.
     public bool IsNegative = false;
 
+    // A run-speed-reducing effect. Slows never stack across DIFFERENT
+    // effect assets, regardless of source - see CharacterStats.ApplyEffect,
+    // which only lets the single strongest currently-active slow actually
+    // take effect, unlike every other pair of different effects (which
+    // stack independently as normal).
+    public bool IsSlow = false;
+
     // If > 0, while active the holder's own view is darkened - they can
     // only see the environment and other characters within this distance
     // (everything past it fades to black on their own screen only; nobody
