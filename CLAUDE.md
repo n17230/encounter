@@ -458,6 +458,44 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (`ManaOrb.TrySpawn`) rather than wired per-mob-prefab, so every
     current and future mob picks it up automatically — the prefab still
     needs Editor setup, see "Not yet done".
+  - **Skeleton Tactician escort** (see `BOSS_DESIGN.md` for the full
+    encounter design): `EnemyAI.MobRole` (`None`/`SkeletonWarrior`/
+    `SkeletonArcher`/`SkeletonHealer`/`SkeletonMage`/`SkeletonTactician`)
+    — `None` (every existing mob) is completely unaffected by any of
+    this. Each escort role's triggered abilities are checked every
+    `FixedUpdate`, layered on top of (Warrior/Archer/Mage) or replacing
+    (Healer holds position instead of chasing; Tactician gets its own
+    movement state machine entirely) the normal chase-and-attack loop.
+    Ally-awareness (HP-threshold heals/shields, nearest-Warrior
+    repositioning, escort head-count) is done by scanning
+    `FindObjectsByType<EnemyAI>()` for matching `MobRole`s each check,
+    not any kind of registry — fine at this scale (one encounter, a
+    handful of mobs). **Tactical Instruction**: while an alive
+    Tactician is within `tacticalInstructionRange` of an escort member,
+    `UpdateTacticalInstruction` (state-change-gated, not re-applied
+    every tick) grants that member a flat `ManaRegenRate` bonus and
+    immunity to the Slow effect (`EffectImmunity`, same mechanism
+    Ice Cleats uses); `FindTarget` separately swaps in priority
+    targeting for Warrior/Archer/Mage while the aura's active, falling
+    back to their own `targetingMode` otherwise. **Arcane Shield**:
+    `ArcaneShieldZones` (`Scripts/Combat/ArcaneShieldZones.cs`) is a
+    server-only static list of position+radius+expiry — no
+    `NetworkObject`/physical presence at all — checked in
+    `PlayerAutoAttack` and `PlayerAbilities.CastAbilityServerRpc`
+    alongside the existing range/facing-cone checks, so a ranged
+    weapon/spell simply can't target anyone standing inside one; melee
+    is unaffected. Only enforced server-side (can't be predicted
+    client-side), so it surfaces as a normal cast rejection. **Vision
+    darkening** (Enshroud, Concussive Shot): `StatusEffectData
+    .VisionRange` — while active, `PlayerCamera.UpdateVisionEffect`
+    (owner-local) sets `RenderSettings.fog` to fade everything past
+    that distance to black on the affected player's own screen only
+    (`RenderSettings` is per-client, not networked, so nobody else's
+    view changes). **Known simplification**: the Mage's "Icebolt" is a
+    plain `WeaponData` (same damage + Slow effect as the player spell)
+    fired through the ordinary basic-attack path, not an actual cast —
+    it does the same damage and applies the same slow, but doesn't
+    spawn ice ground patches the way the player version does.
 - **Menus / dev UI** (`Scripts/UI/`, all IMGUI `OnGUI`, deliberately
   disposable — don't invest in it; real UI should be UI Toolkit): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
@@ -595,9 +633,11 @@ renamed, or retuned.
 
 ## Not yet done
 
-1. systemd unit for the dedicated server, and **redeploy a fresh server
-   build** — the VPS still runs an old build, whose network protocol no
-   longer matches (NetworkVariables/RPC signatures have since changed).
+1. systemd unit for the dedicated server (still just a manually-launched
+   `nohup` process — no auto-restart on boot/crash). A fresh Linux
+   server build was shipped to the VPS mid-session; it's since fallen
+   behind again (the Skeleton Tactician work and everything after it),
+   so another redeploy is needed once that's ready to test live.
 2. Fire/ice ground patches as URP Decal Projectors (visual only; needs
    the Decal renderer feature added to the three URP renderer assets in
    the Editor first) and real particle VFX instead of coloured discs.
@@ -647,6 +687,22 @@ renamed, or retuned.
    (the path `Resources.Load` looks up — no field to wire it to), (5)
    register it in `DefaultNetworkPrefabs.asset` like every other spawned
    prefab.
+9. **Skeleton Tactician escort — visuals and network-prefab registration**
+   (see `BOSS_DESIGN.md`). The five `MobSkeleton*.prefab` files exist
+   with all their stats/weapon/effect references already wired, but
+   still need: (1) each one's actual visual model parented under its
+   root the same way `VisualGoblin_1` is parented under `MobGoblin_1`
+   (user is attaching `Skeleton_Warrior`/`Skeleton_Archer`/
+   `Skeleton_Mage` etc. from `Assets/PolysplitGames/
+   LowPolyMedievalFantasyBipedCreatures/` separately from this code
+   work) — the Healer and Tactician don't have an obvious matching
+   model in that pack, may need a reused/re-skinned one; (2) all five
+   registered in `DefaultNetworkPrefabs.asset` like every other spawned
+   prefab, or they can't be spawned at all yet; (3) if you want them
+   test-summonable, add them to `PlayerSummon`'s `summonableMobs` on
+   `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
+   on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
+   specified in the design, see `review_with_fable.md`.
 
 ## Notes for future sessions
 
