@@ -12,6 +12,16 @@ public class PlayerSummon : NetworkBehaviour
     [SerializeField] private float summonRadius = 100f;
     [SerializeField] private int maxSummonCount = 20;
 
+    // Skeleton Tactician escort - a single button spawns the whole group at
+    // once (see BOSS_DESIGN.md), rather than one mob type at a time like
+    // the rest of this menu.
+    [SerializeField] private GameObject skeletonWarriorPrefab;
+    [SerializeField] private GameObject skeletonArcherPrefab;
+    [SerializeField] private GameObject skeletonHealerPrefab;
+    [SerializeField] private GameObject skeletonMagePrefab;
+    [SerializeField] private GameObject skeletonTacticianPrefab;
+    [SerializeField] private float encounterFormationSpacing = 3f;
+
     public IReadOnlyList<GameObject> SummonableMobs => summonableMobs;
     public int MaxSummonCount => maxSummonCount;
 
@@ -44,6 +54,44 @@ public class PlayerSummon : NetworkBehaviour
             float angle = Random.Range(0f, Mathf.PI * 2f);
             float x = center.x + Mathf.Cos(angle) * summonRadius;
             float z = center.z + Mathf.Sin(angle) * summonRadius;
+            Vector3 spawnPosition = new Vector3(x, GetSpawnHeight(x, z), z);
+
+            GameObject instance = Instantiate(prefab, spawnPosition, Quaternion.identity);
+            instance.GetComponent<NetworkObject>().Spawn();
+        }
+    }
+
+    public void RequestSummonSkeletonEncounter()
+    {
+        if (!IsOwner) return;
+        RequestSummonSkeletonEncounterServerRpc();
+    }
+
+    [ServerRpc]
+    private void RequestSummonSkeletonEncounterServerRpc()
+    {
+        float angle = Random.Range(0f, Mathf.PI * 2f);
+        Vector3 anchor = transform.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * summonRadius;
+
+        // A tight two-row cluster so the whole escort spawns next to each
+        // other rather than scattered - Warriors/Archer up front, Healer/
+        // Mage/Tactician just behind. Spacing-only formation, no facing.
+        float s = encounterFormationSpacing;
+        (GameObject prefab, Vector3 offset)[] group =
+        {
+            (skeletonWarriorPrefab, new Vector3(-s, 0f, 0f)),
+            (skeletonWarriorPrefab, new Vector3(s, 0f, 0f)),
+            (skeletonArcherPrefab, new Vector3(0f, 0f, 0f)),
+            (skeletonHealerPrefab, new Vector3(-s, 0f, -s)),
+            (skeletonMagePrefab, new Vector3(s, 0f, -s)),
+            (skeletonTacticianPrefab, new Vector3(0f, 0f, -s)),
+        };
+
+        foreach ((GameObject prefab, Vector3 offset) in group)
+        {
+            if (prefab == null) continue;
+            float x = anchor.x + offset.x;
+            float z = anchor.z + offset.z;
             Vector3 spawnPosition = new Vector3(x, GetSpawnHeight(x, z), z);
 
             GameObject instance = Instantiate(prefab, spawnPosition, Quaternion.identity);

@@ -394,6 +394,13 @@ public class MainMenu : MonoBehaviour
                 summon.RequestSummon(summonMobIndex, summonCount);
                 CloseInGameMenu();
             }
+
+            GUILayout.Space(10);
+            if (GUILayout.Button("Summon Skeletons", GUILayout.Height(30)))
+            {
+                summon.RequestSummonSkeletonEncounter();
+                CloseInGameMenu();
+            }
         }
 
         if (GUILayout.Button("Back")) LeavePanel();
