@@ -594,9 +594,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
   menu), right-drag turns the body, left-drag free-looks the camera,
-  left-click / Tab targets, `` ` `` self-targets (fixed, not rebindable,
-  same as F1–F5 party targeting), Escape clears the target first and
-  opens the menu only when nothing is targeted.
+  Tab cycles targets, `` ` `` self-targets (fixed, not rebindable, same
+  as F1–F5 party targeting), Escape clears the target first and opens
+  the menu only when nothing is targeted. Left-click is movement/camera
+  input only — it doesn't select or clear a target.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
   **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
   current target too — `MovementAction.AutoAttack`, rebindable on the

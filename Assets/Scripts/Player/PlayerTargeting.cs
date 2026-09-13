@@ -84,11 +84,6 @@ public class PlayerTargeting : NetworkBehaviour
                 AttackRequested?.Invoke(clicked);
             }
         }
-
-        if (!Input.GetMouseButtonDown(0)) return;
-        if (Input.GetMouseButton(1)) return;
-
-        CurrentTarget = RaycastTarget();
     }
 
     private bool IsClick(Vector3 downPosition, float downTime)
