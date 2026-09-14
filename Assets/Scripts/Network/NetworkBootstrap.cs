@@ -11,6 +11,18 @@ public class NetworkBootstrap : MonoBehaviour
 
     private void Start()
     {
+        // Standalone builds otherwise remember whichever monitor the window
+        // was last on/moved to (Unity caches this per-machine) - forcing it
+        // onto the primary display every launch avoids that. Editor-only
+        // (there's no "wrong monitor" for the Game view) and skipped in
+        // batch mode (a dedicated server has no window at all).
+#if !UNITY_EDITOR
+        if (!Application.isBatchMode && Display.displays.Length > 0)
+        {
+            Screen.MoveMainWindowTo(Display.displays[0], Vector2Int.zero);
+        }
+#endif
+
         transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
 
         string saved = ProfileStore.Current.ServerAddress;

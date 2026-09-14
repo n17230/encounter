@@ -644,6 +644,11 @@ renamed, or retuned.
   shipped build dials by default); `NetworkBootstrap`'s panel has an
   address field that defaults to `127.0.0.1` in the Editor (incl. MPPM
   virtual players) and remembers the last address in the profile.
+- **Primary monitor on launch**: `NetworkBootstrap.Start` calls
+  `Screen.MoveMainWindowTo(Display.displays[0], ...)` in every
+  Standalone build (skipped in the Editor, and in batch mode since a
+  dedicated server has no window) — otherwise a Windows build reopens
+  on whichever monitor it last used, which Unity caches per-machine.
 - A Windows Standalone build was sent to the user's brother and works
   end-to-end against the VPS.
 
