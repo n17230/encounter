@@ -11,8 +11,20 @@ public class PlayerCamera : NetworkBehaviour
     [SerializeField] private float maxPitch = 75f;
     [SerializeField] private float freeLookYawSensitivity = 30f;
 
+    // Up/Down arrow zoom - fixed keys (not rebindable), same pattern as
+    // Tab/backtick/F1-F5. Distance is how far back along the camera's own
+    // local Z the camera sits from the pivot; held-key, not a per-press
+    // step, so it feels like a continuous zoom rather than notches.
+    // Not specified by the user beyond "up/down to zoom in/out" - min/max/
+    // speed are placeholder guesses, flagged in review_with_fable.md.
+    [SerializeField] private float zoomSpeed = 8f;
+    [SerializeField] private float minZoomDistance = 1.5f;
+    [SerializeField] private float maxZoomDistance = 12f;
+
     private float pitch;
     private float freeLookYaw;
+    private float zoomDistance;
+    private Vector3 baseCameraLocalOffset;
 
     private CharacterStats stats;
 
@@ -32,6 +44,8 @@ public class PlayerCamera : NetworkBehaviour
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
+        baseCameraLocalOffset = playerCamera.transform.localPosition;
+        zoomDistance = -baseCameraLocalOffset.z;
     }
 
     public override void OnNetworkSpawn()
@@ -84,6 +98,21 @@ public class PlayerCamera : NetworkBehaviour
         // camera where it was left rather than snapping back.
 
         cameraPivot.localRotation = Quaternion.Euler(pitch, freeLookYaw, 0f);
+
+        if (!menuOpen) UpdateZoom();
+    }
+
+    // Up/Down arrow, held: moves the camera closer/farther along its own
+    // local Z (the offset baked into the prefab), clamped between
+    // minZoomDistance and maxZoomDistance.
+    private void UpdateZoom()
+    {
+        if (Input.GetKey(KeyCode.UpArrow)) zoomDistance -= zoomSpeed * Time.deltaTime;
+        else if (Input.GetKey(KeyCode.DownArrow)) zoomDistance += zoomSpeed * Time.deltaTime;
+        else return;
+
+        zoomDistance = Mathf.Clamp(zoomDistance, minZoomDistance, maxZoomDistance);
+        playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance);
     }
 
     // The smallest VisionRange among this player's own currently active

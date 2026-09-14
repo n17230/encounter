@@ -602,7 +602,11 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   Tab cycles targets, `` ` `` self-targets (fixed, not rebindable, same
   as F1–F5 party targeting), Escape clears the target first and opens
   the menu only when nothing is targeted. Left-click is movement/camera
-  input only — it doesn't select or clear a target.
+  input only — it doesn't select or clear a target. Up/Down arrow (held,
+  fixed, not rebindable) zooms the camera in/out along its own local Z
+  offset from `CameraPivot`, clamped between `PlayerCamera
+  .minZoomDistance`/`maxZoomDistance` — session-only, not saved to the
+  profile.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
   **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
   current target too — `MovementAction.AutoAttack`, rebindable on the
