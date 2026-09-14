@@ -57,17 +57,21 @@ public class EnemyAI : NetworkBehaviour
     [SerializeField] private float archerRepositionDistance = 20f;
     [SerializeField] private float archerMp5Bonus = 15f;
 
-    // Healer
+    // Healer - each spell carries its own range rather than one shared
+    // Healer-wide value, even though they're all 50 right now.
     [SerializeField] private StatusEffectData healerHotEffect;
     [SerializeField] private float underworldGuardianCost = 100f;
     [SerializeField] private float underworldGuardianHpThreshold = 0.95f;
+    [SerializeField] private float underworldGuardianRange = 50f;
     [SerializeField] private float persistenceCost = 100f;
     [SerializeField] private float persistenceCastTime = 1.5f;
     [SerializeField] private float persistenceHeal = 300f;
     [SerializeField] private float persistenceHpThreshold = 0.55f;
+    [SerializeField] private float persistenceRange = 50f;
     [SerializeField] private float manaLeechCost = 75f;
     [SerializeField] private float manaLeechAmount = 150f;
     [SerializeField] private float manaLeechManaThreshold = 150f;
+    [SerializeField] private float manaLeechRange = 50f;
     [SerializeField] private float healerMp5Bonus = 25f;
 
     // Mage
@@ -473,9 +477,11 @@ public class EnemyAI : NetworkBehaviour
     }
 
     // The lowest-health escort member (any role, Tactician included) below
-    // the given fraction - optionally excluding anyone who already carries
-    // requireEffectMissing (e.g. don't re-cast a HoT that's already up).
-    private EnemyAI FindAllyBelowThreshold(float hpFractionThreshold, StatusEffectData requireEffectMissing)
+    // the given fraction and within maxRange (unlimited by default, for
+    // callers - like Arcane Shield - that don't have their own range yet) -
+    // optionally excluding anyone who already carries requireEffectMissing
+    // (e.g. don't re-cast a HoT that's already up).
+    private EnemyAI FindAllyBelowThreshold(float hpFractionThreshold, StatusEffectData requireEffectMissing, float maxRange = float.MaxValue)
     {
         EnemyAI best = null;
         float bestFraction = hpFractionThreshold;
@@ -485,6 +491,7 @@ public class EnemyAI : NetworkBehaviour
             float fraction = mob.stats.CurrentHealth.Value / mob.stats.MaxHealth.Value;
             if (fraction >= hpFractionThreshold) continue;
             if (requireEffectMissing != null && mob.stats.HasActiveEffect(requireEffectMissing)) continue;
+            if (Vector3.Distance(transform.position, mob.transform.position) > maxRange) continue;
             if (fraction < bestFraction)
             {
                 bestFraction = fraction;
@@ -662,7 +669,7 @@ public class EnemyAI : NetworkBehaviour
     {
         if (healerHotEffect != null && stats.HasEnoughMana(underworldGuardianCost))
         {
-            EnemyAI ally = FindAllyBelowThreshold(underworldGuardianHpThreshold, healerHotEffect);
+            EnemyAI ally = FindAllyBelowThreshold(underworldGuardianHpThreshold, healerHotEffect, underworldGuardianRange);
             if (ally != null)
             {
                 stats.TrySpendMana(underworldGuardianCost);
@@ -672,7 +679,7 @@ public class EnemyAI : NetworkBehaviour
 
         if (!persistenceCasting && stats.HasEnoughMana(persistenceCost))
         {
-            EnemyAI ally = FindAllyBelowThreshold(persistenceHpThreshold, null);
+            EnemyAI ally = FindAllyBelowThreshold(persistenceHpThreshold, null, persistenceRange);
             if (ally != null)
             {
                 stats.TrySpendMana(persistenceCost);
@@ -681,7 +688,8 @@ public class EnemyAI : NetworkBehaviour
             }
         }
 
-        if (currentTarget != null && stats.CurrentMana.Value < manaLeechManaThreshold && stats.HasEnoughMana(manaLeechCost))
+        if (currentTarget != null && stats.CurrentMana.Value < manaLeechManaThreshold && stats.HasEnoughMana(manaLeechCost)
+            && Vector3.Distance(transform.position, currentTarget.transform.position) <= manaLeechRange)
         {
             stats.TrySpendMana(manaLeechCost);
             currentTarget.DrainMana(manaLeechAmount);
