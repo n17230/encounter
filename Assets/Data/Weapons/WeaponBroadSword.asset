@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WeaponBroadSword
   m_EditorClassIdentifier: 
   WeaponName: Broad Sword
-  Damage: 40
+  Damage: 100
   SwingInterval: 1.5
   Effect: {fileID: 0}
   Range: 2

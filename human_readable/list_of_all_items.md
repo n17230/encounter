@@ -56,12 +56,12 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 | Item | Weapon | Effect |
 |---|---|---|
-| Broad Sword | 40 damage / 1.5s swing, 2 range | +40% threat generated, +100 Max Health |
+| Broad Sword | 100 damage / 1.5s swing, 2 range | +40% threat generated, +100 Max Health |
 | Staff | 20 damage / 2s swing, 2 range | −10% mana cost, +250 Max Mana. Two-handed |
 | 2H Axe | 80 damage / 3s swing, 2 range | Two-handed, no other bonus |
 | Holy Scepter | none | +10% healing done |
 | Hunter's Bow | 60 damage / 2.5s swing, 50 range | No other bonus |
-| Armorbreaker | 40 damage / 1.5s swing, 2 range | On hit, reduces the target's Armor by 2 for 10s, stacking up to 5 times |
+| Armorbreaker | 100 damage / 1.5s swing, 2 range | On hit, reduces the target's Armor by 2 for 10s, stacking up to 5 times |
 
 ## Off Hand
 
