@@ -63,6 +63,12 @@ PrefabInstance:
       propertyPath: m_Name
       value: VisualGoblin_Brute
       objectReference: {fileID: 0}
+    - target: {fileID: 2093772006013897834, guid: 9896c25fa9f72e646b3a54a21011c4df,
+        type: 3}
+      propertyPath: m_Controller
+      value:
+      objectReference: {fileID: 9100000, guid: 40c2e00d8ff7bc1806f0b34bd01c3aa2,
+        type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

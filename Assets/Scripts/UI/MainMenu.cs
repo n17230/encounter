@@ -613,13 +613,12 @@ public class MainMenu : MonoBehaviour
     {
         GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 150, UIScale.Height / 2f - 170, 300, 340));
 
-        GUILayout.Label("UI Scale");
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("-", GUILayout.Width(40))) UIScale.Value -= UIScale.Step;
-        GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-        GUILayout.Label($"{UIScale.Value * 100f:0}%", centered);
-        if (GUILayout.Button("+", GUILayout.Width(40))) UIScale.Value += UIScale.Step;
-        GUILayout.EndHorizontal();
+        GUILayout.Label($"UI Scale ({UIScale.Value * 100f:0}%)");
+        UIScale.Value = GUILayout.HorizontalSlider(UIScale.Value, UIScale.Min, UIScale.Max);
+
+        GUILayout.Space(10);
+        GUILayout.Label($"Look Sensitivity ({LookSensitivityScale.Value:0.00}x)");
+        LookSensitivityScale.Value = GUILayout.HorizontalSlider(LookSensitivityScale.Value, LookSensitivityScale.Min, LookSensitivityScale.Max);
 
         GUILayout.Space(10);
         GUILayout.Label("Keybindings");

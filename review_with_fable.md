@@ -7,7 +7,78 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 0. Camera zoom (Up/Down arrow) - never run
+## 0. Per-mob Animator Controllers, generic run clip - never run, touches every mob's animation
+
+- **Every mob visual now has its own Animator Controller instead of
+  sharing one** - Ogre and Ogre Brute used to point at the exact same
+  `OgreHammerController`, and Skeleton Warrior was set to reuse it too
+  (from an earlier fix). Split into six standalone duplicates so none
+  of them can affect each other anymore: `OgreController` (Ogre),
+  `OgreBruteController` (Ogre Brute), `SkeletonWarriorController`
+  (Skeleton Warrior), `GoblinController` (Goblin), `GoblinBruteController`
+  (Goblin Brute), `SkeletonArcherController` (Skeleton Archer) - all
+  under `Assets/Animation/`. **Please confirm each of these six mobs
+  still animates correctly** (idle/run/attack/death) - this touched
+  every mob's Animator reference, so it's worth a look even for the
+  ones whose actual clips didn't change (Ogre, Skeleton Warrior).
+- **Goblin and Skeleton Archer previously had NO real animation at
+  all** - both were pointed at the PolysplitGames pack's own demo
+  controller (a single frozen "Pose" state, no parameters, no
+  transitions), so before this they likely never actually
+  idled/ran/attacked/died visually, regardless of what `EnemyAI` was
+  telling them to do. They now have a real Idle/Run/Attack/Death state
+  machine for the first time - **this is the riskiest part of this
+  batch, worth the closest look**: summon a Goblin and a Skeleton
+  Archer, confirm they idle when standing, transition to a run when
+  chasing, play an attack animation on hit, and play a death animation
+  on dying.
+- **Run animation changed to `Stander@Jog`** (a generic humanoid clip
+  from the new `Assets/Shinabro-combat` pack) for every mob EXCEPT Ogre
+  and Skeleton Warrior, which keep their original run clip
+  (`Stander@Sword&Shield_Run`) unchanged, per your explicit instruction.
+  Confirm the new Jog cycle looks right at each mob's actual run speed
+  (`EnemyAI.RunSpeed`) - a generic clip authored at one speed can look
+  like sliding/moonwalking if the mob's actual movement speed doesn't
+  match the clip's original pace; not something that can be checked
+  without seeing it move.
+- **Skeleton Archer got the pack's bow-specific Idle/Attack clips**
+  (`Stander@Bow_Idle`/`Stander@Bow_Attack1`) instead of the generic
+  sword&shield ones every other mob uses, since it's a ranged unit -
+  Death still uses the generic `Stander@KnockDown_F_Light` (no
+  bow-specific death clip exists in the pack). Confirm the bow idle/
+  attack poses actually look right holding a bow, not just technically
+  play.
+- **Skeleton Mage/Healer/Tactician were explicitly left out of this
+  batch** - they have no Animator component at all yet (not just an
+  unwired controller, the component itself is missing), which is a
+  bigger gap than what this batch fixed. Not addressed here.
+- **New pack added**: `Assets/Shinabro-combat` (gitignored like the
+  other four packs, added to `.gitignore`) - only the three clips
+  actually used (`Stander@Jog`, `Stander@Bow_Idle`,
+  `Stander@Bow_Attack1`) were moved into `Assets/External/Shinabro-combat/`
+  following the existing pack convention.
+
+## 1. UI Scale / Look Sensitivity are now sliders - never run
+
+- **UI Scale** (Options page) changed from −/+ 25% buttons to a
+  `GUILayout.HorizontalSlider`, same 75%–250% range and profile
+  backing as before - just a control-style change, please confirm it
+  drags smoothly and still clamps at both ends.
+- **New: Look Sensitivity slider**, 0.25×–3× (placeholder range, not
+  specified beyond "make a slider for look sensitivity") - a single
+  multiplier (`PlayerProfile.LookSensitivity`, via the new
+  `LookSensitivityScale` static, same pattern as `UIScale`) applied on
+  top of `PlayerCamera`'s pitch/free-look-yaw sensitivity AND
+  `PlayerMovement`'s right-drag turn sensitivity - one slider scales
+  all mouse-look speed together, not three separate ones. 1× (the
+  slider's default/center-ish) should feel identical to how the game
+  already felt before this change. Please confirm: dragging it up
+  makes both free-look (left-click-drag) and turning (right-click-drag)
+  noticeably faster together, dragging it down makes both slower
+  together, and it persists across a menu close/reopen and a
+  restart (saved to the profile like UI Scale).
+
+## 2. Camera zoom (Up/Down arrow) - never run
 
 - **New control, not previously in the game**: holding Up Arrow zooms the
   camera in, Down Arrow zooms it out, along the camera's existing
@@ -18,14 +89,21 @@ whole file once it's empty.
   at a maximum rather than drifting off indefinitely; release either key
   and it just holds wherever it was left (no snap-back).
 - **Placeholder numbers, not specified beyond "up/down to zoom in/out"**:
-  zoom speed (8 units/sec), min distance (1.5), max distance (12) -
-  `PlayerCamera.zoomSpeed`/`minZoomDistance`/`maxZoomDistance`. The
-  starting distance (4) is whatever the prefab already had, untouched.
-- Not saved to the profile - resets to the prefab's default distance
-  every time you rejoin/respawn into a fresh player object, unlike most
-  other settings this project persists. Flag if you'd rather it stuck.
+  zoom speed (8 units/sec, `PlayerCamera.zoomSpeed`, not saved - a feel
+  setting, not a preference), min/max distance (1.5/12,
+  `CameraZoomScale.Min`/`Max`). The starting distance (4) is whatever
+  the prefab already had, untouched.
+- **Now saved to the profile** (`PlayerProfile.CameraZoomDistance`, via
+  `CameraZoomScale` - same pattern as `UIScale`/`LookSensitivityScale`):
+  written into the profile's in-memory copy on every zoom change, and
+  persisted to disk by whichever existing Save() trigger fires next
+  (closing the Escape menu, entering the testing area, etc.), same as
+  UI Scale/Look Sensitivity - no new save trigger was added. Please
+  confirm: zoom in/out, close and reopen the Escape menu (or
+  disconnect/rejoin), and check the camera comes back at the distance
+  you left it rather than resetting to the prefab's default (4).
 
-## 1. AoE now hits anyone, players and mobs alike (behavior change)
+## 3. AoE now hits anyone, players and mobs alike (behavior change)
 
 - **Melee AoE (Reaper's Wheel, Cleave, Seismic Slam, Trample) can now hit
   other players, not just mobs** — and heal/shield AoE (Seraph's Grace)
@@ -47,7 +125,7 @@ whole file once it's empty.
   confirming it still hits you if you stand in your own Firebolt/Icebolt
   patch.
 
-## 2. Slows no longer stack across different effects (new global rule)
+## 4. Slows no longer stack across different effects (new global rule)
 
 - **Only the single strongest slow can ever be active on a character at
   once, permanently, for every slow in the game** — `StatusEffectData
@@ -74,7 +152,7 @@ whole file once it's empty.
   RunSpeed (only Armor has a floor) - almost certainly negative/backward
   movement or a full stop well before this fix.
 
-## 3. Skeleton Tactician escort encounter (biggest, newest, most untested batch yet)
+## 5. Skeleton Tactician escort encounter (biggest, newest, most untested batch yet)
 
 - **A whole new boss encounter**, five mobs deep — see `BOSS_DESIGN.md`
   for the full design writeup. The Tactician is the boss; Warrior,
@@ -143,7 +221,7 @@ whole file once it's empty.
     `EnemyAI.arcaneShieldCooldown` on the Mage prefab is the field to
     change.
 
-## 4. Aura spells are now always-on (no cast, no keybind)
+## 6. Aura spells are now always-on (no cast, no keybind)
 
 - **Aura of Replenishment, Aura of Regeneration, and Echolocation no
   longer need to be cast or bound to a key.** You still pick them into
@@ -175,7 +253,7 @@ whole file once it's empty.
   its effect as a single shared instance per target regardless of who's
   pulsing it), but it's untested with this new always-on behavior.
 
-## 5. Server-wide item uniqueness (new mechanic)
+## 7. Server-wide item uniqueness (new mechanic)
 
 - **Each item Id can now only be equipped by one connected player at a
   time** (`CharacterEquipment.globalItemOwners`). If you and another
@@ -195,7 +273,7 @@ whole file once it's empty.
   the server's actual state). Worth flagging if this is confusing in
   practice rather than something to silently work around.
 
-## 6. Mana orb mob drops (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
+## 8. Mana orb mob drops (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
 
 - **Every mob now has a flat 5% chance to drop a mana orb on death**
   (`EnemyAI.HandleDeath` → `ManaOrb.TrySpawn`), which restores 250 mana
@@ -215,7 +293,7 @@ whole file once it's empty.
   double-dip), and confirm a *mob* walking over it does nothing (only
   `PlayerMovement`-having characters trigger it).
 
-## 7. Soul Siphon (new mechanic: tick lifesteal)
+## 9. Soul Siphon (new mechanic: tick lifesteal)
 
 - **Soul Siphon** (new spell, unit-targeted, instant, 250 mana, 3s
   cooldown): 50 damage every 3s for 18s (6 ticks total), and each tick
@@ -238,7 +316,7 @@ whole file once it's empty.
   didn't want a *damage* spell also generating extra threat via its
   self-heal.
 
-## 8. Armor floored at 0
+## 10. Armor floored at 0
 
 - **Armor can no longer go negative** - `Stat` gained an optional
   `minValue` (defaults to no floor for every stat except Armor, which
@@ -250,7 +328,7 @@ whole file once it's empty.
   the raw hit - it should just floor out at "no mitigation," never
   flip into bonus damage.
 
-## 9. Armorbreaker (new mechanic: stacking effects)
+## 11. Armorbreaker (new mechanic: stacking effects)
 
 - **Armorbreaker** (new 1H MainHand weapon, 40 dmg / 2s swing): on hit,
   applies a stacking armor-reduction debuff - each hit adds a stack
@@ -275,7 +353,7 @@ whole file once it's empty.
   Slow) still behave normally afterward, in case something in this
   change subtly affected the shared code path.
 
-## 10. Belt slot removed
+## 12. Belt slot removed
 
 - **The Belt gear slot no longer exists** (it was always empty - nothing
   ever occupied it, so no item needed reassigning). The Gear menu's
@@ -289,7 +367,7 @@ whole file once it's empty.
   Rings, Trinket, Main Hand, and Off Hand items still equip into the
   right places, same as the last slot-renumbering check on this list.
 
-## 11. Aegis of the Ancient (block chance), Aegis of Reflection (damage reflect), Shield renamed
+## 13. Aegis of the Ancient (block chance), Aegis of Reflection (damage reflect), Shield renamed
 
 - **Block chance is now additive, not a flat set** (per your follow-up):
   both shields (Aegis of the Unstoppable, Aegis of Reflection) passively
@@ -336,7 +414,7 @@ whole file once it's empty.
   saved profile, expect it to show as unequipped once (re-equip from
   the new name) - same as every other item rename this session.
 
-## 12. Arctic Winds (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
+## 14. Arctic Winds (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
 
 - **Arctic Winds cannot be tested yet** - same situation as Earthen
   Bastion below: the gameplay code is written and compiles, but there's
@@ -368,7 +446,7 @@ whole file once it's empty.
     diameter all came from you; range 30 and instant cast are
     unconfirmed placeholders.
 
-## 13. Healing now generates threat (new mechanic)
+## 15. Healing now generates threat (new mechanic)
 
 - **All healing spells now generate 15% of the healed amount as threat**
   (instant heals AND each HoT tick - Radiant Embrace, Blessing of
@@ -389,7 +467,7 @@ whole file once it's empty.
   weird - it should just silently generate zero threat (nothing to add
   it to), not error.
 
-## 14. Earthen Bastion (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL), Team Up redirect change
+## 16. Earthen Bastion (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL), Team Up redirect change
 
 - **Earthen Bastion cannot be tested yet** - all the gameplay code is
   written and compiles, but there's no wall prefab assigned, so casting
@@ -433,7 +511,7 @@ whole file once it's empty.
   theirs (their health should not move at all during that window, other
   than any of their own effects).
 
-## 15. Hunter's Bow (first ranged basic attack), Staff now two-handed
+## 17. Hunter's Bow (first ranged basic attack), Staff now two-handed
 
 - **`WeaponData.Range` is now per-weapon** instead of one shared
   constant for everyone (`WeaponData.BasicAttackRange` still exists as
@@ -456,7 +534,7 @@ whole file once it's empty.
   previously-saved profile with both Staff and an Off Hand item
   equipped resolves cleanly (Off Hand empties) the next time gear syncs.
 
-## 16. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
+## 18. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
 
 - **Boots of Lightness (genuinely new movement mechanic, never run)**:
   equip them, jump, then press Jump again while still in the air.
@@ -490,7 +568,7 @@ whole file once it's empty.
   explicitly specified, so flag if a flat +5 everywhere was actually
   wanted instead.
 
-## 17. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
+## 19. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
 
 - **`AbilityData.WeaponDamagePercent`** replaced the old all-or-nothing
   `UseWeaponDamage` bool (a straight rename/generalization, same field
@@ -508,7 +586,7 @@ whole file once it's empty.
   5s tick) and **The Everflow** (Trinket, +1 mana/sec = +5 per 5s tick) -
   both plain stat items, lowest risk, never equipped/tested.
 
-## 18. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
+## 20. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
 
 - **Global cooldown (explicitly requested)**: casting ANY ability now
   locks out starting a different one for 1.5s (not specified, the
@@ -549,7 +627,7 @@ whole file once it's empty.
   stat-bonus Necklace items, lowest risk in this batch, but still never
   equipped/tested.
 
-## 19. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
+## 21. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
 
 - **Broad Sword**: threat-generation bonus changed from +20% to +40%
   (`ThreatMultiplier`) - straightforward number change, low risk.
@@ -574,7 +652,7 @@ whole file once it's empty.
   a saved profile that somehow has both isn't possible to reach through
   the menu at all.
 
-## 20. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
+## 22. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
    Up, Crippling Blow, Seismic Slam, Barbarian's Mantle) — biggest and
    most novel batch yet, several brand-new mechanics
 
@@ -652,7 +730,7 @@ treat all of it as unverified:
   visual assets were provided) - they'll cast with no cast-bar VFX,
   matching how earlier spells started out.
 
-## 21. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
+## 23. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
 
 - **Radiant Embrace**: cast on a hurt ally, confirm exactly 350 healing
   lands (or 385 with Holy Scepter's +10%).
@@ -688,7 +766,7 @@ treat all of it as unverified:
 - All 5 abilities' `Range: 30` (where applicable) was never specified —
   only the numbers listed above came from you.
 
-## 22. Player 2 falling through the map on spawn — fix applied, needs confirming
+## 24. Player 2 falling through the map on spawn — fix applied, needs confirming
 
 - This was diagnosed from reading the code, not from being able to
   reproduce it — the movement validator had no grace period after spawn,
@@ -705,7 +783,7 @@ treat all of it as unverified:
   that would mean the fix didn't fully close the window (e.g.
   `spawnGraceSeconds` isn't long enough over real network latency).
 
-## 23. Mana-on-successful-cast, and mob dots always red
+## 25. Mana-on-successful-cast, and mob dots always red
 
 - Both were straightforward, targeted changes — lower risk than the rest
   of this list, but still never actually run.
@@ -717,7 +795,7 @@ treat all of it as unverified:
   pulsed dot should stay plain red like every other mob, never turning
   yellow the way it used to.
 
-## 24. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
+## 26. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
 **Confirmed working locally (single-client/editor test). Still needs a
 retest against the dedicated server** — the movement-validator
@@ -752,7 +830,7 @@ real network latency, which local testing doesn't exercise.
   Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
   cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
-## 25. Recall
+## 27. Recall
 
 - Target a player or a mob and cast Recall — does it teleport instantly
   to right where you're standing?
@@ -768,7 +846,7 @@ real network latency, which local testing doesn't exercise.
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 26. One For All (damage redirect) — genuinely new mechanic, unrun
+## 28. One For All (damage redirect) — genuinely new mechanic, unrun
 
 - Cast it on an ally, have a mob hit *them*, and confirm 10% of that
   damage lands on *you* (the caster) instead — watch both health bars.
@@ -808,7 +886,7 @@ real network latency, which local testing doesn't exercise.
   min), redirect (10%), mana cost (50), and instant cast all came from
   you.
 
-## 27. Auto-attack
+## 29. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -817,7 +895,7 @@ real network latency, which local testing doesn't exercise.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 28. Party frames + F1–F5 targeting + minimap compass
+## 30. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -845,7 +923,7 @@ real network latency, which local testing doesn't exercise.
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 29. Minimap / Echolocator
+## 31. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -854,7 +932,7 @@ real network latency, which local testing doesn't exercise.
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 30. Gear — ring slots and the recent renumbering
+## 32. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -867,7 +945,7 @@ real network latency, which local testing doesn't exercise.
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 31. General combat/economy numbers worth a sanity pass
+## 33. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool (1250 with Staff's new +250 max mana),
   regen in 5s ticks — does an actual fight feel like mana is a real
@@ -880,7 +958,7 @@ real network latency, which local testing doesn't exercise.
   names ("Regeneration" grants the "Rejuvenation" buff — the underlying
   effect wasn't renamed, only the item).
 
-## 32. Firebolt/Icebolt VFX not homing — diagnosed and fixed (twice), needs confirming
+## 34. Firebolt/Icebolt VFX not homing — diagnosed and fixed (twice), needs confirming
 
 - **First fix (real, but not the actual cause)**: the VFX prefabs'
   particle systems had Simulation Space set to World on most layers,
@@ -904,16 +982,46 @@ real network latency, which local testing doesn't exercise.
   are no longer riding on a physics body that ignores the parent.
 - **Please confirm**: cast Firebolt/Icebolt at a moving target and watch
   the VFX curve/track toward it the same way the tracer/actual hit does.
-- **Separate, unrelated bug surfaced by the console log you pasted**:
-  `impactVfxPrefab` and `CastVfxPrefab` are both showing "Serialized
-  reference type mismatch... expects 'GameObject' but the stored
-  reference is a 'Prefab'" - meaning both are silently nulled at
-  runtime (no impact burst, no cast-hand-glow). Not touched yet since
-  it's a different bug (one-shot cast/impact VFX, not the travel
-  tracking) - needs re-assigning the fields in the Inspector to fix,
-  flag if you want this done next.
+- **Separate, unrelated bug surfaced by the console log you pasted, now
+  fixed**: `impactVfxPrefab` and `CastVfxPrefab` were both showing
+  "Serialized reference type mismatch... expects 'GameObject' but the
+  stored reference is a 'Prefab'" - a guessed fileID (100100000, the
+  right convention for referencing a whole prefab asset, wrong for
+  referencing a specific GameObject inside one) that didn't match the
+  real root GameObject of their target prefabs, nulling both at
+  runtime. Corrected to the real root fileID, read directly from each
+  target prefab file. Please confirm the impact burst and cast-hand-glow
+  actually play now.
+- **Charging VFX changed to reuse the bolt's own look**: `CastVfxPrefab`
+  (played on the caster's hand for the 2s cast time) previously pointed
+  at the asset pack's separate `Casting_Fire_4`/`Casting_Ice` prefabs,
+  which look different from the actual bolt. Per your request, both
+  abilities' `CastVfxPrefab` now point at the exact same
+  `Projectile_Fire`/`Projectile_Ice` prefab the traveling bolt itself
+  uses - `PlayCastVfxClientRpc` already parents it to the caster and
+  destroys it after the cast time, so it reads as "the same fireball/
+  icebolt, just sitting stationary in your hand" rather than a
+  different effect. Please confirm it looks right and isn't cut off
+  awkwardly mid-loop when the 2s cast time ends.
+- **Old placeholder tracer removed**: `FireBolt.prefab`/`IceBolt.prefab`
+  each had a `TrailRenderer` on the root (the invisible capsule that
+  was drawing the trail line you referred to as "the simple tracer"),
+  added before the actual VFX was tracking correctly. Now that the VFX
+  itself tracks, removed the `TrailRenderer` component from both
+  (the disabled placeholder MeshRenderer/SphereCollider on that same
+  root were left alone - they're already inert, not visible, not
+  colliding, and weren't part of what was asked). Please confirm you no
+  longer see the plain trail line, only the VFX itself.
+- **If it still doesn't look changed after these edits**: this has now
+  happened across three separate substantive edits (Simulation Space,
+  disabling the physics Rigidbody, and this tracer removal) - if none
+  of them are visibly taking effect, the Unity Editor most likely hasn't
+  reimported these files at all (they were all edited from outside the
+  Editor). Before assuming another bug, try Assets → Reimport All (or
+  right-click the specific prefab → Reimport) and confirm the Project
+  window isn't showing a stuck import spinner, then retest.
 
-## 33. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 35. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect

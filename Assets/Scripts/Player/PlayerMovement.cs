@@ -146,7 +146,7 @@ public class PlayerMovement : NetworkBehaviour
 
         if (Input.GetMouseButton(1))
         {
-            pendingLookDeltaYaw += Input.GetAxis("Mouse X") * lookSensitivity;
+            pendingLookDeltaYaw += Input.GetAxis("Mouse X") * lookSensitivity * LookSensitivityScale.Value;
         }
     }
 

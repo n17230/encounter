@@ -24,7 +24,7 @@ MonoBehaviour:
   MissileSpeed: 30
   ProjectilePrefab: {fileID: 2881004069007213672, guid: 7c1e5b3b690a9434fa78e51eab315aaa,
     type: 3}
-  CastVfxPrefab: {fileID: 4178702464766235465, guid: a178aad92fd4bd245ba584e291fd6cf2, type: 3}
+  CastVfxPrefab: {fileID: 1485987801625442810, guid: 0203a37b0f047a74794f252f4783d6b2, type: 3}
   GroundPatchPrefab: {fileID: 6179438977361036716, guid: bf2a6adae0edadb488e49fcd1b2d1597,
     type: 3}
   MinPatchCount: 5

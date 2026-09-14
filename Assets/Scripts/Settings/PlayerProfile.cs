@@ -34,6 +34,15 @@ public class PlayerProfile
     public string[] GearIds = new string[GearSlotCount];
     public KeyCode[] MovementKeys = (KeyCode[])MovementInput.Defaults.Clone();
     public float UiScale = 1f;
+    // Multiplier applied on top of every hardcoded look-sensitivity value
+    // (PlayerCamera's pitch/free-look, PlayerMovement's turn) - 1 = the
+    // project's original feel, unchanged.
+    public float LookSensitivity = 1f;
+    // Camera zoom distance (Up/Down arrow) - 0 means "never set, use
+    // whatever distance PlayerCamera's prefab authored" (see
+    // PlayerCamera.Awake), unlike UiScale/LookSensitivity which always
+    // hold a real value.
+    public float CameraZoomDistance = 0f;
     // Last server address joined as a client; empty = NetworkBootstrap's default.
     public string ServerAddress = "";
 
@@ -101,6 +110,8 @@ public class PlayerProfile
             MovementKeys = merged;
         }
         UiScale = Mathf.Clamp(UiScale <= 0f ? 1f : UiScale, UIScale.Min, UIScale.Max);
+        LookSensitivity = Mathf.Clamp(LookSensitivity <= 0f ? 1f : LookSensitivity, LookSensitivityScale.Min, LookSensitivityScale.Max);
+        if (CameraZoomDistance > 0f) CameraZoomDistance = Mathf.Clamp(CameraZoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
     }
 }
 

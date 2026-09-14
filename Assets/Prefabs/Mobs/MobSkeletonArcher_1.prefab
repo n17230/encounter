@@ -1,5 +1,85 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &6203750158303520875
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 4064439118223071522}
+    m_Modifications:
+    - target: {fileID: 177611436018950081, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_Name
+      value: Skeleton_Archer
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.32414
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.62683
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.05896
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 569328495589245362, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+        type: 3}
+      propertyPath: m_Controller
+      value:
+      objectReference: {fileID: 9100000, guid: 3b2ff642681152b93154d86d68c4c395,
+        type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a1400470f4c08b445bacf3f5fbaf2ac8, type: 3}
+--- !u!4 &6855874883804523792 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 665635562375644539, guid: a1400470f4c08b445bacf3f5fbaf2ac8,
+    type: 3}
+  m_PrefabInstance: {fileID: 6203750158303520875}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6296731889638267168
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -21,7 +101,7 @@ PrefabInstance:
     - target: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -1
       objectReference: {fileID: 0}
     - target: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
@@ -91,29 +171,39 @@ PrefabInstance:
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: mainHandWeapon
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: e8c950b823370697c6199b9b0c71a85a,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: archerSlowEffect
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: adb43f628fe8748c3f037d32d5e8fb18,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: archerVisionEffect
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: bffa31e92fde3f18251ccb97beb7a241,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: chillImmunityEffect
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: 73ee1124347b7beb5d4a4f1f869f2cdb,
         type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6855874883804523792}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1ec85ee26249d2246892f9a23cd25a54, type: 3}
+--- !u!4 &4064439118223071522 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
+    type: 3}
+  m_PrefabInstance: {fileID: 6296731889638267168}
+  m_PrefabAsset: {fileID: 0}

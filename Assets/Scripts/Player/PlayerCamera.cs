@@ -15,11 +15,12 @@ public class PlayerCamera : NetworkBehaviour
     // Tab/backtick/F1-F5. Distance is how far back along the camera's own
     // local Z the camera sits from the pivot; held-key, not a per-press
     // step, so it feels like a continuous zoom rather than notches.
-    // Not specified by the user beyond "up/down to zoom in/out" - min/max/
-    // speed are placeholder guesses, flagged in review_with_fable.md.
+    // Saved to the profile via CameraZoomScale (min/max live there, same
+    // pattern as UIScale/LookSensitivityScale). Speed isn't saved - it's
+    // a feel setting, not a preference value. Not specified by the user
+    // beyond "up/down to zoom in/out" - speed is a placeholder guess,
+    // flagged in review_with_fable.md.
     [SerializeField] private float zoomSpeed = 8f;
-    [SerializeField] private float minZoomDistance = 1.5f;
-    [SerializeField] private float maxZoomDistance = 12f;
 
     private float pitch;
     private float freeLookYaw;
@@ -45,7 +46,11 @@ public class PlayerCamera : NetworkBehaviour
     {
         stats = GetComponent<CharacterStats>();
         baseCameraLocalOffset = playerCamera.transform.localPosition;
-        zoomDistance = -baseCameraLocalOffset.z;
+
+        float defaultDistance = -baseCameraLocalOffset.z;
+        zoomDistance = CameraZoomScale.Value > 0f ? CameraZoomScale.Value : defaultDistance;
+        zoomDistance = Mathf.Clamp(zoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
+        playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance);
     }
 
     public override void OnNetworkSpawn()
@@ -80,13 +85,13 @@ public class PlayerCamera : NetworkBehaviour
 
         if (turning || freeLooking)
         {
-            pitch -= Input.GetAxis("Mouse Y") * pitchSensitivity;
+            pitch -= Input.GetAxis("Mouse Y") * pitchSensitivity * LookSensitivityScale.Value;
             pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
         }
 
         if (freeLooking)
         {
-            freeLookYaw += Input.GetAxis("Mouse X") * freeLookYawSensitivity;
+            freeLookYaw += Input.GetAxis("Mouse X") * freeLookYawSensitivity * LookSensitivityScale.Value;
         }
         else if (turning)
         {
@@ -104,15 +109,19 @@ public class PlayerCamera : NetworkBehaviour
 
     // Up/Down arrow, held: moves the camera closer/farther along its own
     // local Z (the offset baked into the prefab), clamped between
-    // minZoomDistance and maxZoomDistance.
+    // CameraZoomScale.Min/Max. Written back into the profile's in-memory
+    // copy on every change; an existing Save() trigger (menu close,
+    // entering the testing area) is what actually persists it to disk,
+    // same as UiScale/LookSensitivity.
     private void UpdateZoom()
     {
         if (Input.GetKey(KeyCode.UpArrow)) zoomDistance -= zoomSpeed * Time.deltaTime;
         else if (Input.GetKey(KeyCode.DownArrow)) zoomDistance += zoomSpeed * Time.deltaTime;
         else return;
 
-        zoomDistance = Mathf.Clamp(zoomDistance, minZoomDistance, maxZoomDistance);
+        zoomDistance = Mathf.Clamp(zoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
         playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance);
+        CameraZoomScale.Value = zoomDistance;
     }
 
     // The smallest VisionRange among this player's own currently active

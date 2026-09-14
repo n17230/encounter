@@ -25,9 +25,10 @@ controls so they and friends can play together. Git: `github.com/n17230/encounte
   testing multiple clients in-editor — MPPM requires 2023.1+).
 - Product name `encounter` (`ProjectSettings/ProjectSettings.asset`).
 - **Git + LFS**: images/models/audio/fonts plus TerrainData `.asset`s go
-  through LFS (`.gitattributes`). The four imported Asset Store packs
-  (`Assets/PolysplitGames`, `Assets/Shinabro`, `Assets/Spells Pack`,
-  `Assets/TriForge Assets`) are **gitignored and stay local** — 3.9 GB.
+  through LFS (`.gitattributes`). The five imported Asset Store packs
+  (`Assets/PolysplitGames`, `Assets/Shinabro`, `Assets/Shinabro-combat`,
+  `Assets/Spells Pack`, `Assets/TriForge Assets`) are **gitignored and
+  stay local** — 3.9 GB.
   The subset the game actually references (288 files, ~1 GB) lives in
   `Assets/External/<Pack>/<original relative path>` with their `.meta`
   files, so every GUID reference resolves. **If you start using another
@@ -452,6 +453,33 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `TargetCandidate`s (threat, distance) from connected alive players.
   Whether a mob participates in threat is purely "does it have a
   `ThreatTable` component" (ogres yes, goblins no).
+  - **Mob animation**: every mob visual gets its own dedicated
+    `Assets/Animation/*Controller.controller`, never shared across mob
+    variants (even ones that are otherwise identical, e.g. Goblin/
+    Goblin Brute) — a shared controller means one mob's future retune
+    silently affects every other mob pointed at the same asset, which
+    is exactly the trap `MobSkeletonWarrior_1`/`MobOgre_1`/
+    `MobOgre_Brute` were in before being split apart. Every one of these
+    controllers has the identical shape: Idle/Run/Attack/Death states
+    driven by a `speed` float (`EnemyAI`'s idle↔run blend) and
+    `attack`/`death` triggers — `EnemyAI.Awake` wires whichever
+    `Animator` it finds via `GetComponentInChildren<Animator>()` into
+    the shared `NetworkAnimator` on the mob's root, and `FixedUpdate`
+    drives `speed`/`attack`/`death` the same way for every mob
+    regardless of which controller/clips it has. The clips themselves
+    are generic Humanoid animations (the "Stander" rig, from
+    `Assets/External/Shinabro`/`Shinabro-combat`) retargeted onto each
+    creature's own Humanoid Avatar — not creature-specific animations —
+    so the same four-state shape trivially extends to any new mob by
+    just duplicating an existing controller and swapping which clips
+    the four states point at. Currently wired: Ogre, Ogre Brute,
+    Goblin, Goblin Brute, Skeleton Warrior (reuses the Ogre clip set),
+    Skeleton Archer (uses the pack's bow-specific Idle/Attack clips
+    instead of the generic sword&shield ones, since it's a ranged
+    unit). **Skeleton Mage/Healer/Tactician have no Animator at all
+    yet** — not just an unwired controller, the component itself is
+    missing from their prefabs — a bigger gap than the others, not yet
+    addressed.
   - **Healing threat**: `CharacterStats.Heal` also generates threat —
     15% of the amount actually healed (after `HealingMultiplier`), for
     both an instant heal and each individual HoT tick (both funnel
@@ -521,9 +549,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   placeholder with a hover tooltip until there's 2D art. While open,
   `PlayerMovement`, `PlayerCamera`, `PlayerTargeting`, `PlayerAbilities`
   ignore gameplay input; on close `MainMenu.Closed` triggers
-  loadout/gear re-sync. Options page: UI scale (−/+ 25% steps, 75–250%)
-  and movement rebinding (any non-mouse key; binding a key steals it
-  from other movement actions *and* ability slots, and vice versa).
+  loadout/gear re-sync. Options page: UI scale and look sensitivity are
+  both sliders (75–250% / 0.25×–3×, `UIScale`/`LookSensitivityScale` —
+  same profile-backed pattern), plus movement rebinding (any non-mouse
+  key; binding a key steals it from other movement actions *and*
+  ability slots, and vice versa). Look sensitivity is a single
+  multiplier applied on top of `PlayerCamera`'s pitch/free-look yaw and
+  `PlayerMovement`'s turn yaw, not three separate sliders.
   Ability hotkeys are limited to 1–5, Shift+1–5, F1–F5, Q/E/R/T/F/G.
   `DevGui.Begin()` (UI scale) must be the first line of every `OnGUI`,
   laying out against `UIScale.Width/Height`. The Escape menu also has a
@@ -604,9 +636,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   the menu only when nothing is targeted. Left-click is movement/camera
   input only — it doesn't select or clear a target. Up/Down arrow (held,
   fixed, not rebindable) zooms the camera in/out along its own local Z
-  offset from `CameraPivot`, clamped between `PlayerCamera
-  .minZoomDistance`/`maxZoomDistance` — session-only, not saved to the
-  profile.
+  offset from `CameraPivot`, clamped between `CameraZoomScale.Min`/`Max`
+  — saved to the profile (same set-in-memory-then-an-existing-Save()-
+  trigger-persists-it pattern as UI Scale/Look Sensitivity), so it
+  restores on respawn/rejoin.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
   **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
   current target too — `MovementAction.AutoAttack`, rebindable on the
