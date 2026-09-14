@@ -16,9 +16,6 @@ MonoBehaviour:
   ItemName: Champion's Cloak
   Slot: 3
   Bonuses:
-  - Stat: 8
-    ModifierType: 1
-    Value: -0.1
   - Stat: 7
     ModifierType: 1
     Value: 0.2
