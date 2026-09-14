@@ -15,7 +15,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Amulet of Vitality | +150 Max Health, +5 Armor |
-| Amulet of the Magi | +100 Max Mana, +0.4 Mana Regen/sec |
+| Amulet of the Magi | +100 Max Mana, +0.8 Mana Regen/sec |
 | Amulet of the Berserker | +5 Weapon Damage |
 
 ## Chest
@@ -50,7 +50,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Ember Stone | +10% damage dealt; wearer is permanently Burning |
-| The Everflow | +1 Mana Regen/sec |
+| The Everflow | +2 Mana Regen/sec |
 
 ## Main Hand
 
@@ -69,7 +69,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 |---|---|
 | Aegis of the Unstoppable | +20 Armor, +5% chance to block melee attacks |
 | Aegis of Reflection | +10 Armor, +5% chance to block melee attacks, reflects 3% of incoming damage back at the attacker |
-| Tomb of the Magi | +50 Max Mana, +0.4 Mana Regen/sec |
+| Tomb of the Magi | +50 Max Mana, +0.8 Mana Regen/sec |
 
 ## Slots with nothing yet
 

@@ -18,7 +18,7 @@ MonoBehaviour:
   Bonuses:
   - Stat: 3
     ModifierType: 0
-    Value: 1
+    Value: 2
   HpThresholdEffects: []
   Immunities: []
   Auras: []

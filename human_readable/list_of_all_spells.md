@@ -62,6 +62,6 @@ retuned — it's a snapshot, not auto-generated.
 
 | Spell | Effect |
 |---|---|
-| Aura of Replenishment | You and allies within 40 units gain +3 mana per 5s |
+| Aura of Replenishment | You and allies within 40 units gain +6 mana per 5s |
 | Aura of Regeneration | You and allies within 40 units gain a heal-over-time (+10 hp per 5s) |
 | Echolocation | Reveals every mob on your minimap |
