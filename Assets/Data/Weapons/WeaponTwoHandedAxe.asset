@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WeaponTwoHandedAxe
   m_EditorClassIdentifier:
   WeaponName: 2H Axe
-  Damage: 80
+  Damage: 150
   SwingInterval: 3
   Effect: {fileID: 0}
   Range: 2
