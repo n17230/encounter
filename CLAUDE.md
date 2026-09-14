@@ -147,7 +147,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `DealDamage`; a new grant replaces any remainder rather than
     stacking, and it has no duration cap — it persists until consumed.
     `AbilityData.AreaAroundCaster` resolves centered on the caster's own
-    position, hitting every player (not mobs) within `GroundEffectRadius`.
+    position, hitting every `Targetable` (player or mob, caster
+    included) within `GroundEffectRadius` — so a heal/shield AoE also
+    heals/shields any mob standing in range, a deliberate side effect of
+    "AoE hits anyone" applying to every ability, not just damage ones.
   - **Persistent structures**: `AbilityData.IsPersistentStructure` +
     `StructurePrefab`/`StructureWidth`/`StructureHeight`/
     `StructureThickness`, ground-targeted. On resolve,
@@ -202,13 +205,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     overriding the other. Aegis of the Ancient (`RequiresShield`,
     `SelfBuff`) grants +25% for its duration.
   - **Caster-facing AoEs**: `AbilityData.EnemiesAroundCaster`/
-    `ConeAroundCaster` hit every non-player `Targetable` within
-    `GroundEffectRadius` (the cone variant also filtered by `ConeAngle`
-    via `FacingCone.IsWithin`) — used by Reaper's Wheel/Seismic Slam
-    (circle) and Cleave (cone). `ChargeForwardDistance`/`ChargeToTarget`
-    drive the caster via `PlayerMovement.ServerBeginPull`: the former
-    (Trample) charges straight forward a fixed distance, hitting every
-    enemy within 2.5 units of the line; the latter (Team Up) charges to
+    `ConeAroundCaster` hit every other `Targetable` (player or mob,
+    never the caster) within `GroundEffectRadius` (the cone variant also
+    filtered by `ConeAngle` via `FacingCone.IsWithin`) — used by
+    Reaper's Wheel/Seismic Slam (circle) and Cleave (cone). All melee
+    AoE hits anyone, including other players, by design.
+    `ChargeForwardDistance`/`ChargeToTarget` drive the caster via
+    `PlayerMovement.ServerBeginPull`: the former (Trample) charges
+    straight forward a fixed distance, hitting every other Targetable
+    within 2.5 units of the line; the latter (Team Up) charges to
     just short of a unit target and applies `Effect` to the *target*,
     not the caster — a support "peel" ability, whose effect is a full
     damage redirect to the caster (reuses the One For All redirect

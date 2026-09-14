@@ -684,9 +684,7 @@ public class PlayerAbilities : NetworkBehaviour
 
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
-            if (candidate == null) continue;
-            if (candidate.GetComponent<PlayerMovement>() == null) continue; // allies only, not mobs
-            if (candidate.Stats == null || candidate.Stats.CurrentHealth.Value <= 0f) continue;
+            if (candidate == null || candidate.Stats == null || candidate.Stats.CurrentHealth.Value <= 0f) continue;
             if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
 
             candidate.Stats.ReceiveHit(new HitInfo
@@ -737,10 +735,10 @@ public class PlayerAbilities : NetworkBehaviour
         return damage;
     }
 
-    // Full circle around the caster's own position, hitting every enemy
-    // (a Targetable with no PlayerMovement - i.e. not a player) within
-    // GroundEffectRadius. No targeting at all - mirrors ResolveAreaAroundCaster
-    // but with the opposite audience. E.g. Reaper's Wheel, Seismic Slam.
+    // Full circle around the caster's own position, hitting every OTHER
+    // Targetable (player or mob - never the caster) within
+    // GroundEffectRadius. No targeting at all. E.g. Reaper's Wheel,
+    // Seismic Slam.
     private void ResolveEnemiesAroundCaster(AbilityData ability)
     {
         if (ability.RequiresMeleeWeapon && equipment.MainHandWeapon == null)
@@ -759,7 +757,7 @@ public class PlayerAbilities : NetworkBehaviour
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
             if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.transform == transform) continue; // never hits the caster
             if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
             if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
 
@@ -774,7 +772,7 @@ public class PlayerAbilities : NetworkBehaviour
         }
     }
 
-    // Same as ResolveEnemiesAroundCaster, but only enemies within ConeAngle
+    // Same as ResolveEnemiesAroundCaster, but only targets within ConeAngle
     // degrees of the caster's current facing. E.g. Cleave.
     private void ResolveConeAroundCaster(AbilityData ability)
     {
@@ -794,7 +792,7 @@ public class PlayerAbilities : NetworkBehaviour
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
             if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.transform == transform) continue; // never hits the caster
             if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
             if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
             if (!FacingCone.IsWithin(transform, candidate.transform.position, ability.ConeAngle)) continue;
@@ -811,9 +809,10 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     // No targeting: the caster charges straight forward (their own current
-    // facing) for ChargeForwardDistance units, hitting every enemy near
-    // the path along the way, then rides the same ServerBeginPull rail the
-    // ground-targeted abilities use for the actual movement. E.g. Trample.
+    // facing) for ChargeForwardDistance units, hitting every other
+    // Targetable (player or mob - never the caster) near the path along
+    // the way, then rides the same ServerBeginPull rail the ground-targeted
+    // abilities use for the actual movement. E.g. Trample.
     private void ResolveChargeForward(AbilityData ability)
     {
         if (!stats.TrySpendMana(ability.ManaCost))
@@ -828,11 +827,11 @@ public class PlayerAbilities : NetworkBehaviour
         flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
         Vector3 end = start + flatForward * ability.ChargeForwardDistance;
 
-        const float pathHitRadius = 2.5f; // how close to the charge line an enemy needs to be to get hit
+        const float pathHitRadius = 2.5f; // how close to the charge line a target needs to be to get hit
         foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
         {
             if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.GetComponent<PlayerMovement>() != null) continue; // enemies only, not allies
+            if (candidate.transform == transform) continue; // never hits the caster
             if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
 
             Vector3 flatPos = candidate.transform.position;
