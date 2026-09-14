@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   Id: bleed
   DisplayName: Bleeding
-  Duration: 5
+  Duration: 8
   StackingMode: 0
   TickDamage: 10
   TickHeal: 0

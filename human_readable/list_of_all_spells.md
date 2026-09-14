@@ -18,7 +18,7 @@ retuned — it's a snapshot, not auto-generated.
 
 | Spell | Requires weapon | Mana | Cooldown | Cast | Effect |
 |---|---|---|---|---|---|
-| Reaper's Wheel | Yes | 25 | 8s | Instant | Weapon damage to every enemy in an 8-unit circle around you, + Bleed (10 dmg/sec, 5s) |
+| Reaper's Wheel | Yes | 25 | 8s | Instant | Weapon damage to every enemy in an 8-unit circle around you, + Bleed (10 dmg/sec, 8s) |
 | Cleave | Yes | 8 | 2s | Instant | Weapon damage to every enemy in a 120° cone in front of you (8-unit reach) |
 | Trample | No | 38 | 30s | Instant | Charge forward 10 units: 30 damage + 3s Stun to everything near the path |
 | Seismic Slam | Yes | 38 | 30s | 1s | 10% weapon damage + 3s Stun to every enemy in an 8-unit circle around you |
