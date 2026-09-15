@@ -29,6 +29,14 @@ public class AbilityData : ScriptableObject
     // gameplay state of its own.
     public GameObject CastVfxPrefab;
 
+    // Purely cosmetic - played once at the TARGET's position when this
+    // ability successfully resolves against a unit target (the
+    // ResolveAbility direct-hit path only - projectile-based abilities
+    // use Projectile.impactVfxPrefab instead, played on projectile
+    // impact rather than resolve). Same broadcast-and-instantiate-
+    // locally approach as CastVfxPrefab, no gameplay state of its own.
+    public GameObject TargetVfxPrefab;
+
     public GameObject GroundPatchPrefab;
     public int MinPatchCount = 0;
     public int MaxPatchCount = 0;

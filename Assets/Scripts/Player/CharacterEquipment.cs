@@ -59,17 +59,33 @@ public class CharacterEquipment : NetworkBehaviour
     public readonly NetworkVariable<bool> CastAuraRevealsMobs =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // Whether specifically Aura of Replenishment/Regeneration are slotted -
+    // synced to everyone (unlike activeAuraAbilities, server-only) so
+    // AuraGroundVisual can show the right VFX under a player on every
+    // client, not just their own. Same pattern as CastAuraRevealsMobs,
+    // just per-ability instead of unioned across all active auras.
+    public readonly NetworkVariable<bool> HasReplenishmentAura =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public readonly NetworkVariable<bool> HasRegenerationAura =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     public void SetActiveAuras(IEnumerable<AbilityData> auraAbilities)
     {
         if (!IsServer) return;
         activeAuraAbilities.Clear();
         bool revealsMobs = false;
+        bool hasReplenishment = false;
+        bool hasRegeneration = false;
         foreach (AbilityData ability in auraAbilities)
         {
             activeAuraAbilities.Add(ability);
             revealsMobs |= (ability.AuraReveals & MinimapReveal.Mobs) != 0;
+            if (ability.Id == "aura_of_replenishment") hasReplenishment = true;
+            if (ability.Id == "aura_of_regeneration") hasRegeneration = true;
         }
         CastAuraRevealsMobs.Value = revealsMobs;
+        HasReplenishmentAura.Value = hasReplenishment;
+        HasRegenerationAura.Value = hasRegeneration;
     }
 
     // Server-side view of what the main hand swings with (null = unarmed).

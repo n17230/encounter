@@ -7,7 +7,128 @@ game from here. This is the punch list of what to playtest, roughly in
 priority order. Delete items as they're confirmed working; delete the
 whole file once it's empty.
 
-## 0. Per-mob Animator Controllers, generic run clip - never run, touches every mob's animation
+## 0. Buff/aura/spell VFX indicators - two real bugs found from first playtest, fixed
+
+- **First playtest found two real bugs, both now fixed**:
+  1. Aura VFX (`AuraGroundVisual`) appeared at the player's center, not
+     their feet - `transform.position` sits at the `CharacterController`
+     's center, not the ground; fixed to compute actual feet Y the same
+     way `PlayerMovement.ValidateReplicatedMovement` already does
+     (`center.y - height/2` offset), instead of assuming
+     `transform.position.y` was already ground-level.
+  2. `EffectOverheadVisual` (Buff_Light on Vitality Ward) never showed
+     at all - it subscribed to `NetworkList.OnListChanged`, a pattern
+     not used/proven anywhere else in this codebase (the one existing
+     reader of this same list, `PlayerHUD.DescribeEffects`, polls it
+     fresh every frame instead). Switched to polling, matching that
+     proven approach.
+  - **`ShieldVisual` fixed proactively too, even though not reported
+    broken yet** - it used the equivalent `NetworkVariable.OnValueChanged`
+    subscription, the same untested-in-this-codebase pattern as bug 2
+    above, just on a plain variable instead of a list. Switched to
+    polling as well, before you hit the same bug a third time. Please
+    specifically re-check Aegis of Arcane's shield VFX now, since it
+    was never confirmed working in the first place.
+  3. **Third bug, found from your follow-up report** ("has the glow but
+     not the actual aura pattern / shield icon"): every particle layer
+     in `Aura_Arcane`, `Aura_Light`, and `Buff_Light` was still set to
+     World simulation space (same setting that caused the earlier
+     Firebolt/Icebolt tracking bug). Scale-pulsing a World-space layer
+     doesn't reliably work - a particle's size locks in at the moment
+     it's emitted, so any layer whose particles happened to spawn while
+     the pulse was near-zero-scale stayed invisible permanently, even
+     once the scale ramped back up; only short-lived layers (Glow)
+     re-emit often enough to mostly look right regardless. Flipped
+     every layer in all three prefabs to Local space. **Not visually
+     confirmed by me** (can't run the Editor) - please recheck all
+     three (shield, buff, both auras) for the full effect now, not just
+     the glow layer.
+- **New: `ShieldVisual` component (`Player.prefab`)** shows the
+  `Shield_Arcane` VFX (from the newly-externalized `Assets/External/
+  Spells Pack/Particles/Prefabs/Shields/`) on whoever is currently
+  shielded, for as long as `CharacterStats.ShieldAmount` stays above 0
+  - disappears the instant the shield is fully absorbed or a fresh cast
+  replaces it. Reacts directly to the `ShieldAmount` `NetworkVariable`
+  (already synced to everyone), so every client sees it on the
+  shielded player, not just the shielded player themselves.
+- Since this keys off `ShieldAmount` generically rather than "Aegis of
+  Arcane specifically," it'll also show on ANY future ability that
+  grants a shield the same way (currently only Aegis of Arcane does) -
+  worth knowing if a second shield spell is ever added with a different
+  intended look.
+- **Please confirm**: cast Aegis of Arcane on a target, confirm the
+  shield VFX appears on them immediately and stays through however
+  many hits it takes to burn through the 350 absorb - confirm it
+  disappears the instant the shield hits 0, and that recasting it while
+  the old shield is still up doesn't leave two VFX instances stacked
+  (should just be one, since a shield replaces rather than stacks).
+- **New: `EffectOverheadVisual` component (`Player.prefab`)** shows
+  Buff_Light above a player's head for as long as they have Vitality
+  Ward (Blessing of Vitality's +10 Armor buff) active - generalized off
+  `CharacterStats.ActiveEffects` (any `StatusEffectData` could be wired
+  the same way; only Vitality Ward is wired right now). Please confirm:
+  cast Blessing of Vitality on a target, Buff_Light appears above their
+  head immediately and disappears exactly when the 16s Vitality Ward
+  buff expires.
+- **New: `AuraGroundVisual` component (`Player.prefab`)** shows
+  Aura_Arcane at a player's feet while they have Aura of Replenishment
+  slotted, and Aura_Light at their feet while they have Aura of
+  Regeneration slotted (both can show at once if both are slotted).
+  Needed two new synced flags on `CharacterEquipment`
+  (`HasReplenishmentAura`/`HasRegenerationAura`) since nothing
+  previously told OTHER clients which specific aura a player has -
+  only that player's own profile knew. Size is 1x the prefab's own
+  natural size (`AuraGroundVisual.sizeMultiplier`), set once at spawn.
+  - **Root cause of "only the glow shows, not the actual pattern"
+    (three rounds of back-and-forth to track down)**: it was never the
+    shader/material (though that conversion was real and needed - these
+    materials were on a Built-in-only shader URP can't render at all),
+    and never the World-vs-Local simulation space (also real, also
+    needed for correct tracking). The actual remaining bug was in my
+    own code - I was fading the aura in/out by animating its
+    `transform.localScale` every frame, but a particle's size is baked
+    in at the moment it's emitted, not continuously re-read from the
+    parent's current scale. So any particle that happened to spawn
+    while the pulse was near-zero-scale stayed invisible forever, even
+    once the scale ramped back up - only very short-lived layers
+    (re-emitting fast enough that few particles were ever "born small")
+    happened to look mostly fine, which is exactly the "just the glow"
+    symptom. Confirmed by you finding a plain, untouched instance
+    renders completely fine directly in the Scene. Rewrote the fade to
+    modulate each `ParticleSystemRenderer`'s material alpha instead
+    (captured once per renderer from the original design alpha, so
+    e.g. an intentionally-70%-transparent layer still ends up at 70%
+    at the pulse's peak, not 100%) - this doesn't touch particle
+    simulation at all, so it should be the real fix. **Not visually
+    confirmed by me** - please recheck both auras for the first time
+    since this rewrite.
+  - **Pulse timing, worth watching closely since it was never run**: a
+    repeating 6-second cycle, each player's own 3-second visible window
+    (alpha fades 0 → full → 0, peaking exactly in the middle) starting
+    on a different second based on their rank among connected players
+    (1st to join starts at cycle-second 0, 2nd at 1, ... 6th at 5, then
+    wraps). With 2+ players both running the same aura, confirm their
+    pulses visibly stagger rather than flashing in unison - and that a
+    player's own pulse timing doesn't jump/reset just because someone
+    else joins or leaves (their rank could shift, which intentionally
+    reseats their phase - not something to "fix", just something to
+    notice if it looks jarring).
+- **New: `AbilityData.TargetVfxPrefab`** - a target-side counterpart to
+  the existing `CastVfxPrefab` (caster-side, during the cast). Blessing
+  of Vitality now plays Casting_Light on the caster while casting and
+  Spell_Light_6 on the target once the heal actually lands. Please
+  confirm both show up and neither lingers oddly - the target VFX is
+  destroyed after a flat 5s (same convention `Projectile
+  .impactVfxPrefab` already uses), not tied to the actual particle
+  system's own natural length.
+- **Found and fixed in passing**: `Casting_Light.prefab` (used above)
+  had a leftover enabled demo script (`CreateProjectile`, from the
+  asset pack's own demo scene) that would have tried to spawn a whole
+  separate "Projectile_Light" effect on a timer - the same class of
+  leftover-demo-script issue the Firebolt/Icebolt VFX had earlier.
+  Disabled it before wiring this in, so it shouldn't recur here.
+
+## 1. Per-mob Animator Controllers, generic run clip - never run, touches every mob's animation
 
 - **Every mob visual now has its own Animator Controller instead of
   sharing one** - Ogre and Ogre Brute used to point at the exact same
@@ -58,7 +179,7 @@ whole file once it's empty.
   `Stander@Bow_Attack1`) were moved into `Assets/External/Shinabro-combat/`
   following the existing pack convention.
 
-## 1. UI Scale / Look Sensitivity are now sliders - never run
+## 2. UI Scale / Look Sensitivity are now sliders - never run
 
 - **UI Scale** (Options page) changed from −/+ 25% buttons to a
   `GUILayout.HorizontalSlider`, same 75%–250% range and profile
@@ -78,7 +199,7 @@ whole file once it's empty.
   together, and it persists across a menu close/reopen and a
   restart (saved to the profile like UI Scale).
 
-## 2. Camera zoom (Up/Down arrow) - never run
+## 3. Camera zoom (Up/Down arrow) - never run
 
 - **New control, not previously in the game**: holding Up Arrow zooms the
   camera in, Down Arrow zooms it out, along the camera's existing
@@ -103,7 +224,7 @@ whole file once it's empty.
   disconnect/rejoin), and check the camera comes back at the distance
   you left it rather than resetting to the prefab's default (4).
 
-## 3. AoE now hits anyone, players and mobs alike (behavior change)
+## 4. AoE now hits anyone, players and mobs alike (behavior change)
 
 - **Melee AoE (Reaper's Wheel, Cleave, Seismic Slam, Trample) can now hit
   other players, not just mobs** — and heal/shield AoE (Seraph's Grace)
@@ -125,7 +246,7 @@ whole file once it's empty.
   confirming it still hits you if you stand in your own Firebolt/Icebolt
   patch.
 
-## 4. Slows no longer stack across different effects (new global rule)
+## 5. Slows no longer stack across different effects (new global rule)
 
 - **Only the single strongest slow can ever be active on a character at
   once, permanently, for every slow in the game** — `StatusEffectData
@@ -152,7 +273,7 @@ whole file once it's empty.
   RunSpeed (only Armor has a floor) - almost certainly negative/backward
   movement or a full stop well before this fix.
 
-## 5. Skeleton Tactician escort encounter (biggest, newest, most untested batch yet)
+## 6. Skeleton Tactician escort encounter (biggest, newest, most untested batch yet)
 
 - **A whole new boss encounter**, five mobs deep — see `BOSS_DESIGN.md`
   for the full design writeup. The Tactician is the boss; Warrior,
@@ -221,7 +342,7 @@ whole file once it's empty.
     `EnemyAI.arcaneShieldCooldown` on the Mage prefab is the field to
     change.
 
-## 6. Aura spells are now always-on (no cast, no keybind)
+## 7. Aura spells are now always-on (no cast, no keybind)
 
 - **Aura of Replenishment, Aura of Regeneration, and Echolocation no
   longer need to be cast or bound to a key.** You still pick them into
@@ -253,7 +374,7 @@ whole file once it's empty.
   its effect as a single shared instance per target regardless of who's
   pulsing it), but it's untested with this new always-on behavior.
 
-## 7. Server-wide item uniqueness (new mechanic)
+## 8. Server-wide item uniqueness (new mechanic)
 
 - **Each item Id can now only be equipped by one connected player at a
   time** (`CharacterEquipment.globalItemOwners`). If you and another
@@ -273,7 +394,7 @@ whole file once it's empty.
   the server's actual state). Worth flagging if this is confusing in
   practice rather than something to silently work around.
 
-## 8. Mana orb mob drops (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
+## 9. Mana orb mob drops (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
 
 - **Every mob now has a flat 5% chance to drop a mana orb on death**
   (`EnemyAI.HandleDeath` → `ManaOrb.TrySpawn`), which restores 250 mana
@@ -293,7 +414,7 @@ whole file once it's empty.
   double-dip), and confirm a *mob* walking over it does nothing (only
   `PlayerMovement`-having characters trigger it).
 
-## 9. Soul Siphon (new mechanic: tick lifesteal)
+## 10. Soul Siphon (new mechanic: tick lifesteal)
 
 - **Soul Siphon** (new spell, unit-targeted, instant, 250 mana, 3s
   cooldown): 50 damage every 3s for 18s (6 ticks total), and each tick
@@ -316,7 +437,7 @@ whole file once it's empty.
   didn't want a *damage* spell also generating extra threat via its
   self-heal.
 
-## 10. Armor floored at 0
+## 11. Armor floored at 0
 
 - **Armor can no longer go negative** - `Stat` gained an optional
   `minValue` (defaults to no floor for every stat except Armor, which
@@ -328,7 +449,7 @@ whole file once it's empty.
   the raw hit - it should just floor out at "no mitigation," never
   flip into bonus damage.
 
-## 11. Armorbreaker (new mechanic: stacking effects)
+## 12. Armorbreaker (new mechanic: stacking effects)
 
 - **Armorbreaker** (new 1H MainHand weapon, 40 dmg / 2s swing): on hit,
   applies a stacking armor-reduction debuff - each hit adds a stack
@@ -353,7 +474,7 @@ whole file once it's empty.
   Slow) still behave normally afterward, in case something in this
   change subtly affected the shared code path.
 
-## 12. Belt slot removed
+## 13. Belt slot removed
 
 - **The Belt gear slot no longer exists** (it was always empty - nothing
   ever occupied it, so no item needed reassigning). The Gear menu's
@@ -367,7 +488,7 @@ whole file once it's empty.
   Rings, Trinket, Main Hand, and Off Hand items still equip into the
   right places, same as the last slot-renumbering check on this list.
 
-## 13. Aegis of the Ancient (block chance), Aegis of Reflection (damage reflect), Shield renamed
+## 14. Aegis of the Ancient (block chance), Aegis of Reflection (damage reflect), Shield renamed
 
 - **Block chance is now additive, not a flat set** (per your follow-up):
   both shields (Aegis of the Unstoppable, Aegis of Reflection) passively
@@ -414,7 +535,7 @@ whole file once it's empty.
   saved profile, expect it to show as unequipped once (re-equip from
   the new name) - same as every other item rename this session.
 
-## 14. Arctic Winds (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
+## 15. Arctic Winds (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL)
 
 - **Arctic Winds cannot be tested yet** - same situation as Earthen
   Bastion below: the gameplay code is written and compiles, but there's
@@ -446,7 +567,7 @@ whole file once it's empty.
     diameter all came from you; range 30 and instant cast are
     unconfirmed placeholders.
 
-## 15. Healing now generates threat (new mechanic)
+## 16. Healing now generates threat (new mechanic)
 
 - **All healing spells now generate 15% of the healed amount as threat**
   (instant heals AND each HoT tick - Radiant Embrace, Blessing of
@@ -467,7 +588,7 @@ whole file once it's empty.
   weird - it should just silently generate zero threat (nothing to add
   it to), not error.
 
-## 16. Earthen Bastion (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL), Team Up redirect change
+## 17. Earthen Bastion (NEEDS AN EDITOR STEP BEFORE IT WORKS AT ALL), Team Up redirect change
 
 - **Earthen Bastion cannot be tested yet** - all the gameplay code is
   written and compiles, but there's no wall prefab assigned, so casting
@@ -511,7 +632,7 @@ whole file once it's empty.
   theirs (their health should not move at all during that window, other
   than any of their own effects).
 
-## 17. Hunter's Bow (first ranged basic attack), Staff now two-handed
+## 18. Hunter's Bow (first ranged basic attack), Staff now two-handed
 
 - **`WeaponData.Range` is now per-weapon** instead of one shared
   constant for everyone (`WeaponData.BasicAttackRange` still exists as
@@ -534,7 +655,7 @@ whole file once it's empty.
   previously-saved profile with both Staff and an Off Hand item
   equipped resolves cleanly (Off Hand empties) the next time gear syncs.
 
-## 18. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
+## 19. Boots of Lightness (new air-hover mechanic), Armored Boots, Amulet of Vitality +5 Armor
 
 - **Boots of Lightness (genuinely new movement mechanic, never run)**:
   equip them, jump, then press Jump again while still in the air.
@@ -568,7 +689,7 @@ whole file once it's empty.
   explicitly specified, so flag if a flat +5 everywhere was actually
   wanted instead.
 
-## 19. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
+## 20. Crippling Blow / Seismic Slam weapon-scaled damage, Trample retune, Tomb of the Magi, The Everflow
 
 - **`AbilityData.WeaponDamagePercent`** replaced the old all-or-nothing
   `UseWeaponDamage` bool (a straight rename/generalization, same field
@@ -586,7 +707,7 @@ whole file once it's empty.
   5s tick) and **The Everflow** (Trinket, +1 mana/sec = +5 per 5s tick) -
   both plain stat items, lowest risk, never equipped/tested.
 
-## 20. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
+## 21. Global cooldown, Aura spells (replacing the amulets + Echolocator), Cleanse, 2 new amulets
 
 - **Global cooldown (explicitly requested)**: casting ANY ability now
   locks out starting a different one for 1.5s (not specified, the
@@ -627,7 +748,7 @@ whole file once it's empty.
   stat-bonus Necklace items, lowest risk in this batch, but still never
   equipped/tested.
 
-## 21. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
+## 22. Broad Sword threat, 2H Axe, two-handed/off-hand exclusivity
 
 - **Broad Sword**: threat-generation bonus changed from +20% to +40%
   (`ThreatMultiplier`) - straightforward number change, low risk.
@@ -652,7 +773,7 @@ whole file once it's empty.
   a saved profile that somehow has both isn't possible to reach through
   the menu at all.
 
-## 22. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
+## 23. Seven new warrior spells/item (Reaper's Wheel, Trample, Cleave, Team
    Up, Crippling Blow, Seismic Slam, Barbarian's Mantle) — biggest and
    most novel batch yet, several brand-new mechanics
 
@@ -730,7 +851,7 @@ treat all of it as unverified:
   visual assets were provided) - they'll cast with no cast-bar VFX,
   matching how earlier spells started out.
 
-## 23. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
+## 24. Five new healing spells + shields + Holy Scepter — biggest untested batch yet
 
 - **Radiant Embrace**: cast on a hurt ally, confirm exactly 350 healing
   lands (or 385 with Holy Scepter's +10%).
@@ -766,7 +887,7 @@ treat all of it as unverified:
 - All 5 abilities' `Range: 30` (where applicable) was never specified —
   only the numbers listed above came from you.
 
-## 24. Player 2 falling through the map on spawn — fix applied, needs confirming
+## 25. Player 2 falling through the map on spawn — fix applied, needs confirming
 
 - This was diagnosed from reading the code, not from being able to
   reproduce it — the movement validator had no grace period after spawn,
@@ -783,7 +904,7 @@ treat all of it as unverified:
   that would mean the fix didn't fully close the window (e.g.
   `spawnGraceSeconds` isn't long enough over real network latency).
 
-## 25. Mana-on-successful-cast, and mob dots always red
+## 26. Mana-on-successful-cast, and mob dots always red
 
 - Both were straightforward, targeted changes — lower risk than the rest
   of this list, but still never actually run.
@@ -795,7 +916,7 @@ treat all of it as unverified:
   pulsed dot should stay plain red like every other mob, never turning
   yellow the way it used to.
 
-## 26. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
+## 27. Force Compression / Force Expansion / ground-targeted casting (highest risk — newest, most moving parts)
 
 **Confirmed working locally (single-client/editor test). Still needs a
 retest against the dedicated server** — the movement-validator
@@ -830,7 +951,7 @@ real network latency, which local testing doesn't exercise.
   Force speed 15/s. The 30-unit diameter (→ 15-unit radius), instant
   cast (0s), 25s cooldown, and 240 mana cost all came from you.
 
-## 27. Recall
+## 28. Recall
 
 - Target a player or a mob and cast Recall — does it teleport instantly
   to right where you're standing?
@@ -846,7 +967,7 @@ real network latency, which local testing doesn't exercise.
 - Cooldown (30s), mana cost (200), and range (40) came from you;
   instant cast and no threat generated are still unlabeled guesses.
 
-## 28. One For All (damage redirect) — genuinely new mechanic, unrun
+## 29. One For All (damage redirect) — genuinely new mechanic, unrun
 
 - Cast it on an ally, have a mob hit *them*, and confirm 10% of that
   damage lands on *you* (the caster) instead — watch both health bars.
@@ -886,7 +1007,7 @@ real network latency, which local testing doesn't exercise.
   min), redirect (10%), mana cost (50), and instant cast all came from
   you.
 
-## 29. Auto-attack
+## 30. Auto-attack
 
 - Right-click a mob (a quick click, not a drag): does it target and arm
   auto-attack without also turning the camera?
@@ -895,7 +1016,7 @@ real network latency, which local testing doesn't exercise.
 - Tab to a different target while auto-attacking — does it follow, or
   get stuck attacking the old target?
 
-## 30. Party frames + F1–F5 targeting + minimap compass
+## 31. Party frames + F1–F5 targeting + minimap compass
 
 - With 2+ clients connected: does each player see the *other* player(s)'
   health/mana bars top-right, correctly updating live as they take
@@ -923,7 +1044,7 @@ real network latency, which local testing doesn't exercise.
   walking toward the "N" label increase world Z)? The math should be
   right but was never seen rendered.
 
-## 31. Minimap / Echolocator
+## 32. Minimap / Echolocator
 
 - Confirm the map is blank with no items equipped (just your own dot).
 - Equip Echolocator: do mobs pulse onto the map every ~5s, stay frozen
@@ -932,7 +1053,7 @@ real network latency, which local testing doesn't exercise.
 - Transmitting Beacon on another player: do they show as a green dot on
   your map even with no reveal gear of your own equipped?
 
-## 32. Gear — ring slots and the recent renumbering
+## 33. Gear — ring slots and the recent renumbering
 
 - Equip a ring (Transmitting Beacon): does it go into Ring 1, and if
   Ring 1 is already full, does a second ring correctly fall into Ring 2
@@ -945,7 +1066,7 @@ real network latency, which local testing doesn't exercise.
   expect Main/Off/Trinket to have reset to empty — known, not a bug,
   just re-equip once.
 
-## 33. General combat/economy numbers worth a sanity pass
+## 34. General combat/economy numbers worth a sanity pass
 
 - Mana: 120 per bolt, 1000 pool (1250 with Staff's new +250 max mana),
   regen in 5s ticks — does an actual fight feel like mana is a real
@@ -958,7 +1079,7 @@ real network latency, which local testing doesn't exercise.
   names ("Regeneration" grants the "Rejuvenation" buff — the underlying
   effect wasn't renamed, only the item).
 
-## 34. Firebolt/Icebolt VFX not homing — diagnosed and fixed (twice), needs confirming
+## 35. Firebolt/Icebolt VFX not homing — diagnosed and fixed (twice), needs confirming
 
 - **First fix (real, but not the actual cause)**: the VFX prefabs'
   particle systems had Simulation Space set to World on most layers,
@@ -1021,7 +1142,7 @@ real network latency, which local testing doesn't exercise.
   right-click the specific prefab → Reimport) and confirm the Project
   window isn't showing a stuck import spinner, then retest.
 
-## 35. Still outstanding from earlier sessions (unrelated to the above, just parked here)
+## 36. Still outstanding from earlier sessions (unrelated to the above, just parked here)
 
 - The VPS still runs the **pre-refactor server build** — its network
   protocol no longer matches this client at all. Nothing will connect

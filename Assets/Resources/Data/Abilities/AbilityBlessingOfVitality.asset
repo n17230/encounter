@@ -25,7 +25,10 @@ MonoBehaviour:
   ShieldAmount: 0
   MissileSpeed: 15
   ProjectilePrefab: {fileID: 0}
-  CastVfxPrefab: {fileID: 0}
+  CastVfxPrefab: {fileID: 1417743600138777596, guid: e6f07c1f9b84b9e41b865d1052260a89,
+    type: 3}
+  TargetVfxPrefab: {fileID: 427106131876683581, guid: 76204a57e3d5cdc458026a1c115397c5,
+    type: 3}
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0

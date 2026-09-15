@@ -147,6 +147,46 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (`NetworkVariable<float>`) absorbs damage before health in
     `DealDamage`; a new grant replaces any remainder rather than
     stacking, and it has no duration cap — it persists until consumed.
+    `ShieldVisual` (`Player.prefab` only, `Scripts/Combat/ShieldVisual.cs`)
+    shows `shieldVfxPrefab` (Shield_Arcane) on the shielded character for
+    as long as `ShieldAmount` stays above 0 — reacts to the
+    already-everyone-synced `NetworkVariable` directly, so every client
+    (not just the owner) sees it with no RPC needed; skipped on a
+    headless dedicated server.
+    `EffectOverheadVisual` (`Scripts/Player/EffectOverheadVisual.cs`) is
+    the same everyone-sees-it pattern generalized to any status effect:
+    shows a VFX above the character's head for as long as a specific
+    `StatusEffectData` is in `CharacterStats.ActiveEffects` (also already
+    synced to everyone, via `NetworkList.OnListChanged`) — currently
+    wired once, for Vitality Ward (Blessing of Vitality's buff) with
+    Buff_Light.
+    `AuraGroundVisual` (`Scripts/Player/AuraGroundVisual.cs`) is the
+    ground-level counterpart for the two movement-auras specifically:
+    shows Aura_Arcane/Aura_Light at a player's feet for as long as
+    `CharacterEquipment.HasReplenishmentAura`/`HasRegenerationAura`
+    (two more everyone-synced flags, computed in `SetActiveAuras`
+    alongside `CastAuraRevealsMobs`) is true. Both auras pulse on a
+    repeating 6-tick cycle (tick = `AuraPulseInterval`, 1s) staggered by
+    each player's rank among connected players (1-6, sorted by
+    `OwnerClientId` — computed client-side by scanning `CharacterStats`
+    the same way `PartyFrames.PartyNumber` does, since
+    `NetworkManager.ConnectedClientsList` is server-only): each player's
+    own 3-tick visible window (fade in, peak at the middle tick, fade
+    back out — a half sine) starts on a different tick, so up to 6
+    players' pulses don't all flash in sync. Implemented as a scale
+    pulse (0 → full size → 0), not a true material alpha fade, since
+    these are full imported multi-layer particle VFX and scale is what
+    reliably fades "the whole effect" without reaching into every
+    sub-emitter's own color curves.
+    `AbilityData.TargetVfxPrefab` is the target-side counterpart to
+    `CastVfxPrefab` (which plays on the *caster*, for the cast-time
+    window) — a purely cosmetic one-shot VFX played once at the
+    *target*'s position when a direct-hit (non-projectile,
+    non-ground-targeted) ability resolves successfully, via
+    `PlayerAbilities.PlayTargetVfxClientRpc`, same broadcast-and-
+    instantiate-locally approach as `CastVfxPrefab`/`Projectile
+    .impactVfxPrefab`. Blessing of Vitality uses both: Casting_Light on
+    the caster while casting, Spell_Light_6 on the target once it lands.
     `AbilityData.AreaAroundCaster` resolves centered on the caster's own
     position, hitting every `Targetable` (player or mob, caster
     included) within `GroundEffectRadius` — so a heal/shield AoE also

@@ -666,7 +666,24 @@ public class PlayerAbilities : NetworkBehaviour
                 Effect = ability.Effect,
                 EffectDuration = ability.DirectHitEffectDuration,
             });
+
+            if (ability.TargetVfxPrefab != null) PlayTargetVfxClientRpc(ability.Id, targetNetworkObjectId);
         }
+    }
+
+    // Everyone sees this at the target's position, not just the caster -
+    // purely cosmetic (no gameplay state), same instantiate-locally
+    // approach as PlayCastVfxClientRpc. E.g. Blessing of Vitality's
+    // Spell_Light_6 on the healed target.
+    [ClientRpc]
+    private void PlayTargetVfxClientRpc(string abilityId, ulong targetNetworkObjectId)
+    {
+        AbilityData ability = GameDatabase.GetAbility(abilityId);
+        if (ability == null || ability.TargetVfxPrefab == null) return;
+        if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObject)) return;
+
+        GameObject vfxInstance = Instantiate(ability.TargetVfxPrefab, targetObject.transform.position, Quaternion.identity);
+        Destroy(vfxInstance, 5f);
     }
 
     // No unit/ground targeting at all - resolves centered on the caster's
