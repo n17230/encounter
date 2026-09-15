@@ -1,5 +1,79 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &2254127640060416407
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 5618338672735851253}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.00307
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.60856
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.34131
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: a8d9674eb2fcd244ea544c2c80a68870,
+        type: 3}
+      propertyPath: m_Name
+      value: Skeleton_Mage
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a8d9674eb2fcd244ea544c2c80a68870, type: 3}
+--- !u!4 &1784265858060498556 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a8d9674eb2fcd244ea544c2c80a68870,
+    type: 3}
+  m_PrefabInstance: {fileID: 2254127640060416407}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2521431797299057399
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -21,7 +95,7 @@ PrefabInstance:
     - target: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -1
       objectReference: {fileID: 0}
     - target: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
@@ -91,29 +165,39 @@ PrefabInstance:
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: mainHandWeapon
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: b58878b16135c9668356f26a9f7647e2,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
       propertyPath: mageEnshroudEffect
-      value:
+      value: 
       objectReference: {fileID: 11400000, guid: 312261702a8041d54a755e093d103091,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
-      propertyPath: arcaneShieldBuffEffect
-      value:
-      objectReference: {fileID: 11400000, guid: 52be993faee85cc07e23bb5dc1e85214,
+      propertyPath: chillImmunityEffect
+      value: 
+      objectReference: {fileID: 11400000, guid: 73ee1124347b7beb5d4a4f1f869f2cdb,
         type: 2}
     - target: {fileID: 8000000000000000012, guid: 1ec85ee26249d2246892f9a23cd25a54,
         type: 3}
-      propertyPath: chillImmunityEffect
-      value:
-      objectReference: {fileID: 11400000, guid: 73ee1124347b7beb5d4a4f1f869f2cdb,
+      propertyPath: arcaneShieldBuffEffect
+      value: 
+      objectReference: {fileID: 11400000, guid: 52be993faee85cc07e23bb5dc1e85214,
         type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1784265858060498556}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1ec85ee26249d2246892f9a23cd25a54, type: 3}
+--- !u!4 &5618338672735851253 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8000000000000000002, guid: 1ec85ee26249d2246892f9a23cd25a54,
+    type: 3}
+  m_PrefabInstance: {fileID: 2521431797299057399}
+  m_PrefabAsset: {fileID: 0}

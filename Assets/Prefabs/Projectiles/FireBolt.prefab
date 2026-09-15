@@ -202,7 +202,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Projectile
   ShowTopMostFoldoutHeaderGroup: 1
-  impactVfxPrefab: {fileID: 793658156676631732, guid: fd3b802c2fdd92641aa23ec351995025, type: 3}
+  impactVfxPrefab: {fileID: 5685069347925975538, guid: fd3b802c2fdd92641aa23ec351995025, type: 3}
 --- !u!1001 &9111111111111110001
 PrefabInstance:
   m_ObjectHideFlags: 0

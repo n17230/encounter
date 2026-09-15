@@ -647,10 +647,10 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   replenishmentVfxPrefab: {fileID: 3013692993095305385, guid: a3c2a5190890d2b4caf52909306f6828,
     type: 3}
-  regenerationVfxPrefab: {fileID: 174211133732289389, guid: 45ac8be0dc80ecf48b330e3d398901f6,
+  regenerationVfxPrefab: {fileID: 174211133732289389, guid: 594d40f48a7e46a46a7735f6d2f2d274,
     type: 3}
   groundOffset: 0.05
-  sizeMultiplier: 1
+  sizeMultiplier: 0.67
 --- !u!114 &7777777777777770005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -664,7 +664,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EffectOverheadVisual
   ShowTopMostFoldoutHeaderGroup: 1
-  watchedEffect: {fileID: 11400000, guid: 18d2fb04f1d80d1447ed35d23dad4e62, type: 2}
-  vfxPrefab: {fileID: 6479325296391499975, guid: 85eaee30681296a48ba9564854369b08,
-    type: 3}
+  mappings:
+  - Effect: {fileID: 11400000, guid: 18d2fb04f1d80d1447ed35d23dad4e62, type: 2}
+    VfxPrefab: {fileID: 6479325296391499975, guid: e694fb120e0cb4d4bb3fa1a9b3285b79,
+      type: 3}
+    HeadHeight: 2.2
+  - Effect: {fileID: 11400000, guid: 4c8b3d49e7fa21f7778d75d826d97ba7, type: 2}
+    VfxPrefab: {fileID: 3671594976279353174, guid: 9c77f9c1191db9444b9aa844d3981727,
+      type: 3}
+    HeadHeight: -0.5
   headHeight: 2.2

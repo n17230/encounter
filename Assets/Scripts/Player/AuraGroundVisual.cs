@@ -19,7 +19,7 @@ public class AuraGroundVisual : NetworkBehaviour
     // Applied once at instantiation, not animated - unlike the old
     // scale-pulse approach, a static scale set before any particles spawn
     // is safe (1x = the imported prefab's own natural size).
-    [SerializeField] private float sizeMultiplier = 1f;
+    [SerializeField] private float sizeMultiplier = 0.67f;
 
     // Pulse timing: a repeating 6-tick cycle (tick = CharacterEquipment's
     // own AuraPulseInterval, 1s) where each connected player's pulse

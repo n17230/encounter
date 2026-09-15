@@ -1,43 +1,69 @@
+using System;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-// Shows vfxPrefab above a character's head for as long as watchedEffect is
-// one of their currently active status effects (per CharacterStats
-// .ActiveEffects, already synced to everyone) - e.g. Vitality Ward +
-// Buff_Light. Purely visual, reacts the same way on every client, not
-// just the affected character's owner. Polls ActiveEffects every frame
-// rather than subscribing to NetworkList.OnListChanged - the same
-// proven approach PlayerHUD.DescribeEffects already uses for this exact
-// list, instead of an event subscription pattern untested elsewhere in
-// this codebase.
+// Shows a VFX above a character's head for as long as a specific status
+// effect is currently active on them (per CharacterStats.ActiveEffects,
+// already synced to everyone) - one persistent instance per active effect,
+// not re-triggered per tick. Supports several (effect, VFX, height) triples
+// from one component so multiple buffs can each get their own overhead
+// indicator at its own height - e.g. Vitality Ward + Buff_Light, Everliving
+// Touch + Light Dots. Purely visual, reacts the same way on every client,
+// not just the affected character's owner. Polls ActiveEffects every frame
+// rather than
+// subscribing to NetworkList.OnListChanged - the same proven approach
+// PlayerHUD.DescribeEffects already uses for this exact list, instead of
+// an event subscription pattern untested elsewhere in this codebase.
 [RequireComponent(typeof(CharacterStats))]
 public class EffectOverheadVisual : NetworkBehaviour
 {
-    [SerializeField] private StatusEffectData watchedEffect;
-    [SerializeField] private GameObject vfxPrefab;
-    [SerializeField] private float headHeight = 2.2f;
+    [Serializable]
+    private struct Mapping
+    {
+        public StatusEffectData Effect;
+        public GameObject VfxPrefab;
+        public float HeadHeight;
+    }
+
+    [SerializeField] private List<Mapping> mappings = new List<Mapping>();
 
     private CharacterStats stats;
-    private GameObject activeVfx;
+    private readonly List<GameObject> activeVfx = new List<GameObject>();
 
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
+        while (activeVfx.Count < mappings.Count) activeVfx.Add(null);
     }
 
     public override void OnNetworkDespawn()
     {
-        if (activeVfx != null) Destroy(activeVfx);
+        foreach (GameObject vfx in activeVfx)
+        {
+            if (vfx != null) Destroy(vfx);
+        }
     }
 
     private void Update()
     {
-        if (!IsClient || watchedEffect == null || vfxPrefab == null) return;
+        if (!IsClient) return;
+
+        for (int i = 0; i < mappings.Count; i++)
+        {
+            UpdateMapping(i);
+        }
+    }
+
+    private void UpdateMapping(int index)
+    {
+        Mapping mapping = mappings[index];
+        if (mapping.Effect == null || mapping.VfxPrefab == null) return;
 
         bool active = false;
         foreach (ActiveEffectNet entry in stats.ActiveEffects)
         {
-            if (entry.EffectId.ToString() == watchedEffect.Id)
+            if (entry.EffectId.ToString() == mapping.Effect.Id)
             {
                 active = true;
                 break;
@@ -46,17 +72,17 @@ public class EffectOverheadVisual : NetworkBehaviour
 
         if (!active)
         {
-            if (activeVfx != null)
+            if (activeVfx[index] != null)
             {
-                Destroy(activeVfx);
-                activeVfx = null;
+                Destroy(activeVfx[index]);
+                activeVfx[index] = null;
             }
             return;
         }
 
-        if (activeVfx == null) activeVfx = Instantiate(vfxPrefab);
+        if (activeVfx[index] == null) activeVfx[index] = Instantiate(mapping.VfxPrefab);
 
         Vector3 position = transform.position;
-        activeVfx.transform.position = new Vector3(position.x, position.y + headHeight, position.z);
+        activeVfx[index].transform.position = new Vector3(position.x, position.y + mapping.HeadHeight, position.z);
     }
 }

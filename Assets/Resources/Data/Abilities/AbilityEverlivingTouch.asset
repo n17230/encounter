@@ -23,9 +23,12 @@ MonoBehaviour:
   Damage: 0
   HealAmount: 0
   ShieldAmount: 0
-  MissileSpeed: 15
-  ProjectilePrefab: {fileID: 0}
+  MissileSpeed: 60
+  ProjectilePrefab: {fileID: 634947618538231971, guid: f383dfd5303eb41479d1788d2d3055e0,
+    type: 3}
   CastVfxPrefab: {fileID: 0}
+  TargetVfxPrefab: {fileID: 3671594976279353174, guid: 9c77f9c1191db9444b9aa844d3981727,
+    type: 3}
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0
@@ -41,3 +44,24 @@ MonoBehaviour:
   RecallTarget: 0
   ExclusiveSingleTarget: 0
   AreaAroundCaster: 0
+  EnemiesAroundCaster: 0
+  ConeAroundCaster: 0
+  ConeAngle: 90
+  RequiresMeleeWeapon: 0
+  RequiresShield: 0
+  WeaponDamagePercent: 0
+  ChargeForwardDistance: 0
+  ChargeToTarget: 0
+  ChargeSpeed: 20
+  IsAuraSpell: 0
+  AuraRange: 40
+  AuraReveals: 0
+  RemovesNegativeEffect: 0
+  IsPersistentStructure: 0
+  StructurePrefab: {fileID: 0}
+  StructureWidth: 0
+  StructureHeight: 5
+  StructureThickness: 2
+  IsFollowingZone: 0
+  FollowingZonePrefab: {fileID: 0}
+  SelfBuff: 0
