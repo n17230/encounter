@@ -56,6 +56,14 @@ public class CharacterAppearance : NetworkBehaviour
     // class knows which of the two rigs is currently live.
     public Animator ActiveAnimator { get; private set; }
 
+    // The active rig's own root Transform (maleRigRoot or femaleRigRoot) -
+    // distinct from this component's own transform (the network-replicated
+    // player root, also the camera's parent and what movement/combat-facing
+    // read). Purely-visual rotations (see PlayerMovement's strafe-turn)
+    // belong on this transform instead, so they never affect movement
+    // direction, the camera, or FacingCone checks.
+    public Transform ActiveRigRoot { get; private set; }
+
     private void Awake()
     {
         applier = new CharacterAppearanceApplier(maleRigRoot, femaleRigRoot);
@@ -166,6 +174,7 @@ public class CharacterAppearance : NetworkBehaviour
         // Skipped when unchanged so a color-only Apply() doesn't needlessly
         // re-point the NetworkAnimator every time.
         Transform activeRigRoot = IsFemale.Value ? femaleRigRoot : maleRigRoot;
+        ActiveRigRoot = activeRigRoot;
         Animator resolvedAnimator = activeRigRoot != null ? activeRigRoot.GetComponentInChildren<Animator>() : null;
         if (resolvedAnimator != ActiveAnimator)
         {

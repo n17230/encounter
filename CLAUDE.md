@@ -734,7 +734,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   textures are generated at runtime.
 - **Controls**: W/S forward/back (both mouse buttons also = forward), A/D
   strafe, Space jump, `\` auto-run (cancelled by W/S or opening the
-  menu), right-drag turns the body, left-drag free-looks the camera,
+  menu), right-drag turns the body, left-drag free-looks the camera.
+  The character's visual model also faces the direction of net WASD
+  movement, but only while forward input is forward or neutral — straight
+  ahead for plain forward, 90° for a pure strafe, a blended diagonal for
+  forward+strafe (`PlayerMovement.FixedUpdate` sets
+  `CharacterAppearance.ActiveRigRoot`'s local yaw every tick via
+  `Atan2(strafeInput, forwardInput)` — level-triggered from current input,
+  not a one-shot turn-per-press, so it can't accumulate and always
+  resolves back to neutral on its own). Any backward component (S alone,
+  or S+A/S+D) instead always faces forward, ignoring strafe entirely for
+  this calculation — actual movement itself is unaffected either way,
+  this only governs which way the model visibly faces while backpedaling
+  in any combination. The active rig only, never the player's own
+  transform, which also drives movement direction, the camera, and
+  `FacingCone` combat checks — purely cosmetic by design: it doesn't
+  affect movement direction, the camera, or combat facing/hit detection,
+  and isn't currently visible to other clients (same limitation as the
+  still-open cross-client animation sync issue).
   Tab cycles targets, `` ` `` self-targets (fixed, not rebindable, same
   as F1–F5 party targeting), Escape clears the target first and opens
   the menu only when nothing is targeted. Left-click is movement/camera
@@ -865,6 +882,14 @@ renamed, or retuned.
    `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
    on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
    specified in the design, see `review_with_fable.md`.
+10. **Animation doesn't replicate to other clients** — player 1's animation
+    plays on player 1's own screen but not on player 2's, and vice versa.
+    `CharacterAppearance` re-points a `NetworkAnimator` to the active rig's
+    `Animator` (see Architecture above), but the Editor wiring this needs
+    (component on `Player.prefab`'s root, Authority Mode: Owner, its
+    `Animator` field pre-assigned to one rig's `Animator` rather than left
+    blank) hasn't been confirmed as actually applied — check that first
+    before any further code changes here.
 
 ## Notes for future sessions
 

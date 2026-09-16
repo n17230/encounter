@@ -189,6 +189,37 @@ public class PlayerMovement : NetworkBehaviour
             pendingLookDeltaYaw = 0f;
         }
 
+        // Movement-facing: the visual rig (CharacterAppearance
+        // .ActiveRigRoot) faces the direction of net WASD movement, but
+        // only while forwardInput is forward or neutral - pure strafe
+        // (A/D alone) faces 90 degrees, forward+strafe (W+A/W+D) blends
+        // to a smooth 45 degrees, plain forward faces straight ahead.
+        // Any backward component (S alone, or S+A/S+D) instead always
+        // faces forward, full stop, ignoring strafe entirely for this
+        // calculation - the character keeps facing forward rather than
+        // spinning to face away from the camera (or to some back-left/
+        // back-right angle) while backpedaling in any combination. Actual
+        // movement itself is unaffected either way - only which way the
+        // model visibly faces while doing it. Idle (no input) also faces
+        // forward (Atan2(0,0) is 0 by convention).
+        // Level-triggered - recomputed from live input every tick, no
+        // accumulation possible - and never touches this transform,
+        // which is also what movement direction, the camera, and combat
+        // facing (FacingCone) all read: purely cosmetic, doesn't affect
+        // movement direction, the camera, or combat facing/hit
+        // detection - only what the character visibly looks like it's
+        // facing. Owner-local only, like the rest of this method; other
+        // clients don't see this yet (same limitation as the still-open
+        // cross-client animation sync issue).
+        Transform rigRoot = appearance != null ? appearance.ActiveRigRoot : null;
+        if (rigRoot != null)
+        {
+            float facingYaw = forwardInput < 0f
+                ? 0f
+                : Mathf.Atan2(strafeInput, forwardInput) * Mathf.Rad2Deg;
+            rigRoot.localRotation = Quaternion.Euler(0f, facingYaw, 0f);
+        }
+
         Vector3 horizontalVelocity;
         if (IsPulling)
         {

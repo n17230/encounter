@@ -82,6 +82,12 @@ public class CharacterAppearanceApplier
         if (maleRigRoot == null || femaleRigRoot == null) return;
 
         bool female = selection.Female;
+        // Only ever toggles active state here - never touches either rig
+        // root's own localRotation. PlayerMovement's strafe-turn rotates
+        // CharacterAppearance.ActiveRigRoot directly and relies on that
+        // rotation surviving an unrelated Apply() call (e.g. a color-only
+        // change); resetting/reparenting a rig root here would silently
+        // wipe an in-progress turn.
         maleRigRoot.gameObject.SetActive(!female);
         femaleRigRoot.gameObject.SetActive(female);
         Dictionary<string, GameObject> nodes = female ? femaleNodes : maleNodes;
