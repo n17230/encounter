@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56b5961801c17add967f6a792aa6571c, type: 3}
+  m_Name: Appearance_headwear_eyepatch_r
+  m_EditorClassIdentifier: 
+  Id: headwear_eyepatch_r
+  DisplayName: Eyepatch (Right)
+  Gender: 2
+  Prefab: {fileID: 1803138175406489789, guid: 2b695258525a4244e9d0c2f1c2823ace, type: 3}

@@ -40,6 +40,7 @@ public class PlayerMovement : NetworkBehaviour
     private CharacterController controller;
     private CharacterStats stats;
     private NetworkTransform networkTransform;
+    private CharacterAppearance appearance;
     private float verticalVelocity;
 
     private readonly MovementValidator validator = new MovementValidator();
@@ -91,6 +92,7 @@ public class PlayerMovement : NetworkBehaviour
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
         networkTransform = GetComponent<NetworkTransform>();
+        appearance = GetComponent<CharacterAppearance>();
     }
 
     public override void OnNetworkSpawn()
@@ -220,6 +222,12 @@ public class PlayerMovement : NetworkBehaviour
             // liftoff, ignoring subsequent turning/input changes to direction.
             horizontalVelocity = airborneVelocity;
         }
+
+        // Owner-authoritative, same as everything else in this method - the
+        // NetworkAnimator (Authority Mode: Owner) replicates this to every
+        // other client, matching the same "speed" parameter/threshold
+        // convention every mob's Animator Controller already uses.
+        appearance?.ActiveAnimator?.SetFloat("speed", horizontalVelocity.magnitude);
 
         if (grounded && verticalVelocity < 0f)
         {

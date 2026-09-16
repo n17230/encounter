@@ -80,4 +80,192 @@ public class PlayerProfileTests
         Assert.IsFalse(GearSlot.Trinket.IsRing());
         Assert.IsFalse(GearSlot.MainHand.IsRing());
     }
+
+    [Test]
+    public void NormalizeDefaultsTopAndBottomToAMatchingGenderOption()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.Normalize();
+
+        Assert.IsFalse(string.IsNullOrEmpty(profile.AppearanceTopId));
+        Assert.IsFalse(string.IsNullOrEmpty(profile.AppearanceBottomId));
+        Assert.AreEqual(AppearanceGender.Male, profile.GetAppearanceTop().Gender);
+        Assert.AreEqual(AppearanceGender.Male, profile.GetAppearanceBottom().Gender);
+        Assert.AreEqual(AppearanceSlot.Top, profile.GetAppearanceTop().Slot);
+        Assert.AreEqual(AppearanceSlot.Bottom, profile.GetAppearanceBottom().Slot);
+    }
+
+    // Eyebrows/Eyes/Mouth all go through the same NormalizeRequiredSlot
+    // helper as Top/Bottom - one representative slot (Eyebrows) covers the
+    // shared logic; the others are exercised by DrawAppearancePanel's tabs
+    // reading/writing the same catalog, not re-tested per-slot here.
+    [Test]
+    public void NormalizeDefaultsEyebrowsToAMatchingGenderOption()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.Normalize();
+
+        Assert.IsFalse(string.IsNullOrEmpty(profile.AppearanceEyebrowsId));
+        Assert.AreEqual(AppearanceGender.Male, profile.GetAppearanceEyebrows().Gender);
+        Assert.AreEqual(AppearanceSlot.Eyebrows, profile.GetAppearanceEyebrows().Slot);
+    }
+
+    [Test]
+    public void NormalizeClearsAndRedefaultsEyebrowsWhenGenderSwitches()
+    {
+        PlayerProfile profile = new PlayerProfile { AppearanceIsFemale = false, AppearanceEyebrowsId = "eyebrows_m_3" };
+        profile.Normalize();
+        Assert.AreEqual("eyebrows_m_3", profile.AppearanceEyebrowsId);
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+
+        Assert.AreEqual(AppearanceGender.Female, profile.GetAppearanceEyebrows().Gender);
+    }
+
+    // Hair and FacialHair both use NormalizeOptionalSlot instead - "none" is
+    // a valid choice (e.g. hair tucked away under a full helmet, or no
+    // facial hair at all) and must survive Normalize() rather than being
+    // redefaulted to some other style.
+    [Test]
+    public void NormalizeLeavesHairEmptyRatherThanDefaultingIt()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.Normalize();
+
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceHairId));
+    }
+
+    [Test]
+    public void NormalizeClearsHairThatNoLongerMatchesGender()
+    {
+        PlayerProfile profile = new PlayerProfile { AppearanceIsFemale = false, AppearanceHairId = "hair_m_5" };
+        profile.Normalize();
+        Assert.AreEqual("hair_m_5", profile.AppearanceHairId);
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceHairId));
+    }
+
+    [Test]
+    public void NormalizeLeavesFacialHairEmptyRatherThanDefaultingIt()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.Normalize();
+
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceFacialHairId));
+    }
+
+    [Test]
+    public void NormalizeClearsFacialHairThatNoLongerMatchesGender()
+    {
+        PlayerProfile profile = new PlayerProfile { AppearanceIsFemale = false, AppearanceFacialHairId = "facialhair_m_1" };
+        profile.Normalize();
+        Assert.AreEqual("facialhair_m_1", profile.AppearanceFacialHairId);
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceFacialHairId));
+    }
+
+    [Test]
+    public void NormalizeDropsAccessoriesThatNoLongerMatchGender()
+    {
+        PlayerProfile profile = new PlayerProfile
+        {
+            AppearanceIsFemale = false,
+            AppearanceAccessoryIds = "accessory_m_knight_pauldrons;accessory_m_knight_greathelm",
+        };
+        profile.Normalize();
+        Assert.IsTrue(profile.HasAccessory("accessory_m_knight_pauldrons"));
+        Assert.IsTrue(profile.HasAccessory("accessory_m_knight_greathelm"));
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+
+        Assert.IsFalse(profile.HasAccessory("accessory_m_knight_pauldrons"));
+        Assert.IsFalse(profile.HasAccessory("accessory_m_knight_greathelm"));
+    }
+
+    [Test]
+    public void ToggleAccessoryAddsAndRemovesIndependently()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.ToggleAccessory("accessory_m_knight_pauldrons", true);
+        profile.ToggleAccessory("accessory_m_knight_greathelm", true);
+
+        Assert.IsTrue(profile.HasAccessory("accessory_m_knight_pauldrons"));
+        Assert.IsTrue(profile.HasAccessory("accessory_m_knight_greathelm"));
+
+        profile.ToggleAccessory("accessory_m_knight_pauldrons", false);
+
+        Assert.IsFalse(profile.HasAccessory("accessory_m_knight_pauldrons"));
+        Assert.IsTrue(profile.HasAccessory("accessory_m_knight_greathelm"));
+    }
+
+    [Test]
+    public void NormalizeKeepsAUnisexHeadwearRegardlessOfGender()
+    {
+        PlayerProfile profile = new PlayerProfile { AppearanceHeadwearId = "headwear_beret" };
+        profile.Normalize();
+        Assert.AreEqual("headwear_beret", profile.AppearanceHeadwearId);
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+        Assert.AreEqual("headwear_beret", profile.AppearanceHeadwearId);
+    }
+
+    [Test]
+    public void NormalizeClearsAndRedefaultsTopBottomHeadwearWhenGenderSwitches()
+    {
+        PlayerProfile profile = new PlayerProfile
+        {
+            AppearanceIsFemale = false,
+            AppearanceTopId = "top_m_knight",
+            AppearanceBottomId = "bottom_m_knight",
+            AppearanceHeadwearId = "headwear_kettlehat_m",
+        };
+        profile.Normalize();
+        Assert.AreEqual("top_m_knight", profile.AppearanceTopId);
+
+        profile.AppearanceIsFemale = true;
+        profile.Normalize();
+
+        Assert.AreEqual(AppearanceGender.Female, profile.GetAppearanceTop().Gender);
+        Assert.AreEqual(AppearanceGender.Female, profile.GetAppearanceBottom().Gender);
+        // A gender-specific headwear that no longer matches is cleared
+        // outright, not re-defaulted (unlike Top/Bottom, "no headwear" is a
+        // valid, common choice).
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceHeadwearId));
+    }
+
+    [Test]
+    public void NormalizeClearsAStaleHeadwearIdThatNoLongerResolves()
+    {
+        PlayerProfile profile = new PlayerProfile { AppearanceHeadwearId = "headwear_does_not_exist" };
+        profile.Normalize();
+
+        Assert.IsTrue(string.IsNullOrEmpty(profile.AppearanceHeadwearId));
+    }
+
+    [Test]
+    public void NormalizeClampsAppearanceColorIndicesToThePaletteRange()
+    {
+        PlayerProfile profile = new PlayerProfile
+        {
+            AppearanceBodyColorIndex = 999,
+            AppearanceObjectColorIndex = -5,
+        };
+        profile.Normalize();
+
+        AppearanceColorPalette palette = GameDatabase.Palette;
+        Assert.IsNotNull(palette);
+        Assert.GreaterOrEqual(profile.AppearanceBodyColorIndex, 0);
+        Assert.Less(profile.AppearanceBodyColorIndex, palette.BodyColors.Length);
+        Assert.GreaterOrEqual(profile.AppearanceObjectColorIndex, 0);
+        Assert.Less(profile.AppearanceObjectColorIndex, palette.ObjectColors.Length);
+    }
 }

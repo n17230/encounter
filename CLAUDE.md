@@ -18,6 +18,70 @@ still named `reallyfungame`), built in Unity, hosted on a VPS the user
 controls so they and friends can play together. Git: `github.com/n17230/encounter`
 (user `n17230`).
 
+## Workflow for every request
+
+Every request runs this pipeline, not just "write the code." Skip nothing
+unless the request genuinely doesn't touch that stage (e.g. a pure question
+has no gate/mutation/review stage to run).
+
+1. **Refine.** Restate the exact ask against Core rules 1–2 before touching
+   anything: does it require inventing anything the user didn't specify, or
+   touching code outside what was asked? Then check it against the actual
+   current codebase (the referenced classes/assets/fields still exist and
+   look like what the ask assumes) rather than proceeding on the ask's own
+   description of the code. If either check turns up something unclear or
+   inconsistent, ask (`AskUserQuestion`) instead of guessing.
+2. **Plan.** For anything beyond a trivial/obvious change, use Plan Mode to
+   settle the technical approach (which files, what structure, test
+   placement) and get sign-off *before* writing code — don't improvise
+   architecture mid-implementation. Skip this for genuinely small asks
+   (rename, one-line fix, add a test) — proportional, not ceremonial.
+3. **Act (generate).** Implement the minimal diff. Any new pure-C# logic
+   (the kind that lives in `Scripts/**` and is unit-testable, per the
+   existing `Assets/Tests/EditMode` pattern) gets its test written in the
+   same change, not deferred to later.
+4. **Quality gate.** Before calling anything done: `dotnet build
+   Tools/CompileCheck.csproj` must pass clean; re-check the diff against
+   scope (nothing tangential slipped in — if something did, back it out and
+   write it down for the user instead of keeping it); any new `.cs`/
+   `.asmdef`/folder has a hand-authored `.meta` with a fresh GUID.
+5. **Mutation pass (reasoned, not executed) — fresh subagent.** Hand this
+   off to a fresh, non-fork subagent (`Agent`, e.g. `general-purpose`),
+   given only the diff and the touched test file(s) — not the conversation
+   history that produced them. It should hand-trace 2-3 plausible mutations
+   (flipped comparison, off-by-one, swapped constant) against the tests and
+   report which would and wouldn't be caught. A `fork` doesn't satisfy this
+   — it inherits full context, so it shares whatever misunderstanding
+   produced the code and tests together. This can't actually execute from
+   here — EditMode tests only run from the Editor's Test Runner, and there
+   is no real executable test suite to run outside it, by design — so it's
+   reasoned coverage, not a passing run.
+6. **Independent review — fresh subagent.** Same reasoning as step 5: hand
+   the diff to a fresh, non-fork subagent for review rather than treating
+   "I wrote it carefully" as the review. Give it the diff and the ask, not
+   my reasoning for why it's correct. Report its findings before declaring
+   the change done.
+7. **Manual verification — enumerated, targeted.** Since Play Mode /
+   multi-client runs can't be driven from here, hand back a short concrete
+   checklist of what to click/test in the Editor for the golden path plus
+   one edge case. On top of that baseline, whenever the change touches
+   anything this pipeline structurally cannot judge — visual/VFX
+   appearance, animation timing, movement/camera feel, balance or tuning
+   numbers, or anything needing a hand-authored Editor step (prefab
+   `GlobalObjectIdHash`, meshes, materials, per "Not yet done" above) —
+   call that out as its own numbered list of specific things for the user
+   to check, not folded into the generic checklist. Say plainly that these
+   items need the user's own judgment and haven't been (and can't be)
+   verified by anything upstream in this pipeline. Never claim "it works"
+   without that caveat attached.
+8. **Merge readiness — always separate.** Whether something is ready to
+   merge/push is its own explicit statement, called out on its own, never
+   folded into "done." Nothing gets merged as part of this flow.
+
+Infrastructure/ops concerns (server provisioning, MCP tooling, monitoring/
+logging setup) are out of this loop entirely — not part of any request's
+pipeline unless the user separately asks for ops work specifically.
+
 ## Tech baseline
 
 - Unity **6.3 LTS** (`6000.3.23f1`), URP 17.3.0, Netcode for GameObjects

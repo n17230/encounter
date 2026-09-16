@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -7,7 +8,14 @@ using UnityEngine;
 // from and written to ProfileStore.Current, which persists across restarts.
 public class MainMenu : MonoBehaviour
 {
-    private enum Panel { None, Skills, Gear, Options, Summon }
+    private enum Panel { None, Skills, Gear, Appearance, Options, Summon }
+
+    // Live character preview shown on the Appearance panel - see
+    // CharacterPreview. Both are optional (null until the Editor-side
+    // preview stage is set up); the panel falls back to a placeholder
+    // message rather than failing when either isn't wired yet.
+    [SerializeField] private CharacterPreview characterPreview;
+    [SerializeField] private Texture previewRenderTexture;
 
     private static readonly KeyBindingOption[] AllowedKeyBindings = BuildAllowedKeyBindings();
     private static readonly KeyCode[] AllKeyCodes = (KeyCode[])System.Enum.GetValues(typeof(KeyCode));
@@ -27,6 +35,8 @@ public class MainMenu : MonoBehaviour
     private int awaitingKeyForSlot = -1;
     private int awaitingKeyForMovement = -1;
     private Vector2 scrollPosition;
+    private int appearanceTabIndex;
+    private Vector2 appearanceTabScrollPosition;
     private Vector2 summonScrollPosition;
     private int summonMobIndex;
     private int summonCount = 1;
@@ -203,6 +213,9 @@ public class MainMenu : MonoBehaviour
             case Panel.Gear:
                 DrawGearPanel();
                 break;
+            case Panel.Appearance:
+                DrawAppearancePanel();
+                break;
             case Panel.Options:
                 DrawOptionsPanel();
                 break;
@@ -334,14 +347,23 @@ public class MainMenu : MonoBehaviour
     {
         activePanel = panel;
         scrollPosition = Vector2.zero;
+        appearanceTabIndex = 0;
+        appearanceTabScrollPosition = Vector2.zero;
     }
 
+    // Buttons grouped by purpose rather than a flat list - character-build
+    // choices together, then utility tools, then the action that leaves the
+    // menu - per the game-ui-design skill's guidance for this surface (a
+    // low-stakes flat menu: group for scannability, don't over-design it).
     private void DrawMainPanel()
     {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 110, 200, 220));
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 140, 200, 280));
         if (GUILayout.Button("Choose Skills", GUILayout.Height(40))) OpenPanel(Panel.Skills);
         if (GUILayout.Button("Choose Gear", GUILayout.Height(40))) OpenPanel(Panel.Gear);
+        if (GUILayout.Button("Character Creation", GUILayout.Height(40))) OpenPanel(Panel.Appearance);
+        GUILayout.Space(10);
         if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
+        GUILayout.Space(10);
         if (GUILayout.Button("Enter Testing Area", GUILayout.Height(40)))
         {
             ProfileStore.Save();
@@ -352,11 +374,14 @@ public class MainMenu : MonoBehaviour
 
     private void DrawInGamePanel()
     {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 130, 200, 260));
+        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 160, 200, 320));
         if (GUILayout.Button("Skills", GUILayout.Height(40))) OpenPanel(Panel.Skills);
         if (GUILayout.Button("Gear", GUILayout.Height(40))) OpenPanel(Panel.Gear);
+        if (GUILayout.Button("Character Creation", GUILayout.Height(40))) OpenPanel(Panel.Appearance);
+        GUILayout.Space(10);
         if (GUILayout.Button("Summon Mobs", GUILayout.Height(40))) OpenPanel(Panel.Summon);
         if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
+        GUILayout.Space(10);
         if (GUILayout.Button("Resume", GUILayout.Height(40))) CloseInGameMenu();
         GUILayout.EndArea();
     }
@@ -607,6 +632,225 @@ public class MainMenu : MonoBehaviour
         if (Profile.GetGear(GearSlot.Ring1) == null) return GearSlot.Ring1;
         if (Profile.GetGear(GearSlot.Ring2) == null) return GearSlot.Ring2;
         return GearSlot.Ring1;
+    }
+
+    // Cosmetic-only: everything except weapons is selectable, independently
+    // per category (not locked to the pack's pre-built class presets), plus
+    // two recolor swatches. No stat effect - see CharacterAppearance.
+    // Weapons are never shown here (see the character creation plan notes -
+    // a visually-equipped weapon is planned as a future Gear-driven feature
+    // instead). A live preview (CharacterPreview, rendered into
+    // previewRenderTexture) sits alongside the choices so a pick's effect is
+    // visible immediately. With nine selectable categories, a flat row of
+    // parallel columns (the original Top/Bottom/Headwear layout) doesn't
+    // scale - a category-tab list replaces it, one list/checklist visible
+    // at a time, per the game-ui-design skill's guidance to group by
+    // purpose rather than cram everything into view at once.
+    private static readonly string[] AppearanceTabLabels =
+    {
+        "Top", "Bottom", "Headwear", "Hair", "Facial Hair", "Eyebrows", "Eyes", "Mouth", "Accessories"
+    };
+
+    private void DrawAppearancePanel()
+    {
+        const float previewWidth = 200f;
+        const float previewHeight = 380f;
+        const float contentX = previewWidth + 30f;
+        const float tabColumnWidth = 130f;
+        const float listHeight = 320f;
+        const float panelWidth = 700f;
+        const float panelHeight = 520f;
+
+        float panelX = UIScale.Width / 2f - panelWidth / 2f;
+        float panelY = UIScale.Height / 2f - panelHeight / 2f;
+
+        GUI.Label(new Rect(panelX, panelY, 400, 24), "Character Creation");
+
+        Rect previewRect = new Rect(panelX, panelY + 30f, previewWidth, previewHeight);
+        GUI.Box(previewRect, GUIContent.none);
+        if (characterPreview != null) characterPreview.Refresh(Profile);
+        if (previewRenderTexture != null)
+        {
+            GUI.DrawTexture(previewRect, previewRenderTexture, ScaleMode.ScaleToFit);
+        }
+        else
+        {
+            GUIStyle centeredWrap = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUI.Label(previewRect, "Preview not configured yet", centeredWrap);
+        }
+
+        // Hold to spin the preview character to see it from other angles -
+        // see CharacterPreview.Rotate. GUI.RepeatButton (not GUI.Button) so
+        // holding the mouse down keeps rotating smoothly instead of one
+        // fixed step per click.
+        float rotateY = previewRect.yMax + 6f;
+        Rect rotateLeftRect = new Rect(previewRect.x, rotateY, previewWidth / 2f - 3f, 28f);
+        Rect rotateRightRect = new Rect(previewRect.x + previewWidth / 2f + 3f, rotateY, previewWidth / 2f - 3f, 28f);
+        if (characterPreview != null)
+        {
+            if (GUI.RepeatButton(rotateLeftRect, "< Rotate")) characterPreview.Rotate(-90f * Time.deltaTime);
+            if (GUI.RepeatButton(rotateRightRect, "Rotate >")) characterPreview.Rotate(90f * Time.deltaTime);
+        }
+
+        // +30f matches previewRect's own header clearance above, so the
+        // Gender row doesn't draw on top of the "Character Creation" title.
+        GUILayout.BeginArea(new Rect(panelX + contentX, panelY + 30f, panelWidth - contentX, panelHeight - 30f));
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Gender:", GUILayout.Width(60));
+        string maleLabel = (!Profile.AppearanceIsFemale ? "> " : "") + "Male";
+        if (GUILayout.Button(maleLabel, GUILayout.Width(90)) && Profile.AppearanceIsFemale)
+        {
+            Profile.AppearanceIsFemale = false;
+            Profile.Normalize();
+        }
+        string femaleLabel = (Profile.AppearanceIsFemale ? "> " : "") + "Female";
+        if (GUILayout.Button(femaleLabel, GUILayout.Width(90)) && !Profile.AppearanceIsFemale)
+        {
+            Profile.AppearanceIsFemale = true;
+            Profile.Normalize();
+        }
+        GUILayout.EndHorizontal();
+        GUILayout.Space(6);
+
+        AppearanceGender gender = Profile.Gender;
+
+        GUILayout.BeginHorizontal();
+
+        GUILayout.BeginVertical(GUILayout.Width(tabColumnWidth));
+        for (int i = 0; i < AppearanceTabLabels.Length; i++)
+        {
+            string tabLabel = (i == appearanceTabIndex ? "> " : "") + AppearanceTabLabels[i];
+            if (GUILayout.Button(tabLabel))
+            {
+                appearanceTabIndex = i;
+                appearanceTabScrollPosition = Vector2.zero;
+            }
+        }
+        GUILayout.EndVertical();
+
+        GUILayout.BeginVertical();
+        DrawAppearanceTabContent(gender, listHeight);
+        GUILayout.EndVertical();
+
+        GUILayout.EndHorizontal();
+        GUILayout.Space(10);
+
+        AppearanceColorPalette palette = GameDatabase.Palette;
+        int bodyCount = palette != null && palette.BodyColors != null ? palette.BodyColors.Length : 0;
+        int objectCount = palette != null && palette.ObjectColors != null ? palette.ObjectColors.Length : 0;
+
+        DrawColorStepper("Body Color", ref Profile.AppearanceBodyColorIndex, bodyCount);
+        DrawColorStepper("Gear Color", ref Profile.AppearanceObjectColorIndex, objectCount);
+
+        GUILayout.Space(10);
+        if (GUILayout.Button("Back")) LeavePanel();
+        GUILayout.EndArea();
+    }
+
+    // Picking a Bottom that was designed to be worn with a specific
+    // accessory (e.g. Sorcerer's leaves the shins bare without its matching
+    // Shoes) auto-enables that accessory the moment it's picked - a helpful
+    // default, not a forced-on rule, so the player can still turn it back
+    // off afterward in the Accessories tab if they want.
+    private static void SetBottom(string id)
+    {
+        Profile.AppearanceBottomId = id;
+        AppearancePieceData piece = GameDatabase.GetAppearancePiece(id);
+        if (piece != null && !string.IsNullOrEmpty(piece.RequiredAccessoryId))
+        {
+            Profile.ToggleAccessory(piece.RequiredAccessoryId, true);
+        }
+    }
+
+    private void DrawAppearanceTabContent(AppearanceGender gender, float listHeight)
+    {
+        switch (appearanceTabIndex)
+        {
+            case 0:
+                DrawSelectableList("Top", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceTopId, id => Profile.AppearanceTopId = id,
+                    GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Top && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                break;
+            case 1:
+                DrawSelectableList("Bottom", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceBottomId, SetBottom,
+                    GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Bottom && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                break;
+            case 2:
+                IEnumerable<(string Id, string DisplayName)> headwearOptions = new[] { ("", "None") }
+                    .Concat(GameDatabase.AppearanceHeadwear.Where(h => h.Gender == AppearanceGender.Unisex || h.Gender == gender).Select(h => (h.Id, h.DisplayName)));
+                DrawSelectableList("Headwear", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceHeadwearId, id => Profile.AppearanceHeadwearId = id, headwearOptions);
+                break;
+            case 3:
+                IEnumerable<(string Id, string DisplayName)> hairOptions = new[] { ("", "None") }
+                    .Concat(GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Hair && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                DrawSelectableList("Hair", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceHairId, id => Profile.AppearanceHairId = id, hairOptions);
+                break;
+            case 4:
+                IEnumerable<(string Id, string DisplayName)> facialHairOptions = new[] { ("", "None") }
+                    .Concat(GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.FacialHair && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                DrawSelectableList("Facial Hair", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceFacialHairId, id => Profile.AppearanceFacialHairId = id, facialHairOptions);
+                break;
+            case 5:
+                DrawSelectableList("Eyebrows", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceEyebrowsId, id => Profile.AppearanceEyebrowsId = id,
+                    GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Eyebrows && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                break;
+            case 6:
+                DrawSelectableList("Eyes", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceEyesId, id => Profile.AppearanceEyesId = id,
+                    GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Eyes && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                break;
+            case 7:
+                DrawSelectableList("Mouth", ref appearanceTabScrollPosition, listHeight, Profile.AppearanceMouthId, id => Profile.AppearanceMouthId = id,
+                    GameDatabase.AppearancePieces.Where(p => p.Slot == AppearanceSlot.Mouth && p.Gender == gender).Select(p => (p.Id, p.DisplayName)));
+                break;
+            case 8:
+                GUILayout.Label("Accessories (any combination)");
+                DrawSelectableChecklist(ref appearanceTabScrollPosition, listHeight,
+                    GameDatabase.AppearanceAccessories.Where(a => a.Gender == gender).Select(a => (a.Id, a.DisplayName)),
+                    Profile.HasAccessory, Profile.ToggleAccessory);
+                break;
+        }
+    }
+
+    // Shared by every single-select tab of DrawAppearancePanel - identical
+    // scroll-list-of-selectable-buttons shape, differing only in which
+    // options are offered and which Profile field the selection reads/writes.
+    private static void DrawSelectableList(string label, ref Vector2 scrollPosition, float height, string currentId,
+        System.Action<string> setId, IEnumerable<(string Id, string DisplayName)> options)
+    {
+        GUILayout.Label(label);
+        scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(height));
+        foreach ((string id, string displayName) in options)
+        {
+            string buttonLabel = (id == currentId ? "> " : "") + displayName;
+            if (GUILayout.Button(buttonLabel)) setId(id);
+        }
+        GUILayout.EndScrollView();
+    }
+
+    // The Accessories tab's free multi-select - same shape as
+    // DrawSelectableList but every option toggles independently rather than
+    // exactly one being current.
+    private static void DrawSelectableChecklist(ref Vector2 scrollPosition, float height,
+        IEnumerable<(string Id, string DisplayName)> options, System.Func<string, bool> isSelected, System.Action<string, bool> setSelected)
+    {
+        scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(height));
+        foreach ((string id, string displayName) in options)
+        {
+            bool current = isSelected(id);
+            bool next = GUILayout.Toggle(current, displayName);
+            if (next != current) setSelected(id, next);
+        }
+        GUILayout.EndScrollView();
+    }
+
+    // Shared by the Body/Gear color rows of DrawAppearancePanel.
+    private static void DrawColorStepper(string label, ref int index, int count)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label($"{label} ({(count > 0 ? index + 1 : 0)}/{count})", GUILayout.Width(160));
+        if (GUILayout.Button("<", GUILayout.Width(30)) && count > 0) index = (index - 1 + count) % count;
+        if (GUILayout.Button(">", GUILayout.Width(30)) && count > 0) index = (index + 1) % count;
+        GUILayout.EndHorizontal();
     }
 
     private void DrawOptionsPanel()

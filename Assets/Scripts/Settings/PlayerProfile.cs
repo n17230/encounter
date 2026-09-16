@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -46,6 +47,23 @@ public class PlayerProfile
     // Last server address joined as a client; empty = NetworkBootstrap's default.
     public string ServerAddress = "";
 
+    // Cosmetic appearance - see CharacterAppearance. Entirely separate from
+    // GearIds (no stat effect); AppearanceHeadwearId/AppearanceFacialHairId
+    // empty means none. AppearanceAccessoryIds is a ';'-joined list (free
+    // multi-select, any combination) - see CharacterAppearanceApplier.
+    public bool AppearanceIsFemale = false;
+    public string AppearanceTopId = "";
+    public string AppearanceBottomId = "";
+    public string AppearanceHeadwearId = "";
+    public string AppearanceEyebrowsId = "";
+    public string AppearanceEyesId = "";
+    public string AppearanceMouthId = "";
+    public string AppearanceHairId = "";
+    public string AppearanceFacialHairId = "";
+    public string AppearanceAccessoryIds = "";
+    public int AppearanceBodyColorIndex = 0;
+    public int AppearanceObjectColorIndex = 0;
+
     public AbilityData GetSlotAbility(int slot) => GameDatabase.GetAbility(SlotAbilityIds[slot]);
 
     public void SetSlotAbility(int slot, AbilityData ability)
@@ -80,6 +98,26 @@ public class PlayerProfile
 
     public bool IsEquipped(ItemData item) => item != null && Array.IndexOf(GearIds, item.Id) >= 0;
 
+    public AppearanceGender Gender => AppearanceIsFemale ? AppearanceGender.Female : AppearanceGender.Male;
+
+    public AppearancePieceData GetAppearanceTop() => GameDatabase.GetAppearancePiece(AppearanceTopId);
+    public AppearancePieceData GetAppearanceBottom() => GameDatabase.GetAppearancePiece(AppearanceBottomId);
+    public AppearanceHeadwearData GetAppearanceHeadwear() => GameDatabase.GetAppearanceHeadwear(AppearanceHeadwearId);
+    public AppearancePieceData GetAppearanceEyebrows() => GameDatabase.GetAppearancePiece(AppearanceEyebrowsId);
+    public AppearancePieceData GetAppearanceEyes() => GameDatabase.GetAppearancePiece(AppearanceEyesId);
+    public AppearancePieceData GetAppearanceMouth() => GameDatabase.GetAppearancePiece(AppearanceMouthId);
+    public AppearancePieceData GetAppearanceHair() => GameDatabase.GetAppearancePiece(AppearanceHairId);
+    public AppearancePieceData GetAppearanceFacialHair() => GameDatabase.GetAppearancePiece(AppearanceFacialHairId);
+
+    public bool HasAccessory(string id) => CharacterAppearanceApplier.ParseAccessoryIds(AppearanceAccessoryIds).Contains(id);
+
+    public void ToggleAccessory(string id, bool enabled)
+    {
+        HashSet<string> ids = CharacterAppearanceApplier.ParseAccessoryIds(AppearanceAccessoryIds);
+        if (enabled) ids.Add(id); else ids.Remove(id);
+        AppearanceAccessoryIds = string.Join(";", ids);
+    }
+
     // A profile loaded from disk may predate a change in slot counts or
     // have been hand-edited; make every array the size the code expects.
     public void Normalize()
@@ -112,6 +150,70 @@ public class PlayerProfile
         UiScale = Mathf.Clamp(UiScale <= 0f ? 1f : UiScale, UIScale.Min, UIScale.Max);
         LookSensitivity = Mathf.Clamp(LookSensitivity <= 0f ? 1f : LookSensitivity, LookSensitivityScale.Min, LookSensitivityScale.Max);
         if (CameraZoomDistance > 0f) CameraZoomDistance = Mathf.Clamp(CameraZoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
+
+        // A slot Id that no longer resolves, or no longer matches the
+        // current gender (e.g. the gender was just switched), is cleared the
+        // same way a stale ability Id is above - then re-defaulted to the
+        // first matching option so a fresh or just-switched profile doesn't
+        // render with a blank face or bare skin. Eyebrows/Eyes/Mouth
+        // need exactly one active the same as Top/Bottom always have.
+        NormalizeRequiredSlot(AppearanceSlot.Top, ref AppearanceTopId);
+        NormalizeRequiredSlot(AppearanceSlot.Bottom, ref AppearanceBottomId);
+        NormalizeRequiredSlot(AppearanceSlot.Eyebrows, ref AppearanceEyebrowsId);
+        NormalizeRequiredSlot(AppearanceSlot.Eyes, ref AppearanceEyesId);
+        NormalizeRequiredSlot(AppearanceSlot.Mouth, ref AppearanceMouthId);
+
+        // Unlike the slots above, "none" is a valid, common choice for
+        // hair (e.g. a full helmet with no hair sticking out), headwear,
+        // and facial hair - a stale/mismatched Id is just cleared, never
+        // re-defaulted to some other hairstyle/headwear/beard.
+        NormalizeOptionalSlot(AppearanceSlot.Hair, ref AppearanceHairId);
+        NormalizeOptionalSlot(AppearanceSlot.FacialHair, ref AppearanceFacialHairId);
+        if (!string.IsNullOrEmpty(AppearanceHeadwearId))
+        {
+            AppearanceHeadwearData headwear = GetAppearanceHeadwear();
+            if (headwear == null || (headwear.Gender != AppearanceGender.Unisex && headwear.Gender != Gender))
+            {
+                AppearanceHeadwearId = "";
+            }
+        }
+
+        // Free multi-select accessories: drop any Id that no longer
+        // resolves or no longer matches the current gender.
+        List<string> validAccessoryIds = new List<string>();
+        foreach (string id in CharacterAppearanceApplier.ParseAccessoryIds(AppearanceAccessoryIds))
+        {
+            AppearanceAccessoryData accessory = GameDatabase.GetAppearanceAccessory(id);
+            if (accessory != null && accessory.Gender == Gender) validAccessoryIds.Add(id);
+        }
+        AppearanceAccessoryIds = string.Join(";", validAccessoryIds);
+
+        AppearanceColorPalette palette = GameDatabase.Palette;
+        int bodyColorCount = palette != null && palette.BodyColors != null ? palette.BodyColors.Length : 1;
+        int objectColorCount = palette != null && palette.ObjectColors != null ? palette.ObjectColors.Length : 1;
+        AppearanceBodyColorIndex = Mathf.Clamp(AppearanceBodyColorIndex, 0, Mathf.Max(0, bodyColorCount - 1));
+        AppearanceObjectColorIndex = Mathf.Clamp(AppearanceObjectColorIndex, 0, Mathf.Max(0, objectColorCount - 1));
+    }
+
+    private void NormalizeRequiredSlot(AppearanceSlot slot, ref string id)
+    {
+        AppearancePieceData piece = GameDatabase.GetAppearancePiece(id);
+        if (piece == null || piece.Slot != slot || piece.Gender != Gender) id = "";
+
+        if (string.IsNullOrEmpty(id))
+        {
+            foreach (AppearancePieceData candidate in GameDatabase.AppearancePieces)
+            {
+                if (candidate.Slot == slot && candidate.Gender == Gender) { id = candidate.Id; break; }
+            }
+        }
+    }
+
+    private void NormalizeOptionalSlot(AppearanceSlot slot, ref string id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        AppearancePieceData piece = GameDatabase.GetAppearancePiece(id);
+        if (piece == null || piece.Slot != slot || piece.Gender != Gender) id = "";
     }
 }
 

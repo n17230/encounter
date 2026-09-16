@@ -27,6 +27,7 @@ public class PlayerAbilities : NetworkBehaviour
     private CharacterEquipment equipment;
     private PlayerAutoAttack autoAttack;
     private PlayerMovement movement;
+    private CharacterAppearance appearance;
 
     // Owner-local aiming state for a ground-targeted ability (see
     // AbilityData.IsGroundTargeted). Exposed so PlayerTargeting can ignore
@@ -88,6 +89,7 @@ public class PlayerAbilities : NetworkBehaviour
         equipment = GetComponent<CharacterEquipment>();
         autoAttack = GetComponent<PlayerAutoAttack>();
         movement = GetComponent<PlayerMovement>();
+        appearance = GetComponent<CharacterAppearance>();
     }
 
     public override void OnNetworkSpawn()
@@ -514,15 +516,22 @@ public class PlayerAbilities : NetworkBehaviour
 
     // Everyone sees the caster's hand-glow VFX, not just the owner - it's
     // purely cosmetic (no gameplay state), so each client just instantiates
-    // it locally rather than it being a NetworkObject.
+    // it locally rather than it being a NetworkObject. Parented to the
+    // right-hand bone (same one for every spell - see
+    // CharacterAppearance.GetRightHandBone) so it tracks through any
+    // animation instead of floating at a fixed offset from the root; falls
+    // back to the old root-relative placement if the bone isn't resolvable
+    // (e.g. rig not wired yet).
     [ClientRpc]
     private void PlayCastVfxClientRpc(string abilityId, float duration)
     {
         AbilityData ability = GameDatabase.GetAbility(abilityId);
         if (ability == null || ability.CastVfxPrefab == null) return;
 
-        Vector3 spawnPosition = transform.position + Vector3.up * 1.2f + transform.forward * 0.5f;
-        GameObject vfxInstance = Instantiate(ability.CastVfxPrefab, spawnPosition, transform.rotation, transform);
+        Transform rightHand = appearance != null ? appearance.GetRightHandBone() : null;
+        GameObject vfxInstance = rightHand != null
+            ? Instantiate(ability.CastVfxPrefab, rightHand.position, rightHand.rotation, rightHand)
+            : Instantiate(ability.CastVfxPrefab, transform.position + Vector3.up * 1.2f + transform.forward * 0.5f, transform.rotation, transform);
         Destroy(vfxInstance, duration);
     }
 

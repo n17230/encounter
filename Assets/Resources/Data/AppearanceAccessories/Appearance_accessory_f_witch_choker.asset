@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b3714041e7ad29f0f85fac97480a7d6, type: 3}
+  m_Name: Appearance_accessory_f_witch_choker
+  m_EditorClassIdentifier:
+  Id: accessory_f_witch_choker
+  DisplayName: Witch Choker
+  Gender: 1
+  NodeName: F_Witch_Choker
