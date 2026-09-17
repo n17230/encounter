@@ -416,6 +416,27 @@ public class PlayerAbilities : NetworkBehaviour
         ShowNotice(reason);
     }
 
+    // Server-only. Called on death (see PlayerRespawn.HandleDeath) -
+    // clears every ability's cooldown and the global cooldown, both
+    // server-side and (via RPC) the owner's own predicted copy, so a
+    // fresh respawn doesn't still show abilities on cooldown from the
+    // fight that killed them.
+    public void ResetCooldowns()
+    {
+        if (!IsServer) return;
+        cooldownReadyTime.Clear();
+        serverGlobalCooldownReadyTime = 0f;
+        ResetCooldownsClientRpc();
+    }
+
+    [ClientRpc]
+    private void ResetCooldownsClientRpc()
+    {
+        if (!IsOwner) return;
+        predictedCooldownReady.Clear();
+        predictedGlobalCooldownReady = 0f;
+    }
+
     // Start-of-cast rejection: undo the optimistic cooldown and cast bar.
     [ClientRpc]
     private void NotifyCastRejectedClientRpc(string abilityId, string reason)
@@ -532,6 +553,7 @@ public class PlayerAbilities : NetworkBehaviour
         GameObject vfxInstance = rightHand != null
             ? Instantiate(ability.CastVfxPrefab, rightHand.position, rightHand.rotation, rightHand)
             : Instantiate(ability.CastVfxPrefab, transform.position + Vector3.up * 1.2f + transform.forward * 0.5f, transform.rotation, transform);
+        VfxScale.Apply(vfxInstance, ability.CastVfxScale);
         Destroy(vfxInstance, duration);
     }
 
@@ -692,6 +714,7 @@ public class PlayerAbilities : NetworkBehaviour
         if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObject)) return;
 
         GameObject vfxInstance = Instantiate(ability.TargetVfxPrefab, targetObject.transform.position, Quaternion.identity);
+        VfxScale.Apply(vfxInstance, ability.TargetVfxScale);
         Destroy(vfxInstance, 5f);
     }
 

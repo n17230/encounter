@@ -1,0 +1,39 @@
+/* Panel-specific layout for the Options screen. Shared look lives in Theme.uss. */
+
+#options-panel {
+    width: 460px;
+    min-height: 640px;
+}
+
+#keybindings-scroll {
+    max-height: 440px;
+    margin-top: 4px;
+}
+
+.keybind-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+}
+
+.keybind-row--alt {
+    background-color: var(--color-surface-alt);
+}
+
+.keybind-row__label {
+    flex-grow: 1;
+    color: var(--color-text);
+    font-size: 14px;
+}
+
+.keybind-row__key-button {
+    min-width: 120px;
+}
+
+.keybind-row--awaiting > .keybind-row__key-button {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}

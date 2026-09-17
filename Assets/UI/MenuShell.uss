@@ -1,0 +1,15 @@
+/* Panel-specific layout for the main/in-game menu shell. Shared look lives in Theme.uss. */
+
+#shell-panel {
+    width: 260px;
+}
+
+.shell-button {
+    height: 44px;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.shell-spacer {
+    height: 6px;
+}

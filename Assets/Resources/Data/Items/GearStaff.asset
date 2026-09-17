@@ -12,16 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearStaff
   m_EditorClassIdentifier: 
-  Id: staff
-  ItemName: Staff
+  Id: staff_of_the_magi
+  ItemName: Staff of the Magi
   Slot: 11
   Bonuses:
-  - Stat: 6
-    ModifierType: 1
-    Value: -0.1
   - Stat: 2
     ModifierType: 0
     Value: 250
+  - Stat: 3
+    ModifierType: 0
+    Value: 1
   Immunities: []
   Auras: []
   Weapon: {fileID: 11400000, guid: 780a4832ec9d5f5a0d0b30951f64920a, type: 2}

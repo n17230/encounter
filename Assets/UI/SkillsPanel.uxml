@@ -1,0 +1,26 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="SkillsPanel.uss" />
+    <ui:VisualElement name="skills-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="skills-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Button name="back-button" text="&#8592; Back" class="icon-button" />
+                <ui:Label text="Skills" class="panel__title" />
+                <ui:VisualElement class="panel__header-spacer" />
+            </ui:VisualElement>
+
+            <ui:Label text="YOUR KIT" class="section-label" />
+            <ui:VisualElement name="kit-toolbar" class="kit-toolbar" />
+
+            <ui:VisualElement name="kit-subrow" class="kit-subrow">
+                <ui:Label name="kit-subrow-label" class="kit-subrow__label" />
+                <ui:Button name="key-binding-button" text="Set Key Binding" class="button" />
+                <ui:Button name="remove-button" text="Remove" class="button button--ghost" />
+            </ui:VisualElement>
+
+            <ui:Label text="AVAILABLE ABILITIES" class="section-label" />
+            <ui:VisualElement name="category-tabs" class="category-tabs" />
+            <ui:ScrollView name="available-scroll" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

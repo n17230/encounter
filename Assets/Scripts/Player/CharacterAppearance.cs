@@ -146,7 +146,7 @@ public class CharacterAppearance : NetworkBehaviour
     private void Apply()
     {
         // Purely cosmetic and invisible to anyone on a headless dedicated
-        // server - skip entirely there, same as ShieldVisual/
+        // server - skip entirely there, same as ArcaneShieldVisual/
         // EffectOverheadVisual/AuraGroundVisual already do, rather than
         // doing renderer scans and MaterialPropertyBlock writes for every
         // connected player for nothing.

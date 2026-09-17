@@ -27,8 +27,10 @@ MonoBehaviour:
   ProjectilePrefab: {fileID: 0}
   CastVfxPrefab: {fileID: 2020952792066653868, guid: e6f07c1f9b84b9e41b865d1052260a89,
     type: 3}
+  CastVfxScale: 0.5
   TargetVfxPrefab: {fileID: 1400503165379871390, guid: 76204a57e3d5cdc458026a1c115397c5,
     type: 3}
+  TargetVfxScale: 0.6
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0

@@ -41,6 +41,7 @@ public class PlayerMovement : NetworkBehaviour
     private CharacterStats stats;
     private NetworkTransform networkTransform;
     private CharacterAppearance appearance;
+    private PlayerTargeting targeting;
     private float verticalVelocity;
 
     private readonly MovementValidator validator = new MovementValidator();
@@ -93,6 +94,7 @@ public class PlayerMovement : NetworkBehaviour
         stats = GetComponent<CharacterStats>();
         networkTransform = GetComponent<NetworkTransform>();
         appearance = GetComponent<CharacterAppearance>();
+        targeting = GetComponent<PlayerTargeting>();
     }
 
     public override void OnNetworkSpawn()
@@ -259,6 +261,9 @@ public class PlayerMovement : NetworkBehaviour
         // other client, matching the same "speed" parameter/threshold
         // convention every mob's Animator Controller already uses.
         appearance?.ActiveAnimator?.SetFloat("speed", horizontalVelocity.magnitude);
+        int weaponPose = ResolveWeaponPoseParameter();
+        appearance?.ActiveAnimator?.SetInteger("weaponPose", weaponPose);
+        appearance?.ActiveAnimator?.SetBool("showCombatIdle", ResolveShowCombatIdle(weaponPose));
 
         if (grounded && verticalVelocity < 0f)
         {
@@ -289,6 +294,55 @@ public class PlayerMovement : NetworkBehaviour
     // other input this script reads (RunSpeed, jump, etc.); no server
     // round trip needed since movement here is owner-authoritative.
     private bool HasHoverBoots => ProfileStore.Current.GetGear(GearSlot.Boots)?.GrantsAirHover ?? false;
+
+    // The int fed to the Animator's "weaponPose" parameter, same owner-local
+    // ProfileStore read as HasHoverBoots above. OneHandShield (2) is a
+    // combination, not a WeaponPoseType value on its own - a OneHand weapon
+    // plus a shield in the other hand - so it's resolved here rather than
+    // being one of WeaponPoseType's own cases.
+    private int ResolveWeaponPoseParameter()
+    {
+        ItemData mainHand = ProfileStore.Current.GetGear(GearSlot.MainHand);
+        WeaponData weapon = mainHand?.Weapon;
+        WeaponPoseType pose = weapon != null ? weapon.PoseType : WeaponPoseType.Unarmed;
+
+        if (pose == WeaponPoseType.OneHand)
+        {
+            ItemData offHand = ProfileStore.Current.GetGear(GearSlot.OffHand);
+            if (offHand != null && offHand.IsShield) return 2; // OneHandShield
+        }
+
+        switch (pose)
+        {
+            case WeaponPoseType.Unarmed: return 0;
+            case WeaponPoseType.OneHand: return 1;
+            case WeaponPoseType.TwoHand: return 3;
+            case WeaponPoseType.Staff: return 4;
+            case WeaponPoseType.Bow: return 5;
+            case WeaponPoseType.DualWield: return 6;
+            default: return 0;
+        }
+    }
+
+    // True while targeting an NPC or "in combat" (CharacterStats
+    // .IsInCombat, a rolling 20s window since the last hostile
+    // interaction with a mob) - gates whether the weapon-pose idle shows
+    // at all; otherwise the character shows the relaxed out-of-combat
+    // idle regardless of what's equipped. Unarmed (weaponPose 0) always
+    // returns false - there's no dedicated Unarmed idle state, so a
+    // bare-handed player always shows Idle_OutOfCombat, even while
+    // targeting/fighting a mob - this keeps the Animator side simple
+    // (Idle_OutOfCombat only ever needs one incoming condition,
+    // showCombatIdle == false, same shape as every other idle state)
+    // instead of needing a second, weaponPose-based path into it.
+    private bool ResolveShowCombatIdle(int weaponPose)
+    {
+        if (weaponPose == 0) return false; // Unarmed
+
+        bool targetingNpc = targeting != null && targeting.CurrentTarget != null
+            && targeting.CurrentTarget.Stats != null && targeting.CurrentTarget.Stats.IsMob;
+        return targetingNpc || (stats != null && stats.IsInCombat.Value);
+    }
 
     // Called server-side (e.g. by a resolving ground-targeted ability) to
     // drive this player straight toward towardPosition for up to duration

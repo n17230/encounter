@@ -1,0 +1,27 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="SummonPanel.uss" />
+    <ui:VisualElement name="summon-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="summon-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Button name="back-button" text="&#8592; Back" class="icon-button" />
+                <ui:Label text="Summon Mobs" class="panel__title" />
+                <ui:VisualElement class="panel__header-spacer" />
+            </ui:VisualElement>
+
+            <ui:Label name="empty-label" text="No player spawned yet." class="section-label" />
+
+            <ui:ScrollView name="mob-scroll" />
+
+            <ui:VisualElement name="count-row" class="field-row">
+                <ui:Label text="Count" class="field-row__label" />
+                <ui:Button name="count-minus" text="-" class="button count-stepper" />
+                <ui:Label name="count-label" text="1" class="count-label" />
+                <ui:Button name="count-plus" text="+" class="button count-stepper" />
+            </ui:VisualElement>
+
+            <ui:Button name="summon-button" text="Summon" class="button" />
+            <ui:Button name="summon-skeletons-button" text="Summon Skeletons" class="button button--ghost" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

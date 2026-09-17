@@ -24,6 +24,10 @@ public class EffectOverheadVisual : NetworkBehaviour
         public StatusEffectData Effect;
         public GameObject VfxPrefab;
         public float HeadHeight;
+        // Defaults to 0 for any entry serialized before this field existed
+        // (missing YAML data = C#'s own float default) - treated as "not
+        // set, use 1" in UpdateMapping rather than actually scaling to 0.
+        public float Scale;
     }
 
     [SerializeField] private List<Mapping> mappings = new List<Mapping>();
@@ -80,7 +84,11 @@ public class EffectOverheadVisual : NetworkBehaviour
             return;
         }
 
-        if (activeVfx[index] == null) activeVfx[index] = Instantiate(mapping.VfxPrefab);
+        if (activeVfx[index] == null)
+        {
+            activeVfx[index] = Instantiate(mapping.VfxPrefab);
+            VfxScale.Apply(activeVfx[index], mapping.Scale > 0f ? mapping.Scale : 1f);
+        }
 
         Vector3 position = transform.position;
         activeVfx[index].transform.position = new Vector3(position.x, position.y + mapping.HeadHeight, position.z);

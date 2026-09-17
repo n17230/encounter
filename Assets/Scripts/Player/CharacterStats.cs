@@ -9,6 +9,10 @@ public class CharacterStats : NetworkBehaviour
     // generate threat (environmental, or callers that don't track a caster).
     public const ulong NoAttacker = ulong.MaxValue;
 
+    // How long a mob interaction keeps a player "in combat" for - see
+    // IsInCombat/MarkInCombat. Rolling: each new interaction resets it.
+    private const float CombatDuration = 20f;
+
     [SerializeField] private float baseMaxHealth = 100f;
     [SerializeField] private float baseHealthRegenRate = 2f;
     [SerializeField] private float baseMaxMana = 100f;
@@ -63,16 +67,40 @@ public class CharacterStats : NetworkBehaviour
     // for UI only. The authoritative state is the server-side tracker.
     public readonly NetworkList<ActiveEffectNet> ActiveEffects = new NetworkList<ActiveEffectNet>();
 
+    // Whether this player has interacted with a mob (dealt or received a
+    // hostile hit - see ReceiveHit/RefreshCombatState) in the last
+    // CombatDuration seconds. Only ever set true on a player's own
+    // CharacterStats - nothing marks a mob's own instance, so it just
+    // stays false there.
+    public readonly NetworkVariable<bool> IsInCombat =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     private readonly StatusEffectTracker effects = new StatusEffectTracker();
     private readonly List<(EffectImmunity rule, object source)> immunities = new List<(EffectImmunity, object)>();
     private bool isDead;
     private ThreatTable threatTable;
     private float nextRegenTick;
+    private float combatExpireTime;
+
+    // Server-only rolling record of which specific enemies this player has
+    // recently damaged or debuffed - powers single-target-focused gear
+    // like Hunter's Cloak (CharacterEquipment.UpdateSingleTargetBonuses).
+    // Keyed by the mob's NetworkObjectId. Pruned lazily against a generous
+    // fixed bound rather than a per-item window, so different items can
+    // each query their own window length via DistinctEnemiesTouchedWithin.
+    private readonly Dictionary<ulong, float> recentEnemyInteractions = new Dictionary<ulong, float>();
+    private const float MaxTrackedInteractionAge = 60f;
+
+    // Whether this character is a mob (has EnemyAI) rather than a player -
+    // used both directions by RefreshCombatState to tell who's fighting
+    // whom without a separate "is this a player" check.
+    public bool IsMob { get; private set; }
 
     public event Action OnDeath;
 
     private void Awake()
     {
+        IsMob = GetComponent<EnemyAI>() != null;
         MaxHealth = new Stat(baseMaxHealth);
         HealthRegenRate = new Stat(baseHealthRegenRate);
         MaxMana = new Stat(baseMaxMana);
@@ -149,6 +177,8 @@ public class CharacterStats : NetworkBehaviour
         }
 
         effects.Tick(Time.time, TickEffect);
+
+        if (IsInCombat.Value && Time.time >= combatExpireTime) IsInCombat.Value = false;
     }
 
     // The one way anything hostile reaches a character. Server-only.
@@ -156,19 +186,116 @@ public class CharacterStats : NetworkBehaviour
     {
         if (!IsServer) return;
 
+        RefreshCombatState(hit.AttackerClientId, hit.Attacker);
+
         bool blocked = hit.Damage > 0f && hit.Source == HitSource.Melee && RollBlock();
-        if (hit.Damage > 0f && !blocked) DealDamage(hit.Damage, hit.AttackerClientId, hit.Attacker);
+        bool dealtDamage = hit.Damage > 0f && !blocked;
+        if (dealtDamage) DealDamage(hit.Damage, hit.AttackerClientId, hit.Attacker);
         if (hit.Heal > 0f) Heal(hit.Heal, hit.AttackerClientId);
         if (hit.ShieldAmount > 0f) GrantShield(hit.ShieldAmount);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
 
         if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
+
+        // Single-target-focus gear tracking (e.g. Hunter's Cloak) - narrower
+        // than RefreshCombatState above (which fires on any hostile
+        // interaction): only real damage or an actual debuff counts,
+        // per the design's explicit "damage dealt, or debuff" trigger.
+        bool appliedDebuff = hit.Effect != null && hit.Effect.IsNegative;
+        if (IsMob && (dealtDamage || appliedDebuff))
+        {
+            AttackerStats(hit.AttackerClientId)?.RecordEnemyInteraction(NetworkObjectId);
+        }
     }
 
-    // Gear (e.g. Aegis of the Unstoppable, Aegis of Reflection) and
-    // effects (e.g. Aegis of the Ancient) both just add Flat StatModifiers
-    // to BlockChancePercent, so they stack additively through the normal
-    // Stat machinery - no special-casing needed here.
+    // Any hostile interaction between a player and a mob (either
+    // direction) puts the player side "in combat" for CombatDuration -
+    // player-vs-player hits (friendly-fire AoEs) correctly do nothing
+    // here, since neither side is a mob. Doesn't re-fire on later DoT
+    // ticks (those call DealDamage directly, bypassing ReceiveHit) - a
+    // mob-applied DoT only refreshes this at the moment it's first
+    // applied, not on every subsequent tick. Relies on hit.Attacker being
+    // set for a mob-sourced hit (every EnemyAI.ReceiveHit call site sets
+    // it) - GroundPatch/FollowingZone never set it, which is fine today
+    // since only player-cast abilities spawn those, but a future
+    // mob-sourced patch/zone would silently fail to mark this player in
+    // combat unless it also sets Attacker.
+    private void RefreshCombatState(ulong attackerClientId, CharacterStats directAttacker)
+    {
+        if (IsMob)
+        {
+            AttackerStats(attackerClientId)?.MarkInCombat(); // a player hit this mob
+        }
+        else if (directAttacker != null && directAttacker.IsMob)
+        {
+            MarkInCombat(); // a mob hit this player directly
+        }
+    }
+
+    // Server-only. Called on THIS player's own CharacterStats (see
+    // ReceiveHit) whenever they damage or debuff mobNetworkObjectId -
+    // powers single-target-focused gear (CharacterEquipment
+    // .UpdateSingleTargetBonuses), which queries DistinctEnemiesTouchedWithin.
+    public void RecordEnemyInteraction(ulong mobNetworkObjectId)
+    {
+        if (!IsServer) return;
+        PruneEnemyInteractions();
+        recentEnemyInteractions[mobNetworkObjectId] = Time.time;
+    }
+
+    // Called by EnemyAI on death, for every connected player - "killing
+    // your single target lets you switch targets without losing the
+    // bonus" (Hunter's Cloak): forgetting the dead mob here means the next
+    // enemy engaged starts a fresh count instead of adding to an existing one.
+    public void RemoveTrackedEnemy(ulong mobNetworkObjectId)
+    {
+        if (!IsServer) return;
+        recentEnemyInteractions.Remove(mobNetworkObjectId);
+    }
+
+    public int DistinctEnemiesTouchedWithin(float seconds)
+    {
+        PruneEnemyInteractions();
+        float cutoff = Time.time - seconds;
+        int count = 0;
+        foreach (float lastInteractionTime in recentEnemyInteractions.Values)
+        {
+            if (lastInteractionTime >= cutoff) count++;
+        }
+        return count;
+    }
+
+    private void PruneEnemyInteractions()
+    {
+        if (recentEnemyInteractions.Count == 0) return;
+
+        float cutoff = Time.time - MaxTrackedInteractionAge;
+        List<ulong> stale = null;
+        foreach (KeyValuePair<ulong, float> entry in recentEnemyInteractions)
+        {
+            if (entry.Value < cutoff)
+            {
+                stale ??= new List<ulong>();
+                stale.Add(entry.Key);
+            }
+        }
+        if (stale == null) return;
+        foreach (ulong key in stale) recentEnemyInteractions.Remove(key);
+    }
+
+    // Server-only. Rolling window - each call pushes the expiry out
+    // another CombatDuration from now.
+    public void MarkInCombat()
+    {
+        if (!IsServer) return;
+        combatExpireTime = Time.time + CombatDuration;
+        if (!IsInCombat.Value) IsInCombat.Value = true;
+    }
+
+    // Gear (e.g. Aegis of the Unstoppable) and effects (e.g. Aegis of the
+    // Ancient) both just add Flat StatModifiers to BlockChancePercent, so
+    // they stack additively through the normal Stat machinery - no
+    // special-casing needed here.
     private bool RollBlock()
     {
         float chance = BlockChancePercent.Value;
@@ -504,6 +631,25 @@ public class CharacterStats : NetworkBehaviour
             }
         }
         ActiveEffects.Add(entry);
+    }
+
+    // Owner-callable (e.g. the Escape menu's Respawn button) - requests the
+    // server kill this character outright, going through the exact same
+    // OnDeath -> PlayerRespawn.HandleDeath path any other lethal hit
+    // already uses, rather than teleporting/restoring directly here.
+    public void RequestRespawn()
+    {
+        if (!IsOwner) return;
+        RequestRespawnServerRpc();
+    }
+
+    [ServerRpc]
+    private void RequestRespawnServerRpc()
+    {
+        // Lethal regardless of current health, no mitigation/attacker -
+        // ApplyRawDamage's own isDead guard makes this a safe no-op if
+        // already dead/mid-respawn (e.g. a double click).
+        ApplyRawDamage(CurrentHealth.Value);
     }
 
     public void RestoreFull()

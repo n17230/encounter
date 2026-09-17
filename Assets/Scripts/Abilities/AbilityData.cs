@@ -29,6 +29,13 @@ public class AbilityData : ScriptableObject
     // gameplay state of its own.
     public GameObject CastVfxPrefab;
 
+    // Uniform scale applied only to the cast-time instance above, not the
+    // source prefab asset itself - lets the caster's hand-glow read as a
+    // different size than the same effect used elsewhere (e.g. nested
+    // inside a ProjectilePrefab) without needing a second copy of the VFX
+    // to keep in sync. 1 = the prefab's own authored size, unchanged.
+    public float CastVfxScale = 1f;
+
     // Purely cosmetic - played once at the TARGET's position when this
     // ability successfully resolves against a unit target (the
     // ResolveAbility direct-hit path only - projectile-based abilities
@@ -36,6 +43,9 @@ public class AbilityData : ScriptableObject
     // impact rather than resolve). Same broadcast-and-instantiate-
     // locally approach as CastVfxPrefab, no gameplay state of its own.
     public GameObject TargetVfxPrefab;
+
+    // Same purpose as CastVfxScale, for the target-side VFX above instead.
+    public float TargetVfxScale = 1f;
 
     public GameObject GroundPatchPrefab;
     public int MinPatchCount = 0;
@@ -176,4 +186,8 @@ public class AbilityData : ScriptableObject
     // permanent aura, just a plain timed self-buff. RequiresTarget
     // should be false. E.g. Aegis of the Ancient.
     public bool SelfBuff = false;
+
+    // Null for every ability today - mirrors ItemData.Icon. No rendering
+    // code reads this yet (the ability bar/Skills panel are still text-only).
+    public Sprite Icon;
 }

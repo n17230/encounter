@@ -1,0 +1,47 @@
+<!--
+  Compile-checks the game scripts + tests without launching Unity (useful
+  while the Editor holds the project lock). Mirrors what Unity would
+  compile; does not run ILPP or tests.
+
+    dotnet build Tools/CompileCheck.csproj -nologo -v q
+
+  Override UnityEditorDir if the Editor lives elsewhere:
+    dotnet build Tools/CompileCheck.csproj -p:UnityEditorDir="D:\Unity\6000.3.23f1\Editor"
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <OutputType>Library</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <NoWarn>CS0649;CS0414;CS0108;CS0169;CS1701;CS1702</NoWarn>
+    <DefineConstants>UNITY_EDITOR;UNITY_5_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_6000_0_OR_NEWER;UNITY_INCLUDE_TESTS;UNITY_64;UNITY_EDITOR_WIN</DefineConstants>
+    <ProjectRoot>$(MSBuildThisFileDirectory)..\</ProjectRoot>
+    <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">C:\Program Files\Unity\Hub\Editor\6000.3.23f1\Editor</UnityEditorDir>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)obj\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(ProjectRoot)Assets\Scripts\**\*.cs" />
+    <Compile Include="$(ProjectRoot)Assets\Tests\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- This same UnityEngine\*.dll folder already includes UnityEditor
+         .CoreModule.dll etc. (Unity 6's Managed layout puts editor and
+         engine modules side by side here) - enough for Editor-only scripts
+         (Assets/**/Editor/*.cs, e.g. one-off asset-wiring tools) using
+         AssetDatabase/MenuItem/TextureImporter/EditorUtility. Don't also
+         reference the standalone UnityEditor.dll - it redeclares the same
+         types and collides (CS0433). -->
+    <Reference Include="$(UnityEditorDir)\Data\Managed\UnityEngine\*.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Netcode.Runtime.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Collections.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Mathematics.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Networking.Transport.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\UnityEngine.TestRunner.dll" />
+    <Reference Include="$(ProjectRoot)Library\PackageCache\com.unity.ext.nunit@*\net40\unity-custom\nunit.framework.dll" />
+  </ItemGroup>
+</Project>

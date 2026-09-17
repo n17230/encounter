@@ -1,0 +1,30 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="OptionsPanel.uss" />
+    <ui:VisualElement name="options-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="options-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Button name="back-button" text="&#8592; Back" class="icon-button" />
+                <ui:Label text="Options" class="panel__title" />
+                <ui:VisualElement class="panel__header-spacer" />
+            </ui:VisualElement>
+
+            <ui:Label text="DISPLAY &amp; FEEL" class="section-label" />
+            <ui:VisualElement class="field-row">
+                <ui:Label name="ui-scale-label" text="UI Scale (100%)" class="field-row__label" />
+                <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="2.5" class="slider" />
+            </ui:VisualElement>
+            <ui:VisualElement class="field-row">
+                <ui:Label name="look-sensitivity-label" text="Look Sensitivity (1.00x)" class="field-row__label" />
+                <ui:Slider name="look-sensitivity-slider" low-value="0.25" high-value="3" class="slider" />
+            </ui:VisualElement>
+
+            <ui:Label text="KEYBINDINGS" class="section-label" />
+            <ui:ScrollView name="keybindings-scroll" />
+
+            <ui:VisualElement class="panel__footer">
+                <ui:Button name="reset-button" text="Reset to Defaults" class="button button--ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

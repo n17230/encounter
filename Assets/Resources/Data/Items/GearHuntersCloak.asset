@@ -10,21 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
-  m_Name: GearAegisOfReflection
+  m_Name: GearHuntersCloak
   m_EditorClassIdentifier:
-  Id: aegis_of_reflection
-  ItemName: Aegis of Reflection
-  Slot: 12
-  Bonuses:
-  - Stat: 5
-    ModifierType: 0
-    Value: 10
-  - Stat: 12
-    ModifierType: 0
-    Value: 0.03
-  - Stat: 13
-    ModifierType: 0
-    Value: 0.05
+  Id: hunters_cloak
+  ItemName: Hunter's Cloak
+  Slot: 3
+  Bonuses: []
   HpThresholdEffects: []
   Immunities: []
   Auras: []
@@ -33,4 +24,10 @@ MonoBehaviour:
   Weapon: {fileID: 0}
   TwoHanded: 0
   GrantsAirHover: 0
-  IsShield: 1
+  IsShield: 0
+  Icon: {fileID: 0}
+  SingleTargetBonuses:
+  - Stat: 8
+    ModifierType: 1
+    Value: 0.15
+  SingleTargetWindowSeconds: 12

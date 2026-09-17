@@ -25,7 +25,7 @@ public enum StatType
     // abilities like Reaper's Wheel, Cleave, Crippling Blow, Seismic Slam).
     WeaponDamageBonus,
     // Fraction of incoming (post-armor-mitigation) damage dealt straight
-    // back to the attacker (base 0; e.g. Aegis of Reflection). See
+    // back to the attacker (base 0). No item currently grants this. See
     // CharacterStats.DealDamage.
     DamageReflectPercent,
     // Chance to block an incoming HitSource.Melee hit outright, 0 damage

@@ -44,6 +44,11 @@ public class CharacterEquipment : NetworkBehaviour
     // (physical slot, index into that item's HpThresholdEffects).
     private readonly Dictionary<(int slot, int index), bool> thresholdAboveState = new Dictionary<(int, int), bool>();
 
+    // Whether each slot's SingleTargetBonuses are currently applied - see
+    // UpdateSingleTargetBonuses. Keyed by physical slot only (one condition
+    // per item, not per-index like HpThresholdEffects).
+    private readonly Dictionary<int, bool> singleTargetActiveState = new Dictionary<int, bool>();
+
     // True while any worn item broadcasts the wearer's position to allies'
     // minimaps. Server-written so every client can read it off the wearer.
     public readonly NetworkVariable<bool> BroadcastsLocation =
@@ -191,6 +196,7 @@ public class CharacterEquipment : NetworkBehaviour
         }
 
         UpdateHpThresholds();
+        UpdateSingleTargetBonuses();
     }
 
     // Checked on the same once-a-second cadence as auras - plenty
@@ -239,6 +245,37 @@ public class CharacterEquipment : NetworkBehaviour
         }
     }
 
+    // Checked on the same once-a-second cadence as HP thresholds/auras -
+    // e.g. Hunter's Cloak. Active while the wearer has damaged/debuffed at
+    // most one distinct enemy within the item's own SingleTargetWindowSeconds
+    // (CharacterStats.DistinctEnemiesTouchedWithin/RecordEnemyInteraction).
+    private void UpdateSingleTargetBonuses()
+    {
+        for (int slot = 0; slot < SlotCount; slot++)
+        {
+            ItemData item = equippedItems[slot];
+            if (item == null || item.SingleTargetBonuses.Count == 0) continue;
+
+            bool active = stats.DistinctEnemiesTouchedWithin(item.SingleTargetWindowSeconds) <= 1;
+            if (singleTargetActiveState.TryGetValue(slot, out bool previouslyActive) && previouslyActive == active) continue;
+            singleTargetActiveState[slot] = active;
+
+            // Distinct from plain `item` (Bonuses' source) and (item, i, bool)
+            // (HpThresholdEffects' source) - can't collide with either.
+            object source = (item, "singleTarget");
+            foreach (StatType type in Enum.GetValues(typeof(StatType)))
+            {
+                stats.GetStat(type)?.RemoveAllModifiersFromSource(source);
+            }
+
+            if (!active) continue;
+            foreach (StatBonus bonus in item.SingleTargetBonuses)
+            {
+                stats.GetStat(bonus.Stat)?.AddModifier(new StatModifier(bonus.Value, bonus.ModifierType, source));
+            }
+        }
+    }
+
     private void PulseAura(ItemAura aura)
     {
         if (aura.Effect == null) return;
@@ -278,6 +315,15 @@ public class CharacterEquipment : NetworkBehaviour
                     stats.GetStat(type)?.RemoveAllModifiersFromSource((previous, i, false));
                 }
                 thresholdAboveState.Remove((index, i));
+            }
+
+            if (previous.SingleTargetBonuses.Count > 0)
+            {
+                foreach (StatType type in Enum.GetValues(typeof(StatType)))
+                {
+                    stats.GetStat(type)?.RemoveAllModifiersFromSource((previous, "singleTarget"));
+                }
+                singleTargetActiveState.Remove(index);
             }
         }
 

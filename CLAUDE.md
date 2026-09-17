@@ -74,9 +74,6 @@ has no gate/mutation/review stage to run).
    items need the user's own judgment and haven't been (and can't be)
    verified by anything upstream in this pipeline. Never claim "it works"
    without that caveat attached.
-8. **Merge readiness — always separate.** Whether something is ready to
-   merge/push is its own explicit statement, called out on its own, never
-   folded into "done." Nothing gets merged as part of this flow.
 
 Infrastructure/ops concerns (server provisioning, MCP tooling, monitoring/
 logging setup) are out of this loop entirely — not part of any request's
@@ -201,7 +198,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     players) — `HitInfo.Attacker` is an optional direct `CharacterStats`
     reference added specifically so this also works against mobs, which
     have no clientId at all; `EnemyAI`'s melee hit is the only source
-    that currently sets it. Aegis of Reflection grants this stat.
+    that currently sets it. No item currently grants this stat.
   - **Healing and shields**: `HitInfo` carries `Heal` and `ShieldAmount`
     alongside `Damage`, all handled in `ReceiveHit`.
     `CharacterStats.Heal(amount, healerClientId)` scales by the healer's
@@ -251,6 +248,23 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     instantiate-locally approach as `CastVfxPrefab`/`Projectile
     .impactVfxPrefab`. Blessing of Vitality uses both: Casting_Light on
     the caster while casting, Spell_Light_6 on the target once it lands.
+    **Resizing an ability's VFX**: `AbilityData.CastVfxScale`/
+    `TargetVfxScale` (both default 1) scale the *instantiated* cast/target
+    VFX only, never the shared source prefab — `VfxScale.Apply`
+    (`Scripts/Combat/VfxScale.cs`) walks every `ParticleSystem` under the
+    instance and multiplies each one's own local scale directly, since
+    these imported VFX use Particle System Scaling Mode: Local
+    (deliberately — some are also nested inside a differently-scaled
+    parent elsewhere, e.g. `FireBolt.prefab`'s own 0.3-scaled root
+    nesting the same `Projectile_Fire.prefab` Firebolt's cast VFX also
+    uses directly, and Local mode is what lets that nested copy ignore
+    the parent's scale and stay full-size — scaling only an instance's
+    root transform does nothing under Local mode, and scaling the shared
+    source prefab's own root/particle values directly would bleed into
+    every other place that prefab is used). `EffectOverheadVisual
+    .Mapping.Scale` (per entry, default 1 — 0 or less falls back to 1 for
+    any entry serialized before this field existed) applies the same
+    `VfxScale.Apply` to a status effect's persistent overhead VFX.
     `AbilityData.AreaAroundCaster` resolves centered on the caster's own
     position, hitting every `Targetable` (player or mob, caster
     included) within `GroundEffectRadius` — so a heal/shield AoE also
@@ -334,6 +348,26 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     tuples so both sides' modifiers can be independently removed.
     Barbarian's Mantle uses this (armor above the threshold, damage
     below it).
+  - **Single-target-focus item bonuses**: `ItemData.SingleTargetBonuses` +
+    `SingleTargetWindowSeconds` (default 12) — same once/sec evaluation
+    cadence as HP-threshold bonuses (`CharacterEquipment
+    .UpdateSingleTargetBonuses`, right after `UpdateHpThresholds` in
+    `FixedUpdate`), active while the wearer has damaged or debuffed at
+    most one distinct enemy within that rolling window, tracked via a new
+    server-only per-player record: `CharacterStats.RecordEnemyInteraction`
+    (called from `ReceiveHit` whenever a hit against a mob actually deals
+    damage or applies a negative effect — not on every hostile interaction,
+    unlike the broader `IsInCombat` tracker), `DistinctEnemiesTouchedWithin`
+    (the query `CharacterEquipment` polls), and `RemoveTrackedEnemy`
+    (called by `EnemyAI.HandleDeath` for every connected player, so killing
+    your one tracked enemy lets you engage a new one without it counting as
+    "now fighting 2" — the streak continues rather than resetting to 0).
+    An AoE hit/debuff that touches 2+ enemies at once breaks the bonus on
+    the next evaluation tick, same as any other once/sec-evaluated
+    condition here. Modifiers are keyed by `(item, "singleTarget")`,
+    distinct from `Bonuses`' plain-`item` source and `HpThresholdEffects`'
+    `(item, index, bool)` tuples. Hunter's Cloak (+15% `DamageMultiplier`)
+    uses this.
   - **Two-handed weapons**: `ItemData.TwoHanded` — a two-handed MainHand
     item occupies OffHand too. Enforced in `MainMenu`'s gear-equip click
     handler (auto-clears the conflicting slot) and authoritatively in
@@ -446,6 +480,19 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   in `DealDamage` via the attacker's stats, so DoT ticks count too). Put
   new combat features (combat log, downed state, damage numbers) here,
   not at call sites.
+  **In-combat tracker** (players only): `CharacterStats.IsMob`
+  (`GetComponent<EnemyAI>() != null`, cached in `Awake`) tells `ReceiveHit`
+  which side of a hit is a mob; any hostile interaction between a player
+  and a mob (either direction) calls `MarkInCombat()` on the player side,
+  setting `IsInCombat` (a `NetworkVariable<bool>`) true and pushing a
+  rolling 20s expiry out from `Time.time` — checked once per server
+  `FixedUpdate` alongside the regen tick. Player-vs-player hits do
+  nothing here (neither side is a mob). Doesn't re-fire on DoT ticks
+  (those call `DealDamage` directly, bypassing `ReceiveHit`) — a
+  mob-applied DoT only marks combat once, when first applied. Currently
+  drives the weapon-pose idle's `showCombatIdle` gate (see Controls) —
+  the intended pattern for anything else that should care about "is this
+  player currently fighting a mob."
 - **Status effects**: `StatusEffectData` asset = `Id`, `DisplayName`,
   `Duration`, `StackingMode`, `TickDamage`/`TickInterval` (0 = no DoT),
   `List<StatBonus>` modifiers (same `StatBonus` struct gear uses;
@@ -643,8 +690,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     fired through the ordinary basic-attack path, not an actual cast —
     it does the same damage and applies the same slow, but doesn't
     spawn ice ground patches the way the player version does.
-- **Menus / dev UI** (`Scripts/UI/`, all IMGUI `OnGUI`, deliberately
-  disposable — don't invest in it; real UI should be UI Toolkit): pregame
+- **Menus / dev UI** (`Scripts/UI/`, still mostly IMGUI `OnGUI` — deliberately
+  disposable, don't invest further in the remaining IMGUI panels; real UI is
+  UI Toolkit, see Options below for the first migrated panel): pregame
   `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
   and, after `TestingAreaGate.Entered`, the same panels as an **Escape
   menu** (`MainMenu.IsOpen`). The Gear page is a paper-doll: 3×5 grid of
@@ -655,12 +703,26 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   ignore gameplay input; on close `MainMenu.Closed` triggers
   loadout/gear re-sync. Options page: UI scale and look sensitivity are
   both sliders (75–250% / 0.25×–3×, `UIScale`/`LookSensitivityScale` —
-  same profile-backed pattern), plus movement rebinding (any non-mouse
-  key; binding a key steals it from other movement actions *and*
-  ability slots, and vice versa). Look sensitivity is a single
+  same profile-backed pattern), plus movement rebinding (any non-mouse,
+  non-Escape key; binding a key steals it from other movement actions
+  *and* ability slots, and vice versa). Look sensitivity is a single
   multiplier applied on top of `PlayerCamera`'s pitch/free-look yaw and
   `PlayerMovement`'s turn yaw, not three separate sliders.
-  Ability hotkeys are limited to 1–5, Shift+1–5, F1–F5, Q/E/R/T/F/G.
+  Ability hotkeys accept any non-mouse, non-Escape key, with an optional
+  Shift modifier (`MainMenu.CaptureAbilityKey` captures whichever key was
+  pressed plus whether Shift was held at that moment, rather than
+  matching against a fixed list) — Escape is the one key that can never
+  be bound to anything, ability or movement (explicitly excluded in both
+  capture loops, on top of `Update()` already intercepting and consuming
+  it before either loop runs). `MovementAction` also covers what used to
+  be fixed/hardcoded controls — `CycleTarget` (Tab), `SelfTarget`
+  (backtick), `PartyTarget1`-`5` (F1–F5), `ZoomIn`/`ZoomOut` (Up/Down
+  arrow) — all rebindable the same way movement is, defaulting to their
+  old keys. New `MovementAction` values are always appended, never
+  inserted/reordered, since `MovementInput.KeyFor` indexes
+  `PlayerProfile.MovementKeys[]` positionally by `(int)action` —
+  reordering would shift every existing saved profile's bindings onto
+  the wrong action.
   `DevGui.Begin()` (UI scale) must be the first line of every `OnGUI`,
   laying out against `UIScale.Width/Height`. The Escape menu also has a
   **Summon Mobs** page (`PlayerSummon` on the local player object does
@@ -670,6 +732,79 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   the tab-targeting key — the summon count is −/+ buttons for exactly
   that reason. The only text field is the server-address box, which is
   gone once connected.
+  **UI Toolkit migration** (in progress, panel by panel): `Assets/UI/` holds
+  `Theme.uss` (shared design tokens as USS custom properties, scoped under a
+  `.theme-root` class since USS has no universal `:root`, plus reusable BEM
+  component classes — `.panel`, `.button`, `.field-row`, etc.) and each
+  panel's own `<Panel>.uxml`/`<Panel>.uss`. Migrated so far: Options
+  (`OptionsPanelController`), the main/in-game menu shell
+  (`MenuShellController` — one UXML for both the pregame button set and the
+  in-game one, toggled via `SetMode(bool inGame)` rather than two separate
+  panels), Summon Mobs (`SummonPanelController`), and Skills
+  (`SkillsPanelController` — "Your Kit" renders as a horizontal toolbar
+  mirroring the real in-game ability bar's shape rather than a vertical
+  list; "Available Abilities" is a tab bar, one tab per fixed category
+  (Auras/Heals/Melee/Damage Spells/Utility, computed by
+  `MainMenu.CategorizeAbility` purely from fields already on `AbilityData`,
+  checked in that priority order, first match wins — all 5 tabs always
+  exist even when a category is currently empty), each ability shown as a
+  card: name + Mana Cost on one row (Mana omitted entirely for aura spells,
+  which have none), then `TooltipText.BuildAbilityBody`'s description below
+  — a data-driven stat/effect breakdown (no authored flavor text exists on
+  `AbilityData`) formatted in the standard MMO spell-tooltip convention
+  (WoW's, specifically): a compact cast-time/cooldown/range block first,
+  then the effect as a plain-language sentence ("Deals 40 damage.") rather
+  than bare "Label: value" lines. Which tab is selected is controller-local
+  view state, not threaded through `MainMenu`, since it has no bearing on
+  `Profile`/game data.) — `Gear`/`Appearance`
+  are still IMGUI (`DrawGearPanel`/`DrawAppearancePanel`), unaffected. Each `*Controller`
+  (`Scripts/UI/*Controller.cs`, on its own child GameObject under `MainMenu`,
+  each driving its own sibling `UIDocument`, all sharing the same
+  `EncounterPanelSettings.asset` — **`MainMenu` itself must never carry a
+  `UIDocument` component**: Unity auto-nests a child GameObject's
+  `UIDocument` content inside a *parent* GameObject's `UIDocument` tree if
+  the parent has one too, which silently breaks the child's layout (renders
+  at an unresolvable/NaN size — invisible, no console error) — every
+  panel's `UIDocument` must live on its own child GameObject, siblings to
+  each other, with `MainMenu` staying a plain GameObject holding only the
+  `MainMenu` script) is purely presentational — it never
+  touches `ProfileStore`/game state itself, only displays what `MainMenu.cs`
+  pushes into it (each frame the panel is open, for anything with per-frame-
+  changing content) and raises plain C# events that `MainMenu.cs` handles,
+  so all real state/logic stays in the one place it always has been. Every
+  controller resolves its `UIDocument.rootVisualElement`/child elements
+  lazily on first use (`EnsureInitialized()`), not from `Awake()` — a
+  `UIDocument` builds its root in its own `OnEnable`, which runs after every
+  object's `Awake` in the scene, so touching it any earlier risks a null
+  root; `MainMenu.Start()` (never `Awake()`) is where any one-time
+  list-building against a controller happens for the same reason.
+  `MainMenu.RefreshPanelVisibility()` centralizes which one of
+  {shell, Options, Summon, …} is currently visible, based on `activePanel`/
+  `IsOpen`/`TestingAreaGate.Entered`, called from every panel-transition
+  method (`OpenPanel`/`LeavePanel`/`OpenInGameMenu`/`CloseInGameMenu`/
+  `Start`) — adding a future migrated panel only needs one more line there,
+  not changes to every transition method. `UIScale.Value` (the existing
+  player-facing slider) applies to every UI Toolkit panel via
+  `VisualElement.style.scale`, applied on `Show()`, instead of IMGUI's
+  `GUI.matrix` — same profile-backed value either way, so sizing stays
+  consistent while some panels are still IMGUI and some aren't.
+  **Hover tooltips**: `HoverTooltip` (`Scripts/UI/HoverTooltip.cs`, plain C#,
+  not a `MonoBehaviour`) is the UI Toolkit replacement for IMGUI's automatic
+  `GUI.tooltip` hover-tracking — a panel that needs hoverable rows (Skills;
+  Gear once migrated) constructs one and calls `Attach(element, () =>
+  tooltipText)` per hoverable element; it's a cursor-following floating box,
+  content fetched fresh on every hover. `TooltipText`
+  (`Scripts/UI/TooltipText.cs`) holds the actual pure ability/item tooltip
+  text formatting, shared by both this and the still-IMGUI Gear panel.
+  **Gotcha**: `HoverTooltip`'s floating element is added directly to
+  `UIDocument.rootVisualElement`, which is a *different* element from the
+  UXML's own named top-level element that actually carries the
+  `theme-root` class (that one is a child of `rootVisualElement`, not
+  `rootVisualElement` itself) — every controller that constructs a
+  `HoverTooltip` must call `root.AddToClassList("theme-root")` on
+  `rootVisualElement` first, or every `var(--color-*)` on the tooltip
+  silently falls back to UI Toolkit's defaults (black text, no themed
+  background/border) instead of erroring.
 - **Party frames** (`Scripts/UI/PartyFrames.cs`, drawn from `PlayerHUD`,
   top-right): a health+mana row for every *other* connected player,
   WoW-party-style. No party system exists — this simply lists every
@@ -684,19 +819,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   with no gap. `CurrentHealth`/`CurrentMana`/`SyncedMaxHealth`/
   `SyncedMaxMana` are already `NetworkVariable`s readable by everyone,
   so this is pure client-side rendering — no new syncing needed.
-  - **F1–F5 party targeting** (fixed, not rebindable): `PlayerTargeting`
-    targets whoever is drawn in that *row* on the viewer's own screen
-    (F2 = second row), via `PartyFrames.GetDisplayOrder`'s returned
-    order — **not** the same as `PartyNumber`. Row index is
-    viewer-relative (depends on which entry got skipped for being
-    "you"); `PartyNumber` is the same for everyone regardless of who's
-    watching. Example: canonical order P1,P2,P3,P4 — P2's screen shows
-    rows [P1, P3, P4] labeled "Player 1"/"Player 3"/"Player 4"; P2's F2
-    hits row 1 → P3, even though P3's own label says "Player 3", not
-    "Player 2". **Known conflict, not resolved**: F1–F5 are also
-    selectable ability hotkeys in `MainMenu.AllowedKeyBindings` — a
-    player who binds an ability there will trigger both the ability and
-    party-targeting on the same press.
+  - **Party targeting** (`MovementAction.PartyTarget1`-`5`, default
+    F1–F5, rebindable): `PlayerTargeting` targets whoever is drawn in
+    that *row* on the viewer's own screen (`PartyTarget2` = second row),
+    via `PartyFrames.GetDisplayOrder`'s returned order — **not** the
+    same as `PartyNumber`. Row index is viewer-relative (depends on
+    which entry got skipped for being "you"); `PartyNumber` is the same
+    for everyone regardless of who's watching. Example: canonical order
+    P1,P2,P3,P4 — P2's screen shows rows [P1, P3, P4] labeled "Player
+    1"/"Player 3"/"Player 4"; P2's `PartyTarget2` hits row 1 → P3, even
+    though P3's own label says "Player 3", not "Player 2".
 - **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
   radar bottom-right, north-up, player at centre with a heading tick.
   Compass letters (N/E/S/W) are drawn at fixed screen positions just
@@ -752,15 +884,42 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   affect movement direction, the camera, or combat facing/hit detection,
   and isn't currently visible to other clients (same limitation as the
   still-open cross-client animation sync issue).
-  Tab cycles targets, `` ` `` self-targets (fixed, not rebindable, same
-  as F1–F5 party targeting), Escape clears the target first and opens
-  the menu only when nothing is targeted. Left-click is movement/camera
-  input only — it doesn't select or clear a target. Up/Down arrow (held,
-  fixed, not rebindable) zooms the camera in/out along its own local Z
-  offset from `CameraPivot`, clamped between `CameraZoomScale.Min`/`Max`
-  — saved to the profile (same set-in-memory-then-an-existing-Save()-
-  trigger-persists-it pattern as UI Scale/Look Sensitivity), so it
-  restores on respawn/rejoin.
+  **Weapon-type idle pose**: `WeaponData.PoseType` (`WeaponPoseType`:
+  Unarmed/OneHand/TwoHand/Staff/Bow/DualWield — set per weapon asset, e.g.
+  Broad Sword is OneHand, 2H Axe is TwoHand) classifies what a weapon
+  calls for; `PlayerMovement.ResolveWeaponPoseParameter` (owner-local,
+  same `ProfileStore.Current.GetGear` pattern `HasHoverBoots` uses)
+  combines the equipped MainHand weapon's `PoseType` with an OffHand
+  shield check (a `OneHand` weapon + a shield item resolves to a distinct
+  `OneHandShield` pose) to drive a `weaponPose` int Animator parameter
+  every tick, right alongside `speed`. Unlike the movement-facing turn
+  above, this rides the same owner-authority `NetworkAnimator` `speed`
+  already uses, so it replicates to other clients automatically. No
+  off-hand weapon items exist yet, so `DualWield`
+  isn't reachable with real gear currently, only architecturally
+  supported for whenever one exists. The weapon-pose idle only shows
+  while targeting an NPC or `CharacterStats.IsInCombat` is true (see
+  Combat pipeline below); a `showCombatIdle` bool Animator parameter
+  (`PlayerMovement.ResolveShowCombatIdle`) carries this alongside
+  `weaponPose`, and the Animator Controller falls back to a relaxed
+  `Idle_OutOfCombat` pose (`Stander@Sub_Idle2`) otherwise. There's no
+  dedicated Unarmed idle state at all — a bare-fists player (no MainHand
+  weapon) always shows `Idle_OutOfCombat` too, even while targeting or
+  fighting a mob (`ResolveShowCombatIdle` special-cases `weaponPose == 0`
+  to always return false). The Animator-side state names are
+  `Idle_1hWeapon`/`Idle_1hWeaponShield`/`Idle_2hWeapon`/`Idle_Staff`/
+  `Idle_Bow`/`Idle_DualWield`/`Idle_OutOfCombat`.
+  Tab (`MovementAction.CycleTarget`) cycles targets, `` ` ``
+  (`SelfTarget`) self-targets — both rebindable, same as party targeting
+  above — Escape (the one permanently fixed, never-rebindable key)
+  clears the target first and opens the menu only when nothing is
+  targeted. Left-click is movement/camera input only — it doesn't select
+  or clear a target. Up/Down arrow (`ZoomIn`/`ZoomOut`, rebindable, held)
+  zooms the camera in/out along its own local Z offset from
+  `CameraPivot`, clamped between `CameraZoomScale.Min`/`Max` — saved to
+  the profile (same set-in-memory-then-an-existing-Save()-trigger-
+  persists-it pattern as UI Scale/Look Sensitivity), so it restores on
+  respawn/rejoin.
   **Right-clicking a mob** (a click, not a drag) targets it and arms
   **auto-attack** (`PlayerAutoAttack`; **T** toggles it on/off for the
   current target too — `MovementAction.AutoAttack`, rebindable on the
@@ -784,7 +943,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 ## Asset layout
 
 `Assets/Prefabs/{Player,Mobs,Mobs/Visuals,Projectiles,Patches}`,
-`Assets/Materials`, `Assets/Animation`, `Assets/Resources/Data/*`,
+`Assets/Materials`, `Assets/Animation`, `Assets/UI` (UI Toolkit `.uxml`/`.uss`,
+see Menus/dev UI above), `Assets/Resources/Data/*`,
 `Assets/Data/Weapons`, `Assets/Scenes/SampleScene.unity`, `Assets/Settings`
 (URP), `Assets/External` (used third-party subset). Root-level
 `DefaultNetworkPrefabs.asset`, `New Terrain.asset` etc. are Unity-managed.
@@ -882,14 +1042,6 @@ renamed, or retuned.
    `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
    on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
    specified in the design, see `review_with_fable.md`.
-10. **Animation doesn't replicate to other clients** — player 1's animation
-    plays on player 1's own screen but not on player 2's, and vice versa.
-    `CharacterAppearance` re-points a `NetworkAnimator` to the active rig's
-    `Animator` (see Architecture above), but the Editor wiring this needs
-    (component on `Player.prefab`'s root, Authority Mode: Owner, its
-    `Animator` field pre-assigned to one rig's `Animator` rather than left
-    blank) hasn't been confirmed as actually applied — check that first
-    before any further code changes here.
 
 ## Notes for future sessions
 

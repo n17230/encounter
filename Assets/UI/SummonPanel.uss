@@ -1,0 +1,46 @@
+/* Panel-specific layout for the Summon Mobs screen. Shared look lives in Theme.uss. */
+
+#summon-panel {
+    width: 320px;
+}
+
+#mob-scroll {
+    max-height: 220px;
+    margin-top: 4px;
+    margin-bottom: 10px;
+}
+
+.mob-row {
+    -unity-text-align: middle-left;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    color: var(--color-text);
+}
+
+.mob-row--selected {
+    background-color: var(--color-surface-alt);
+    color: var(--color-accent);
+}
+
+#count-row {
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.count-stepper {
+    width: 34px;
+    padding: 4px;
+}
+
+.count-label {
+    width: 40px;
+    -unity-text-align: middle-center;
+    color: var(--color-text);
+    font-size: 15px;
+}
+
+#summon-button, #summon-skeletons-button {
+    margin-bottom: 8px;
+}

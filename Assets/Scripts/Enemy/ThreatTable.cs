@@ -15,4 +15,12 @@ public class ThreatTable : UnityEngine.MonoBehaviour
         threatByClientId.TryGetValue(clientId, out float current);
         threatByClientId[clientId] = current + amount;
     }
+
+    // Wipes this one client's own entry only - e.g. on death (see
+    // PlayerRespawn.HandleDeath), not a full-table clear, so other
+    // players' threat on this mob is unaffected.
+    public void RemoveThreatFor(ulong clientId)
+    {
+        threatByClientId.Remove(clientId);
+    }
 }

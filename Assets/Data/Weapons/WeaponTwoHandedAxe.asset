@@ -17,3 +17,4 @@ MonoBehaviour:
   SwingInterval: 3
   Effect: {fileID: 0}
   Range: 2
+  PoseType: 2

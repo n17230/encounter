@@ -51,4 +51,18 @@ public class ItemData : ScriptableObject
     // .RequiresShield gating (e.g. Aegis of the Ancient) - see
     // CharacterEquipment.HasShieldEquipped.
     public bool IsShield = false;
+
+    // Null for every item today - nothing renders this yet (the Gear menu
+    // still shows every item as an "X" placeholder), this just gives the
+    // data a place to live for whenever icon art gets wired up.
+    public Sprite Icon;
+
+    // Active only while CharacterStats.DistinctEnemiesTouchedWithin
+    // (SingleTargetWindowSeconds) is <= 1 - i.e. this player has only
+    // damaged/debuffed a single enemy within that rolling window. Handled
+    // by CharacterEquipment.UpdateSingleTargetBonuses, evaluated on the
+    // same once-a-second cadence as HpThresholdEffects, not the plain
+    // always-on Bonuses list. Empty for every item except Hunter's Cloak.
+    public List<StatBonus> SingleTargetBonuses = new List<StatBonus>();
+    public float SingleTargetWindowSeconds = 12f;
 }

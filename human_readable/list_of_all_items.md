@@ -29,6 +29,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Champion's Cloak | +20% threat generated, +50 Max Health |
+| Hunter's Cloak | +15% damage dealt while you've only damaged or debuffed one enemy in the last 12s (killing that enemy lets you switch targets without losing it) |
 
 ## Boots
 
@@ -44,6 +45,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Transmitting Beacon | You always show on allies' minimaps |
+| Ring of the Magi | +10 mana per 5s |
 
 ## Trinket
 
@@ -57,7 +59,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Weapon | Effect |
 |---|---|---|
 | Broad Sword | 100 damage / 1.5s swing, 2 range | +40% threat generated, +100 Max Health |
-| Staff | 20 damage / 2s swing, 2 range | −10% mana cost, +250 Max Mana. Two-handed |
+| Staff of the Magi | 20 damage / 2s swing, 2 range | +250 Max Mana, +5 mana per 5s. Two-handed |
 | 2H Axe | 150 damage / 3s swing, 2 range | Two-handed, no other bonus |
 | Holy Scepter | none | +10% healing done |
 | Hunter's Bow | 60 damage / 2.5s swing, 50 range | No other bonus |
@@ -68,8 +70,7 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Effect |
 |---|---|
 | Aegis of the Unstoppable | +20 Armor, +5% chance to block melee attacks |
-| Aegis of Reflection | +10 Armor, +5% chance to block melee attacks, reflects 3% of incoming damage back at the attacker |
-| Tomb of the Magi | +50 Max Mana, +4 mana per 5s |
+| Shield of the Magi | +50 Max Mana, +4 mana per 5s, +10 Armor, +3% chance to block melee attacks |
 
 ## Slots with nothing yet
 

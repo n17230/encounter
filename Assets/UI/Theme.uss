@@ -1,0 +1,177 @@
+/*
+ * Shared design tokens + base component classes for every UI Toolkit panel
+ * in the project. Apply "theme-root" to a document's top-level element to
+ * bring these custom properties into scope (Unity's USS has no universal
+ * :root selector). Follows BEM: blocks are standalone components, elements
+ * use __, modifiers use -- (see .claude/skills/game-ui-design).
+ */
+
+.theme-root {
+    --color-scrim: rgba(10, 11, 15, 0.55);
+    --color-panel: #22262F;
+    --color-panel-border: #3A3F4B;
+    --color-surface: #2A2E38;
+    --color-surface-alt: #262A34;
+    --color-surface-hover: #333846;
+    --color-surface-pressed: #20232B;
+    --color-accent: #D9A54B;
+    --color-accent-hover: #F0C274;
+    --color-text: #ECE8DE;
+    --color-text-secondary: #9AA0AC;
+    --color-danger: #C1554B;
+    --color-disabled: #4A4E58;
+}
+
+.menu-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-scrim);
+}
+
+.panel {
+    background-color: var(--color-panel);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.panel__header-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.panel__title {
+    flex-grow: 1;
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: var(--color-text);
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+}
+
+.panel__header-spacer {
+    width: 60px;
+}
+
+.panel__footer {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.section-label {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--color-text-secondary);
+    letter-spacing: 2px;
+    margin-top: 12px;
+    margin-bottom: 6px;
+}
+
+.button {
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 6px;
+    color: var(--color-text);
+    font-size: 14px;
+    padding: 6px 14px;
+    -unity-text-align: middle-center;
+}
+
+.button:hover {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-accent);
+}
+
+.button:active {
+    background-color: var(--color-surface-pressed);
+}
+
+.button--ghost {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.icon-button {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    padding: 4px 8px;
+}
+
+.icon-button:hover {
+    color: var(--color-accent);
+}
+
+.field-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.field-row__label {
+    width: 220px;
+    color: var(--color-text);
+    font-size: 15px;
+}
+
+.slider {
+    flex-grow: 1;
+}
+
+/* Descendant (not child) selectors: BaseSlider nests tracker/dragger inside
+   an intermediate unity-base-slider__drag-container, so they're grandchildren
+   of .slider, not direct children. */
+.slider .unity-base-slider__tracker {
+    background-color: var(--color-surface);
+    border-width: 0;
+    border-radius: 3px;
+    height: 4px;
+}
+
+.slider .unity-base-slider__dragger {
+    background-color: var(--color-text);
+    border-width: 2px;
+    border-color: var(--color-accent);
+    border-radius: 8px;
+    width: 16px;
+    height: 16px;
+}
+
+.slider:hover .unity-base-slider__dragger {
+    background-color: var(--color-accent-hover);
+}
+
+/* Cursor-following hover tooltip (see HoverTooltip.cs) - shared by every
+   panel with hoverable rows (Skills, Gear once migrated). pickingMode is
+   set to Ignore in code so the tooltip itself never intercepts pointer
+   events. */
+.hover-tooltip {
+    position: absolute;
+    background-color: var(--color-panel);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    max-width: 320px;
+}
+
+.hover-tooltip__text {
+    /* Explicit width, not just relying on the parent's max-width - an
+       absolutely-positioned ancestor's max-width isn't a reliable wrap
+       constraint for a child Label, and the un-wrapped text was rendering
+       as one long unreadable line. 300 = 320 max-width minus the
+       container's 10px+10px horizontal padding. */
+    width: 300px;
+    color: var(--color-text);
+    font-size: 13px;
+    white-space: normal;
+}

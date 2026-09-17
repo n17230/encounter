@@ -165,7 +165,22 @@ public class EnemyAI : NetworkBehaviour
         isDead = true;
         if (animator != null) animator.SetTrigger("death");
         if (Random.value < ManaOrbDropChance) ManaOrb.TrySpawn(transform.position);
+        NotifyEnemyDeathForTracking();
         StartCoroutine(DespawnAfterDelay());
+    }
+
+    // "Death resets the tracker" for single-target-focused gear (e.g.
+    // Hunter's Cloak) - every player's own tracked-enemy record forgets
+    // this mob, so switching to a new target after a kill doesn't count as
+    // "already fighting 2 enemies" for whoever was single-target focused
+    // on it. Same scan-every-CharacterStats pattern PlayerRespawn
+    // .ResetThreatGenerated uses for the analogous "every ThreatTable" case.
+    private void NotifyEnemyDeathForTracking()
+    {
+        foreach (CharacterStats stats in FindObjectsByType<CharacterStats>(FindObjectsSortMode.None))
+        {
+            if (!stats.IsMob) stats.RemoveTrackedEnemy(NetworkObjectId);
+        }
     }
 
     private IEnumerator DespawnAfterDelay()

@@ -107,16 +107,16 @@ public class PlayerCamera : NetworkBehaviour
         if (!menuOpen) UpdateZoom();
     }
 
-    // Up/Down arrow, held: moves the camera closer/farther along its own
-    // local Z (the offset baked into the prefab), clamped between
-    // CameraZoomScale.Min/Max. Written back into the profile's in-memory
-    // copy on every change; an existing Save() trigger (menu close,
-    // entering the testing area) is what actually persists it to disk,
-    // same as UiScale/LookSensitivity.
+    // ZoomIn/ZoomOut (Options page, default Up/Down arrow), held: moves
+    // the camera closer/farther along its own local Z (the offset baked
+    // into the prefab), clamped between CameraZoomScale.Min/Max. Written
+    // back into the profile's in-memory copy on every change; an existing
+    // Save() trigger (menu close, entering the testing area) is what
+    // actually persists it to disk, same as UiScale/LookSensitivity.
     private void UpdateZoom()
     {
-        if (Input.GetKey(KeyCode.UpArrow)) zoomDistance -= zoomSpeed * Time.deltaTime;
-        else if (Input.GetKey(KeyCode.DownArrow)) zoomDistance += zoomSpeed * Time.deltaTime;
+        if (MovementInput.IsHeld(MovementAction.ZoomIn)) zoomDistance -= zoomSpeed * Time.deltaTime;
+        else if (MovementInput.IsHeld(MovementAction.ZoomOut)) zoomDistance += zoomSpeed * Time.deltaTime;
         else return;
 
         zoomDistance = Mathf.Clamp(zoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);

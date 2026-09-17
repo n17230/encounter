@@ -14,12 +14,14 @@ public class PlayerTargeting : NetworkBehaviour
     [SerializeField] private float clickMaxPixels = 5f;
     [SerializeField] private float clickMaxSeconds = 0.3f;
 
-    // Fixed, not rebindable (asked for as literally F1-F5). F1 targets
-    // whoever is drawn in the first party-frame row on this viewer's own
-    // screen, F2 the second, etc. - see PartyFrames.GetDisplayOrder for
-    // why that's not simply "party member N".
-    private static readonly KeyCode[] PartyTargetKeys =
-        { KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4, KeyCode.F5 };
+    // Rebindable via MovementAction.PartyTarget1-5 (Options page), default
+    // F1-F5. Index 0 = PartyTarget1's row, 1 = PartyTarget2's, etc. - see
+    // PartyFrames.GetDisplayOrder for why that's not simply "party member N".
+    private static readonly MovementAction[] PartyTargetActions =
+    {
+        MovementAction.PartyTarget1, MovementAction.PartyTarget2, MovementAction.PartyTarget3,
+        MovementAction.PartyTarget4, MovementAction.PartyTarget5,
+    };
 
     public Targetable CurrentTarget { get; private set; }
 
@@ -52,20 +54,19 @@ public class PlayerTargeting : NetworkBehaviour
         // same clicks confirm/relate to placement, not targeting.
         if (abilities != null && abilities.IsAimingGroundTarget) return;
 
-        if (Input.GetKeyDown(KeyCode.Tab))
+        if (MovementInput.WasPressed(MovementAction.CycleTarget))
         {
             CycleTarget();
         }
 
-        // Fixed, not rebindable, same as the party-target keys below.
-        if (Input.GetKeyDown(KeyCode.BackQuote))
+        if (MovementInput.WasPressed(MovementAction.SelfTarget))
         {
             CurrentTarget = self;
         }
 
-        for (int i = 0; i < PartyTargetKeys.Length; i++)
+        for (int i = 0; i < PartyTargetActions.Length; i++)
         {
-            if (!Input.GetKeyDown(PartyTargetKeys[i])) continue;
+            if (!MovementInput.WasPressed(PartyTargetActions[i])) continue;
             TargetPartySlot(i);
             break;
         }
@@ -103,10 +104,10 @@ public class PlayerTargeting : NetworkBehaviour
             : null;
     }
 
-    // rowIndex 0 = F1's row, 1 = F2's, etc. - the exact same
-    // viewer-relative ordering PartyFrames draws, so a key always targets
-    // whoever is actually sitting in that row on screen. Does nothing if
-    // nobody occupies that row.
+    // rowIndex 0 = PartyTarget1's row, 1 = PartyTarget2's, etc. - the exact
+    // same viewer-relative ordering PartyFrames draws, so a key always
+    // targets whoever is actually sitting in that row on screen. Does
+    // nothing if nobody occupies that row.
     private void TargetPartySlot(int rowIndex)
     {
         Targetable[] all = FindObjectsByType<Targetable>(FindObjectsSortMode.None);

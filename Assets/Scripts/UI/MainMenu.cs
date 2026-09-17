@@ -17,7 +17,16 @@ public class MainMenu : MonoBehaviour
     [SerializeField] private CharacterPreview characterPreview;
     [SerializeField] private Texture previewRenderTexture;
 
-    private static readonly KeyBindingOption[] AllowedKeyBindings = BuildAllowedKeyBindings();
+    // UI Toolkit panels (see CLAUDE.md's Menus/dev UI section), each
+    // replacing an old IMGUI Draw*Panel method entirely. Null-guarded like
+    // characterPreview: if not yet wired in the Editor, that one panel
+    // simply won't open (no error), rather than being a hard requirement to
+    // compile/run.
+    [SerializeField] private OptionsPanelController optionsPanelUI;
+    [SerializeField] private MenuShellController menuShellUI;
+    [SerializeField] private SummonPanelController summonPanelUI;
+    [SerializeField] private SkillsPanelController skillsPanelUI;
+
     private static readonly KeyCode[] AllKeyCodes = (KeyCode[])System.Enum.GetValues(typeof(KeyCode));
     private static readonly string[] MovementActionNames = System.Enum.GetNames(typeof(MovementAction));
 
@@ -37,26 +46,79 @@ public class MainMenu : MonoBehaviour
     private Vector2 scrollPosition;
     private int appearanceTabIndex;
     private Vector2 appearanceTabScrollPosition;
-    private Vector2 summonScrollPosition;
     private int summonMobIndex;
     private int summonCount = 1;
+    private PlayerSummon summonListBuiltFor;
 
     private static PlayerProfile Profile => ProfileStore.Current;
 
-    private static KeyBindingOption[] BuildAllowedKeyBindings()
+    private void Awake()
     {
-        List<KeyBindingOption> options = new List<KeyBindingOption>();
-        KeyCode[] numberKeys = { KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5 };
-        foreach (KeyCode key in numberKeys) options.Add(new KeyBindingOption(key, false));
-        foreach (KeyCode key in numberKeys) options.Add(new KeyBindingOption(key, true));
+        if (optionsPanelUI != null)
+        {
+            optionsPanelUI.BackRequested += LeavePanel;
+            optionsPanelUI.ResetRequested += ResetKeybindingsToDefaults;
+            optionsPanelUI.KeyRowClicked += BeginCaptureMovementKey;
+            optionsPanelUI.UiScaleChanged += value => UIScale.Value = value;
+            optionsPanelUI.LookSensitivityChanged += value => LookSensitivityScale.Value = value;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Options Panel Ui isn't assigned - the Options panel won't open.");
+        }
 
-        KeyCode[] fKeys = { KeyCode.F1, KeyCode.F2, KeyCode.F3, KeyCode.F4, KeyCode.F5 };
-        foreach (KeyCode key in fKeys) options.Add(new KeyBindingOption(key, false));
+        if (menuShellUI != null)
+        {
+            menuShellUI.SkillsClicked += () => OpenPanel(Panel.Skills);
+            menuShellUI.GearClicked += () => OpenPanel(Panel.Gear);
+            menuShellUI.AppearanceClicked += () => OpenPanel(Panel.Appearance);
+            menuShellUI.SummonClicked += () => OpenPanel(Panel.Summon);
+            menuShellUI.OptionsClicked += () => OpenPanel(Panel.Options);
+            menuShellUI.RespawnClicked += () => LocalPlayer<CharacterStats>()?.RequestRespawn();
+            menuShellUI.EnterTestingAreaClicked += EnterTestingArea;
+            menuShellUI.ResumeClicked += CloseInGameMenu;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Menu Shell Ui isn't assigned - the main/in-game menu won't open.");
+        }
 
-        KeyCode[] letterKeys = { KeyCode.Q, KeyCode.E, KeyCode.R, KeyCode.T, KeyCode.F, KeyCode.G };
-        foreach (KeyCode key in letterKeys) options.Add(new KeyBindingOption(key, false));
+        if (summonPanelUI != null)
+        {
+            summonPanelUI.BackRequested += LeavePanel;
+            summonPanelUI.MobRowClicked += SelectSummonMob;
+            summonPanelUI.CountDecreaseRequested += DecreaseSummonCount;
+            summonPanelUI.CountIncreaseRequested += IncreaseSummonCount;
+            summonPanelUI.SummonRequested += RequestSummon;
+            summonPanelUI.SummonSkeletonsRequested += RequestSummonSkeletons;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Summon Panel Ui isn't assigned - the Summon Mobs panel won't open.");
+        }
 
-        return options.ToArray();
+        if (skillsPanelUI != null)
+        {
+            skillsPanelUI.BackRequested += LeavePanel;
+            skillsPanelUI.AvailableAbilityClicked += AssignAbilityToFirstEmptySlot;
+            skillsPanelUI.SlotClicked += ToggleSelectedSkillSlot;
+            skillsPanelUI.RemoveClicked += RemoveSkillSlot;
+            skillsPanelUI.SetKeyBindingClicked += BeginCaptureAbilityKey;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Skills Panel Ui isn't assigned - the Skills panel won't open.");
+        }
+    }
+
+    private void Start()
+    {
+        // Deferred from Awake(): UIDocument builds its rootVisualElement in
+        // its own OnEnable, which runs after every object's Awake in the
+        // scene, so touching it any earlier would hit a null root. Start()
+        // runs after every OnEnable has completed, so this is always safe.
+        optionsPanelUI?.BuildRows(MovementActionNames);
+        RefreshPanelVisibility();
     }
 
     private void Update()
@@ -70,11 +132,221 @@ public class MainMenu : MonoBehaviour
         if (awaitingKeyForSlot >= 0)
         {
             CaptureAbilityKey();
+            // Capture just completed this frame - the affected slot's (and
+            // possibly another slot's, if a key got stolen) label changed,
+            // so the already-built rows need rebuilding. Old IMGUI just
+            // recomputed every label fresh every frame; this only redoes it
+            // on the one frame something actually changed.
+            if (awaitingKeyForSlot < 0) RebuildSkillsLists();
         }
         else if (awaitingKeyForMovement >= 0)
         {
             CaptureMovementKey();
         }
+
+        if (optionsPanelUI != null && activePanel == Panel.Options)
+        {
+            optionsPanelUI.Refresh(Profile.MovementKeys, awaitingKeyForMovement, UIScale.Value, LookSensitivityScale.Value);
+        }
+
+        if (summonPanelUI != null && activePanel == Panel.Summon)
+        {
+            // The local player (and PlayerSummon.SummonableMobs) may not
+            // exist yet the instant the panel opens - old IMGUI just re-read
+            // it fresh every OnGUI call, so this re-checks once per distinct
+            // player instance instead of building the row list only once
+            // in OpenPanel(), which could otherwise leave the list
+            // permanently empty if it opened too early.
+            PlayerSummon summon = LocalPlayer<PlayerSummon>();
+            if (summon != null && summon != summonListBuiltFor)
+            {
+                summonPanelUI.SetMobList(BuildSummonMobLabels());
+                summonListBuiltFor = summon;
+            }
+            summonPanelUI.Refresh(summon != null && summon.SummonableMobs.Count > 0, summonMobIndex, summonCount);
+        }
+
+        if (skillsPanelUI != null && activePanel == Panel.Skills)
+        {
+            skillsPanelUI.RefreshSelection(selectedSlot, awaitingKeyForSlot);
+        }
+    }
+
+    private void BeginCaptureMovementKey(int index)
+    {
+        awaitingKeyForMovement = awaitingKeyForMovement == index ? -1 : index;
+        awaitingKeyForSlot = -1;
+    }
+
+    private void ResetKeybindingsToDefaults()
+    {
+        System.Array.Copy(MovementInput.Defaults, Profile.MovementKeys, Profile.MovementKeys.Length);
+        awaitingKeyForMovement = -1;
+    }
+
+    private void EnterTestingArea()
+    {
+        ProfileStore.Save();
+        TestingAreaGate.Entered = true;
+        RefreshPanelVisibility();
+    }
+
+    private void SelectSummonMob(int index)
+    {
+        summonMobIndex = index;
+    }
+
+    private void DecreaseSummonCount()
+    {
+        summonCount = Mathf.Max(1, summonCount - 1);
+    }
+
+    private void IncreaseSummonCount()
+    {
+        PlayerSummon summon = LocalPlayer<PlayerSummon>();
+        int max = summon != null ? summon.MaxSummonCount : summonCount;
+        summonCount = Mathf.Min(max, summonCount + 1);
+    }
+
+    private void RequestSummon()
+    {
+        PlayerSummon summon = LocalPlayer<PlayerSummon>();
+        if (summon == null) return;
+        summon.RequestSummon(summonMobIndex, summonCount);
+        CloseInGameMenu();
+    }
+
+    private void RequestSummonSkeletons()
+    {
+        PlayerSummon summon = LocalPlayer<PlayerSummon>();
+        if (summon == null) return;
+        summon.RequestSummonSkeletonEncounter();
+        CloseInGameMenu();
+    }
+
+    private List<string> BuildSummonMobLabels()
+    {
+        List<string> labels = new List<string>();
+        PlayerSummon summon = LocalPlayer<PlayerSummon>();
+        if (summon == null) return labels;
+        foreach (var mob in summon.SummonableMobs) labels.Add(PlayerSummon.MobLabel(mob));
+        return labels;
+    }
+
+    private void AssignAbilityToFirstEmptySlot(AbilityData ability)
+    {
+        int emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, null);
+        if (emptySlot < 0) emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, "");
+        if (emptySlot >= 0) Profile.SetSlotAbility(emptySlot, ability);
+        RebuildSkillsLists();
+    }
+
+    private void ToggleSelectedSkillSlot(int index)
+    {
+        selectedSlot = selectedSlot == index ? -1 : index;
+        awaitingKeyForSlot = -1;
+    }
+
+    private void RemoveSkillSlot(int index)
+    {
+        Profile.SetSlotAbility(index, null);
+        Profile.SetSlotKey(index, null);
+        selectedSlot = -1;
+        // Also true of the old IMGUI Remove handler - if a key capture was
+        // armed for this same slot (reachable: Remove and Set Key Binding
+        // sit in the same expanded sub-row), leaving awaitingKeyForSlot
+        // pointing at the now-empty slot means the next keypress binds a
+        // key to nothing and silently steals it from whichever slot
+        // actually owned it.
+        awaitingKeyForSlot = -1;
+        RebuildSkillsLists();
+        // RebuildLists() rebuilds the toolbar but doesn't touch the shared
+        // sub-row - without this, it would keep showing the just-removed
+        // ability's stale name/buttons until the next Update() tick.
+        skillsPanelUI?.RefreshSelection(selectedSlot, awaitingKeyForSlot);
+    }
+
+    private void BeginCaptureAbilityKey(int index)
+    {
+        awaitingKeyForSlot = awaitingKeyForSlot == index ? -1 : index;
+    }
+
+    // Fixed order/names, per the user's explicit categorization. Every check
+    // reads a field that already exists on AbilityData - nothing invented.
+    // Checked top to bottom, first match wins (e.g. a melee ability that
+    // also deals Damage lands in Melee, not Damage Spells).
+    private static readonly string[] AbilityCategoryNames = { "AURAS", "HEALS", "MELEE", "DAMAGE SPELLS", "UTILITY" };
+
+    private static int CategorizeAbility(AbilityData ability)
+    {
+        if (ability.IsAuraSpell) return 0;
+        if (ability.HealAmount > 0f || ability.ShieldAmount > 0f) return 1;
+        if (ability.RequiresMeleeWeapon) return 2;
+        if (ability.Damage > 0f) return 3;
+        return 4;
+    }
+
+    private void RebuildSkillsLists()
+    {
+        if (skillsPanelUI == null) return;
+
+        List<AbilityCategoryDisplay> categories = new List<AbilityCategoryDisplay>();
+        foreach (string name in AbilityCategoryNames)
+        {
+            categories.Add(new AbilityCategoryDisplay { CategoryName = name, Abilities = new List<AbilityData>() });
+        }
+
+        foreach (AbilityData ability in GameDatabase.Abilities)
+        {
+            if (Profile.IndexOfAbility(ability) < 0) categories[CategorizeAbility(ability)].Abilities.Add(ability);
+        }
+
+        List<SkillSlotDisplay> slots = new List<SkillSlotDisplay>();
+        for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
+        {
+            AbilityData slotAbility = Profile.GetSlotAbility(i);
+            if (slotAbility == null)
+            {
+                slots.Add(new SkillSlotDisplay { Ability = null, KeyLabel = "", CanSetKeyBinding = false });
+                continue;
+            }
+
+            KeyBindingOption? slotKey = Profile.GetSlotKey(i);
+            string keyLabel = slotAbility.IsAuraSpell
+                ? "Always On"
+                : (slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound");
+            slots.Add(new SkillSlotDisplay
+            {
+                Ability = slotAbility,
+                KeyLabel = keyLabel,
+                CanSetKeyBinding = !slotAbility.IsAuraSpell,
+            });
+        }
+
+        skillsPanelUI.RebuildLists(categories, slots);
+    }
+
+    // Centralizes which UI Toolkit panel (if any) is visible for the
+    // current activePanel/IsOpen/TestingAreaGate.Entered combination -
+    // called from every panel-state transition instead of each transition
+    // method managing its own Show()/Hide() calls, so a future panel only
+    // needs one more line here rather than touching every transition method.
+    private void RefreshPanelVisibility()
+    {
+        bool showShell = activePanel == Panel.None && (!TestingAreaGate.Entered || IsOpen);
+        if (showShell)
+        {
+            menuShellUI?.SetMode(TestingAreaGate.Entered);
+            menuShellUI?.Show();
+        }
+        else
+        {
+            menuShellUI?.Hide();
+        }
+
+        if (activePanel == Panel.Options) optionsPanelUI?.Show(); else optionsPanelUI?.Hide();
+        if (activePanel == Panel.Summon) summonPanelUI?.Show(); else summonPanelUI?.Hide();
+        if (activePanel == Panel.Skills) skillsPanelUI?.Show(); else skillsPanelUI?.Hide();
     }
 
     private void HandleEscape()
@@ -121,6 +393,7 @@ public class MainMenu : MonoBehaviour
         activePanel = Panel.None;
         selectedSlot = -1;
         scrollPosition = Vector2.zero;
+        RefreshPanelVisibility();
     }
 
     private void CloseInGameMenu()
@@ -130,6 +403,7 @@ public class MainMenu : MonoBehaviour
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
+        RefreshPanelVisibility();
         ProfileStore.Save();
         Closed?.Invoke();
     }
@@ -140,14 +414,27 @@ public class MainMenu : MonoBehaviour
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
+        RefreshPanelVisibility();
         ProfileStore.Save();
     }
 
+    // Any non-mouse key is allowed, same pool CaptureMovementKey already
+    // draws from - Escape is the one permanently protected key (also
+    // already unreachable here in practice, since Update() intercepts and
+    // consumes Escape, cancelling any in-progress capture, before this
+    // ever runs - excluded explicitly anyway so the guarantee doesn't
+    // rely solely on that ordering). Capturing (key, shiftHeld) directly,
+    // rather than matching against a fixed list of pre-built options, is
+    // what makes Shift+AnyKey work generically instead of just Shift+1-5.
     private void CaptureAbilityKey()
     {
-        foreach (KeyBindingOption option in AllowedKeyBindings)
+        foreach (KeyCode key in AllKeyCodes)
         {
-            if (!option.WasPressedThisFrame()) continue;
+            if (key == KeyCode.None || key >= KeyCode.Mouse0 || key == KeyCode.Escape) continue;
+            if (!Input.GetKeyDown(key)) continue;
+
+            bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            KeyBindingOption option = new KeyBindingOption(key, shiftHeld);
 
             for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
             {
@@ -158,7 +445,7 @@ public class MainMenu : MonoBehaviour
 
             Profile.SetSlotKey(awaitingKeyForSlot, option);
             awaitingKeyForSlot = -1;
-            break;
+            return;
         }
     }
 
@@ -167,8 +454,11 @@ public class MainMenu : MonoBehaviour
         foreach (KeyCode key in AllKeyCodes)
         {
             // Mouse buttons and joystick codes sit at the end of the enum;
-            // clicking the "Press a key..." button itself must not bind Mouse0.
-            if (key == KeyCode.None || key >= KeyCode.Mouse0) continue;
+            // clicking the "Press a key..." button itself must not bind
+            // Mouse0. Escape is the one permanently protected key - already
+            // unreachable here in practice (see CaptureAbilityKey's comment
+            // above), excluded explicitly anyway for the same reason.
+            if (key == KeyCode.None || key >= KeyCode.Mouse0 || key == KeyCode.Escape) continue;
             if (!Input.GetKeyDown(key)) continue;
 
             UnbindMovementKey(key);
@@ -204,11 +494,12 @@ public class MainMenu : MonoBehaviour
         switch (activePanel)
         {
             case Panel.None:
-                if (TestingAreaGate.Entered) DrawInGamePanel();
-                else DrawMainPanel();
+                // Rendered by MenuShellController (UI Toolkit), not IMGUI -
+                // see RefreshPanelVisibility() for its Show()/Hide()/SetMode wiring.
                 break;
             case Panel.Skills:
-                DrawSkillsPanel();
+                // Rendered by SkillsPanelController (UI Toolkit), not IMGUI -
+                // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
             case Panel.Gear:
                 DrawGearPanel();
@@ -217,10 +508,12 @@ public class MainMenu : MonoBehaviour
                 DrawAppearancePanel();
                 break;
             case Panel.Options:
-                DrawOptionsPanel();
+                // Rendered by OptionsPanelController (UI Toolkit), not IMGUI -
+                // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
             case Panel.Summon:
-                DrawSummonPanel();
+                // Rendered by SummonPanelController (UI Toolkit), not IMGUI -
+                // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
         }
 
@@ -237,280 +530,19 @@ public class MainMenu : MonoBehaviour
         GUI.Box(new Rect(mouse.x + 16, mouse.y + 16, size.x + 12, size.y + 12), GUI.tooltip);
     }
 
-    private static string BuildAbilityTooltip(AbilityData ability)
-    {
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.AppendLine(ability.AbilityName);
-
-        if (ability.IsAuraSpell)
-        {
-            sb.AppendLine("Always active once slotted - no cast, no keybind, no mana cost.");
-            if (ability.Effect != null) sb.AppendLine(DescribeEffect(ability.Effect, ability.Effect.Duration));
-            if ((ability.AuraReveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Reveals every mob on your minimap.");
-            return sb.ToString().TrimEnd();
-        }
-
-        if (ability.Damage > 0f) sb.AppendLine($"Damage: {ability.Damage}");
-        if (ability.HealAmount > 0f) sb.AppendLine($"Heals: {ability.HealAmount}");
-        if (ability.ShieldAmount > 0f) sb.AppendLine($"Shields for: {ability.ShieldAmount}");
-        sb.AppendLine($"Mana Cost: {ability.ManaCost}");
-        sb.AppendLine($"Cooldown: {ability.Cooldown}s");
-        if (ability.CastTime > 0f) sb.AppendLine($"Cast Time: {ability.CastTime}s");
-        if (!ability.AreaAroundCaster) sb.AppendLine($"Range: {ability.Range}");
-        if (ability.IsGroundTargeted)
-        {
-            sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area");
-            if (ability.ForceSpeed > 0f)
-            {
-                string direction = ability.PushAway ? "outward, away from" : "inward, toward";
-                sb.AppendLine($"Blasts everyone in the area {direction} the center at {ability.ForceSpeed}/s");
-            }
-        }
-        if (ability.AreaAroundCaster) sb.AppendLine($"Centered on you: {ability.GroundEffectRadius} radius, affects all players");
-        if (ability.RecallTarget) sb.AppendLine("Teleports the target to your location");
-
-        if (ability.Effect != null)
-        {
-            float duration = ability.DirectHitEffectDuration > 0f ? ability.DirectHitEffectDuration : ability.Effect.Duration;
-            sb.AppendLine(DescribeEffect(ability.Effect, duration));
-        }
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private static string DescribeEffect(StatusEffectData effect, float duration)
-    {
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.Append(effect.DisplayName).Append(':');
-        if (effect.TickDamage > 0f) sb.Append($" {effect.TickDamage} dmg/{effect.TickInterval}s");
-        if (effect.TickHeal > 0f) sb.Append($" +{effect.TickHeal} hp/{effect.TickInterval}s");
-        if (effect.DamageRedirectPercent > 0f) sb.Append($" redirects {effect.DamageRedirectPercent * 100f:0}% of damage taken to the caster");
-        foreach (StatBonus bonus in effect.Modifiers) sb.Append(' ').Append(DescribeBonus(bonus));
-        sb.Append($" for {duration}s");
-        return sb.ToString();
-    }
-
-    private static string BuildItemTooltip(ItemData item)
-    {
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        sb.AppendLine(item.ItemName);
-        sb.AppendLine($"Slot: {item.Slot}");
-        if (item.Weapon != null) sb.AppendLine($"Weapon: {item.Weapon.Damage} dmg every {item.Weapon.SwingInterval}s");
-
-        foreach (StatBonus bonus in item.Bonuses) sb.AppendLine(DescribeBonus(bonus));
-        foreach (EffectImmunity immunity in item.Immunities)
-        {
-            if (immunity.Effect == null) continue;
-            sb.AppendLine($"Immune to {immunity.Effect.DisplayName}{(immunity.GroundOnly ? " from ground effects" : "")}");
-        }
-        foreach (ItemAura aura in item.Auras)
-        {
-            if (aura.Effect == null) continue;
-            sb.Append(aura.Range > 0f ? $"Aura ({aura.Range} range): " : "While worn: ").Append(aura.Effect.DisplayName);
-            if (aura.Effect.TickDamage > 0f) sb.Append($", {aura.Effect.TickDamage} dmg/{aura.Effect.TickInterval}s");
-            if (aura.Effect.TickHeal > 0f) sb.Append($", +{aura.Effect.TickHeal} hp/{aura.Effect.TickInterval}s");
-            foreach (StatBonus bonus in aura.Effect.Modifiers) sb.Append(", ").Append(DescribeBonus(bonus));
-            sb.AppendLine();
-        }
-        if ((item.Reveals & MinimapReveal.Players) != 0) sb.AppendLine("Reveals players on the minimap");
-        if ((item.Reveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Pulses monsters onto the minimap every 5s");
-        if (item.BroadcastsLocation) sb.AppendLine("Broadcasts your location to allies' minimaps");
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private static string DescribeBonus(StatBonus bonus)
-    {
-        bool isPercent = bonus.ModifierType == StatModifierType.PercentAdditive;
-        float displayValue = isPercent ? bonus.Value * 100f : bonus.Value;
-        if (bonus.Stat == StatType.ManaCostMultiplier)
-        {
-            return $"Mana cost {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
-        }
-        if (bonus.Stat == StatType.ThreatMultiplier)
-        {
-            return $"Threat generated {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
-        }
-        if (bonus.Stat == StatType.DamageMultiplier)
-        {
-            return $"Damage dealt {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
-        }
-        if (bonus.Stat == StatType.HealingMultiplier)
-        {
-            return $"Healing done {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
-        }
-        string sign = displayValue >= 0f ? "+" : "";
-        return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";
-    }
-
     private void OpenPanel(Panel panel)
     {
         activePanel = panel;
         scrollPosition = Vector2.zero;
         appearanceTabIndex = 0;
         appearanceTabScrollPosition = Vector2.zero;
+        if (panel == Panel.Skills) RebuildSkillsLists();
+        RefreshPanelVisibility();
     }
 
-    // Buttons grouped by purpose rather than a flat list - character-build
-    // choices together, then utility tools, then the action that leaves the
-    // menu - per the game-ui-design skill's guidance for this surface (a
-    // low-stakes flat menu: group for scannability, don't over-design it).
-    private void DrawMainPanel()
-    {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 140, 200, 280));
-        if (GUILayout.Button("Choose Skills", GUILayout.Height(40))) OpenPanel(Panel.Skills);
-        if (GUILayout.Button("Choose Gear", GUILayout.Height(40))) OpenPanel(Panel.Gear);
-        if (GUILayout.Button("Character Creation", GUILayout.Height(40))) OpenPanel(Panel.Appearance);
-        GUILayout.Space(10);
-        if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
-        GUILayout.Space(10);
-        if (GUILayout.Button("Enter Testing Area", GUILayout.Height(40)))
-        {
-            ProfileStore.Save();
-            TestingAreaGate.Entered = true;
-        }
-        GUILayout.EndArea();
-    }
-
-    private void DrawInGamePanel()
-    {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 100, UIScale.Height / 2f - 160, 200, 320));
-        if (GUILayout.Button("Skills", GUILayout.Height(40))) OpenPanel(Panel.Skills);
-        if (GUILayout.Button("Gear", GUILayout.Height(40))) OpenPanel(Panel.Gear);
-        if (GUILayout.Button("Character Creation", GUILayout.Height(40))) OpenPanel(Panel.Appearance);
-        GUILayout.Space(10);
-        if (GUILayout.Button("Summon Mobs", GUILayout.Height(40))) OpenPanel(Panel.Summon);
-        if (GUILayout.Button("Options", GUILayout.Height(40))) OpenPanel(Panel.Options);
-        GUILayout.Space(10);
-        if (GUILayout.Button("Resume", GUILayout.Height(40))) CloseInGameMenu();
-        GUILayout.EndArea();
-    }
-
-    // Testing-lobby tool: spawn mobs to fight. Buttons rather than a text
-    // field for the count, because IMGUI's native Tab focus traversal grabs
-    // any focusable control and Tab is the tab-targeting key.
-    private void DrawSummonPanel()
-    {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 120, UIScale.Height / 2f - 220, 240, 440));
-        GUILayout.Label("Summon Mobs");
-
-        PlayerSummon summon = LocalPlayer<PlayerSummon>();
-        if (summon == null || summon.SummonableMobs.Count == 0)
-        {
-            GUILayout.Label("No player spawned yet.");
-        }
-        else
-        {
-            // The mob-type list scrolls independently so it can keep
-            // growing (e.g. the Skeleton Tactician escort) without pushing
-            // the count controls / Summon / Back buttons below the fixed
-            // area and out of view - GUILayout.BeginArea clips silently
-            // instead of scrolling on its own.
-            summonScrollPosition = GUILayout.BeginScrollView(summonScrollPosition, GUILayout.Height(220));
-            for (int i = 0; i < summon.SummonableMobs.Count; i++)
-            {
-                string label = (i == summonMobIndex ? "> " : "") + PlayerSummon.MobLabel(summon.SummonableMobs[i]);
-                if (GUILayout.Button(label)) summonMobIndex = i;
-            }
-            GUILayout.EndScrollView();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Count:", GUILayout.Width(50));
-            if (GUILayout.Button("-", GUILayout.Width(30))) summonCount = Mathf.Max(1, summonCount - 1);
-            GUIStyle centered = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-            GUILayout.Label(summonCount.ToString(), centered, GUILayout.Width(40));
-            if (GUILayout.Button("+", GUILayout.Width(30))) summonCount = Mathf.Min(summon.MaxSummonCount, summonCount + 1);
-            GUILayout.EndHorizontal();
-
-            if (GUILayout.Button("Summon", GUILayout.Height(30)))
-            {
-                summon.RequestSummon(summonMobIndex, summonCount);
-                CloseInGameMenu();
-            }
-
-            GUILayout.Space(10);
-            if (GUILayout.Button("Summon Skeletons", GUILayout.Height(30)))
-            {
-                summon.RequestSummonSkeletonEncounter();
-                CloseInGameMenu();
-            }
-        }
-
-        if (GUILayout.Button("Back")) LeavePanel();
-        GUILayout.EndArea();
-    }
-
-    private void DrawSkillsPanel()
-    {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 320, UIScale.Height / 2f - 220, 640, 440));
-        scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(400));
-
-        GUILayout.Label("Choose Your Skills");
-        GUILayout.BeginHorizontal();
-
-        GUILayout.BeginVertical(GUILayout.Width(300));
-        GUILayout.Label("Available Abilities");
-        foreach (AbilityData ability in GameDatabase.Abilities)
-        {
-            if (Profile.IndexOfAbility(ability) >= 0) continue;
-
-            if (GUILayout.Button(new GUIContent(ability.AbilityName, BuildAbilityTooltip(ability))))
-            {
-                int emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, null);
-                if (emptySlot < 0) emptySlot = System.Array.IndexOf(Profile.SlotAbilityIds, "");
-                if (emptySlot >= 0) Profile.SetSlotAbility(emptySlot, ability);
-            }
-        }
-        GUILayout.EndVertical();
-
-        GUILayout.BeginVertical(GUILayout.Width(300));
-        GUILayout.Label($"Your Kit ({PlayerProfile.AbilitySlots} slots)");
-        for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
-        {
-            AbilityData slotAbility = Profile.GetSlotAbility(i);
-            KeyBindingOption? slotKey = Profile.GetSlotKey(i);
-            string keyLabel = slotAbility != null && slotAbility.IsAuraSpell
-                ? "Always On"
-                : (slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound");
-            string label = slotAbility != null ? $"{i + 1}. {slotAbility.AbilityName} [{keyLabel}]" : $"{i + 1}. (empty)";
-
-            if (slotAbility == null)
-            {
-                GUILayout.Label(label);
-                continue;
-            }
-
-            if (GUILayout.Button(new GUIContent(label, BuildAbilityTooltip(slotAbility))))
-            {
-                selectedSlot = selectedSlot == i ? -1 : i;
-                awaitingKeyForSlot = -1;
-            }
-
-            if (selectedSlot == i)
-            {
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Remove"))
-                {
-                    Profile.SetSlotAbility(i, null);
-                    Profile.SetSlotKey(i, null);
-                    selectedSlot = -1;
-                }
-                if (!slotAbility.IsAuraSpell
-                    && GUILayout.Button(awaitingKeyForSlot == i ? "Press a key..." : "Set Key Binding"))
-                {
-                    awaitingKeyForSlot = awaitingKeyForSlot == i ? -1 : i;
-                }
-                GUILayout.EndHorizontal();
-            }
-        }
-        GUILayout.EndVertical();
-
-        GUILayout.EndHorizontal();
-        GUILayout.EndScrollView();
-
-        if (GUILayout.Button("Back")) LeavePanel();
-        GUILayout.EndArea();
-    }
+    // Main/in-game menu shell, Summon, and Skills panels are rendered by
+    // MenuShellController/SummonPanelController/SkillsPanelController (UI
+    // Toolkit) - see RefreshPanelVisibility().
 
     // Indexed by GearSlot.
     private static readonly string[] SlotShortNames =
@@ -577,7 +609,7 @@ public class MainMenu : MonoBehaviour
         {
             Rect rect = new Rect((i % 3) * (cell + gap), 24f + (i / 3) * (cell + gap), cell, cell);
             ItemData equipped = Profile.GetGear(slots[i]);
-            string tooltip = equipped != null ? BuildItemTooltip(equipped) + "\n(click to unequip)" : $"{SlotShortNames[i]} (empty)";
+            string tooltip = equipped != null ? TooltipText.BuildItemTooltip(equipped) + "\n(click to unequip)" : $"{SlotShortNames[i]} (empty)";
 
             DrawSlotOutline(rect, slots[i]);
             if (GUI.Button(rect, new GUIContent(equipped != null ? "X" : "", tooltip), icon) && equipped != null)
@@ -596,7 +628,7 @@ public class MainMenu : MonoBehaviour
             index++;
 
             DrawSlotOutline(rect, item.Slot);
-            if (GUI.Button(rect, new GUIContent("X", BuildItemTooltip(item) + "\n(click to equip)"), icon))
+            if (GUI.Button(rect, new GUIContent("X", TooltipText.BuildItemTooltip(item) + "\n(click to equip)"), icon))
             {
                 GearSlot targetSlot = TargetSlotFor(item);
 
@@ -853,46 +885,4 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndHorizontal();
     }
 
-    private void DrawOptionsPanel()
-    {
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 150, UIScale.Height / 2f - 170, 300, 340));
-
-        GUILayout.Label($"UI Scale ({UIScale.Value * 100f:0}%)");
-        UIScale.Value = GUILayout.HorizontalSlider(UIScale.Value, UIScale.Min, UIScale.Max);
-
-        GUILayout.Space(10);
-        GUILayout.Label($"Look Sensitivity ({LookSensitivityScale.Value:0.00}x)");
-        LookSensitivityScale.Value = GUILayout.HorizontalSlider(LookSensitivityScale.Value, LookSensitivityScale.Min, LookSensitivityScale.Max);
-
-        GUILayout.Space(10);
-        GUILayout.Label("Keybindings");
-
-        KeyCode[] keys = Profile.MovementKeys;
-        for (int i = 0; i < keys.Length; i++)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(MovementActionNames[i], GUILayout.Width(120));
-
-            string keyLabel;
-            if (awaitingKeyForMovement == i) keyLabel = "Press a key...";
-            else if (keys[i] == KeyCode.None) keyLabel = "Unbound";
-            else keyLabel = keys[i].ToString();
-
-            if (GUILayout.Button(keyLabel))
-            {
-                awaitingKeyForMovement = awaitingKeyForMovement == i ? -1 : i;
-                awaitingKeyForSlot = -1;
-            }
-            GUILayout.EndHorizontal();
-        }
-
-        if (GUILayout.Button("Reset to Defaults"))
-        {
-            System.Array.Copy(MovementInput.Defaults, keys, keys.Length);
-            awaitingKeyForMovement = -1;
-        }
-
-        if (GUILayout.Button("Back")) LeavePanel();
-        GUILayout.EndArea();
-    }
 }
