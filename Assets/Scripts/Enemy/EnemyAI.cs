@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
+using UnityEngine.AI;
 
 // Runs its Awake before NetworkAnimator's (default order 0) on purpose:
 // NetworkAnimator.Awake only builds its parameter/state caches if its
@@ -27,6 +28,32 @@ public class EnemyAI : NetworkBehaviour
     [SerializeField] private float deathDespawnDelay = 2f;
 
     private const float ManaOrbDropChance = 0.05f;
+
+    // Not specified by the user - a reasonable default, flagged in
+    // review_with_fable.md for later tuning. Reused NavMeshPath instance -
+    // NavMesh.CalculatePath clears and refills its corners in place
+    // (confirmed via Unity's own source), so CalculatePath itself only
+    // runs every ~PathRecalcInterval, not every FixedUpdate tick.
+    private const float PathRecalcInterval = 0.25f;
+    private readonly NavMeshPath cachedPath = new NavMeshPath();
+    // NavMeshPath.corners is a property that allocates a brand new array
+    // on EVERY access (that's the documented reason GetCornersNonAlloc
+    // exists at all) - reading it every tick, not just on recalc, would
+    // silently defeat the whole point of reusing one NavMeshPath
+    // instance. This buffer is filled via GetCornersNonAlloc only inside
+    // the recalc-gated branch; cornerBufferCount (not the buffer's own
+    // Length) says how many of its slots are this path's actual corners -
+    // the rest may be stale data left over from a previous, longer path.
+    // 32 is a generous bound for any reasonably-sized level; if a path
+    // ever has more corners than that, GetCornersNonAlloc just truncates
+    // rather than throwing.
+    private readonly Vector3[] cornerBuffer = new Vector3[32];
+    private int cornerBufferCount;
+    // Randomized per-instance so every mob spawned in the same wave
+    // doesn't recalculate on the exact same physics tick forever after -
+    // that would be a periodic synchronized CPU spike with many
+    // concurrent mobs.
+    private float nextPathRecalcTime = Random.Range(0f, PathRecalcInterval);
 
     // --- Skeleton Tactician escort encounter (see BOSS_DESIGN.md) ---
     // None (the default) leaves every other mob (Goblin, Ogre, ...)
@@ -297,7 +324,7 @@ public class EnemyAI : NetworkBehaviour
 
         if (distance > range)
         {
-            Vector3 moveDirection = toTarget.normalized;
+            Vector3 moveDirection = ComputeChaseDirection(target.transform.position);
             transform.rotation = Quaternion.LookRotation(moveDirection);
             MoveWithGravity(moveDirection * stats.RunSpeed.Value);
             if (animator != null) animator.SetFloat("speed", 1f);
@@ -820,7 +847,7 @@ public class EnemyAI : NetworkBehaviour
         }
         else if (distance > range)
         {
-            moveDirection = toTarget.normalized;
+            moveDirection = ComputeChaseDirection(target.transform.position);
         }
 
         if (moveDirection != Vector3.zero)
@@ -880,5 +907,30 @@ public class EnemyAI : NetworkBehaviour
 
         Vector3 motion = horizontalVelocity + Vector3.up * verticalVelocity;
         controller.Move(motion * Time.fixedDeltaTime);
+    }
+
+    // Direction to move to close distance toward destination - follows a
+    // NavMesh path's corners when one can be found, recalculated at most
+    // every PathRecalcInterval (not every tick), falling back to a
+    // straight line whenever no path is available (no NavMesh baked yet,
+    // this mob is off-mesh - e.g. airborne mid-knockback - or the
+    // destination is genuinely unreachable). No per-corner-index tracking
+    // across ticks: between recalcs this keeps aiming at the same
+    // second corner even after passing near it, which can cause a brief
+    // wobble right at a corner until the next recalc - bounded by
+    // PathRecalcInterval being short, same inherent behavior any
+    // periodic-repath model has (including NavMeshAgent's own internal
+    // repath interval). Deliberately not used by ServerBeginPull/IsPulling
+    // (forced straight-line pulls) or kiting - only "close distance to
+    // reach a target" chasing.
+    private Vector3 ComputeChaseDirection(Vector3 destination)
+    {
+        if (Time.time >= nextPathRecalcTime)
+        {
+            nextPathRecalcTime = Time.time + PathRecalcInterval;
+            NavMesh.CalculatePath(transform.position, destination, NavMesh.AllAreas, cachedPath);
+            cornerBufferCount = cachedPath.GetCornersNonAlloc(cornerBuffer);
+        }
+        return MobPathing.DirectionTowardPath(transform.position, destination, cornerBuffer, cornerBufferCount);
     }
 }

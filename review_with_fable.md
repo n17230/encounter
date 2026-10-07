@@ -179,3 +179,28 @@ no
   way any time a multi-file asset gets copied into `Assets/External`
   while its source pack is still present locally.
 
+## 7. Mob pathfinding via NavMesh - PathRecalcInterval is a flagged default
+
+- `EnemyAI.ComputeChaseDirection` recalculates each mob's NavMesh path at
+  most every `PathRecalcInterval` (0.25s), not every physics tick -
+  **not a value the user specified**, picked as a reasonable default the
+  same way `globalCooldownDuration` (1.5s GCD) was. Worth tuning after
+  playtesting with real terrain geometry: too long and chasing looks
+  laggy/wobbly at corners; too short and it burns CPU recalculating paths
+  for no visible benefit.
+- No NavMesh exists in the project yet - this only takes effect once the
+  user installs `com.unity.ai.navigation` via Package Manager and bakes a
+  `NavMeshSurface`. Until then, every mob keeps chasing in the old
+  straight-line way (the fallback path in `MobPathing.DirectionTowardPath`
+  is always taken), so this is a non-breaking rollout either way.
+- **One real bug found and fixed during review**: the first version read
+  `NavMeshPath.corners` every `FixedUpdate` tick, not just on recalc -
+  that property allocates a brand new array on *every single access*
+  (confirmed via Unity's own documented rationale for `GetCornersNonAlloc`
+  existing at all), so it was allocating 50x/sec per chasing mob instead
+  of the intended ~4x/sec. Fixed by reading corners via
+  `GetCornersNonAlloc` into a reused buffer array only inside the
+  recalc-gated branch, with a separate count field (not the buffer's own
+  `Length`) tracking how many of its slots are this path's real corners
+  vs. stale leftovers from a previous, longer path.
+

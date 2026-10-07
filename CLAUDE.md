@@ -736,6 +736,32 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `TargetCandidate`s (threat, distance) from connected alive players.
   Whether a mob participates in threat is purely "does it have a
   `ThreatTable` component" (ogres yes, goblins no).
+  - **Mob pathfinding**: `EnemyAI.ComputeChaseDirection` follows a
+    `NavMesh.CalculatePath` result's corners instead of steering straight
+    at the target, recalculating at most every `PathRecalcInterval`
+    (0.25s, not user-specified — flagged in `review_with_fable.md`) via
+    one reused `NavMeshPath` instance per mob, jittered per-instance on
+    spawn so mobs summoned together don't all recalculate on the same
+    physics tick forever after. Corners are read via
+    `NavMeshPath.GetCornersNonAlloc` into a reused buffer array inside
+    the recalc-gated branch only — `NavMeshPath.corners` itself is a
+    property that allocates a new array on every single access, so
+    reading it every tick (not just on recalc) would silently defeat the
+    whole point of reusing one `NavMeshPath` instance.
+    `Scripts/Enemy/MobPathing.cs` (pure, tested) picks the
+    direction toward the path's second corner (the first is always the
+    query's own source position) and falls back to the previous
+    straight-line behavior whenever no usable path exists — no NavMesh
+    baked yet (see "Not yet done"), the mob is off-mesh (e.g. airborne
+    mid-knockback), or the destination is unreachable (a `PathPartial`
+    result still walks toward the nearest reachable point, which needs no
+    special-casing). No per-corner-index tracking across ticks between
+    recalcs — accepted, bounded imprecision, same as any periodic-repath
+    model. Only applied to "close distance to reach a target" chasing
+    (the generic chase block and the Tactician's own closing-in branch) —
+    deliberately **not** applied to `ServerBeginPull`/`IsPulling` (forced
+    straight-line pulls — Vacuum-style abilities, Archer's
+    `TriggerReposition` — by design) or kiting.
   - **Mob animation**: every mob visual gets its own dedicated
     `Assets/Animation/*Controller.controller`, never shared across mob
     variants (even ones that are otherwise identical, e.g. Goblin/
@@ -1179,13 +1205,17 @@ renamed, or retuned.
    machine, taunt/threat reset on combat end.
 4. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
-5. **Mob pathfinding via NavMesh** — `EnemyAI` currently steers straight
-   at its target and runs into walls. Plan: add `com.unity.ai.navigation`
-   to the manifest, rewrite mob steering to follow `NavMesh.CalculatePath`
-   corners with the existing `CharacterController` (straight-line chase
-   as fallback when no path exists); the user adds a `NavMeshSurface` to
-   the terrain and bakes in the Editor (rebake after terrain/prop
-   changes). Not started.
+5. **Mob pathfinding via NavMesh — code side done, Editor setup still
+   needed.** `EnemyAI.ComputeChaseDirection` (see Enemy targeting below)
+   now follows a NavMesh path when chasing; it still just fizzles back to
+   the old straight-line behavior until a NavMesh actually exists. The
+   user still needs to: add `com.unity.ai.navigation` via the Package
+   Manager (Window → Package Manager → Unity Registry → "AI Navigation" —
+   not added to `manifest.json` directly, since a wrong version pin from
+   outside the Editor would break resolution), add a `NavMeshSurface`
+   component (the scene's existing default agent radius/height, 0.5/2,
+   already matches every mob's `CharacterController`, no tuning needed),
+   and bake (rebake after terrain/prop changes).
 6. **Earthen Bastion's wall prefab** — the gameplay logic is built
    (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
    ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
