@@ -34,8 +34,15 @@ public class EnemyAI : NetworkBehaviour
     // NavMesh.CalculatePath clears and refills its corners in place
     // (confirmed via Unity's own source), so CalculatePath itself only
     // runs every ~PathRecalcInterval, not every FixedUpdate tick.
+    // Constructed in Awake, NOT as a field initializer: NavMeshPath's
+    // constructor calls InitializeNavMeshPath(), which Unity explicitly
+    // disallows calling from a MonoBehaviour constructor/field
+    // initializer (throws "InitializeNavMeshPath is not allowed to be
+    // called from a MonoBehaviour constructor... call it in Awake or
+    // Start instead") - field initializers run during the C# constructor,
+    // before Unity's own object setup, so this must happen in Awake.
     private const float PathRecalcInterval = 0.25f;
-    private readonly NavMeshPath cachedPath = new NavMeshPath();
+    private NavMeshPath cachedPath;
     // NavMeshPath.corners is a property that allocates a brand new array
     // on EVERY access (that's the documented reason GetCornersNonAlloc
     // exists at all) - reading it every tick, not just on recalc, would
@@ -52,8 +59,10 @@ public class EnemyAI : NetworkBehaviour
     // Randomized per-instance so every mob spawned in the same wave
     // doesn't recalculate on the exact same physics tick forever after -
     // that would be a periodic synchronized CPU spike with many
-    // concurrent mobs.
-    private float nextPathRecalcTime = Random.Range(0f, PathRecalcInterval);
+    // concurrent mobs. Set in Awake alongside cachedPath (not a field
+    // initializer) purely to keep this one-time pathing setup together
+    // in one place.
+    private float nextPathRecalcTime;
 
     // --- Skeleton Tactician escort encounter (see BOSS_DESIGN.md) ---
     // None (the default) leaves every other mob (Goblin, Ogre, ...)
@@ -163,6 +172,8 @@ public class EnemyAI : NetworkBehaviour
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
         threatTable = GetComponent<ThreatTable>();
+        cachedPath = new NavMeshPath();
+        nextPathRecalcTime = Random.Range(0f, PathRecalcInterval);
         Animator visualAnimator = GetComponentInChildren<Animator>();
         // Optional - only an Animator that actually has a controller is
         // worth driving; a mob whose visual has none (or no visual at all,
