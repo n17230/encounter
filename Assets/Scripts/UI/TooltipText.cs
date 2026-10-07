@@ -1,8 +1,6 @@
 // Pure ability/item tooltip text formatting, extracted out of MainMenu so it
-// can be shared by both the remaining IMGUI panels (MainMenu.DrawGearPanel,
-// via GUIContent's native tooltip) and UI Toolkit panels (SkillsPanelController,
-// and Gear's controller once it migrates too) without duplicating this logic
-// across the two rendering paths during the migration. No side effects - only
+// can be shared by both UI Toolkit panels (SkillsPanelController,
+// EquipmentPanelController) that use it via HoverTooltip. No side effects - only
 // reads the passed-in data asset.
 public static class TooltipText
 {
@@ -86,7 +84,13 @@ public static class TooltipText
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
         sb.AppendLine(item.ItemName);
         sb.AppendLine($"Slot: {item.Slot}");
-        if (item.Weapon != null) sb.AppendLine($"Weapon: {item.Weapon.Damage} dmg every {item.Weapon.SwingInterval}s");
+        if (item.Weapon != null)
+        {
+            sb.AppendLine(item.Weapon.HealAmount > 0f
+                ? $"Weapon: your auto attacks heal the target for {item.Weapon.HealAmount} every {item.Weapon.SwingInterval}s"
+                : $"Weapon: {item.Weapon.Damage} dmg every {item.Weapon.SwingInterval}s");
+            if (item.Weapon.Effect != null) sb.AppendLine(DescribeEffect(item.Weapon.Effect, item.Weapon.Effect.Duration));
+        }
 
         foreach (StatBonus bonus in item.Bonuses) sb.AppendLine(DescribeBonus(bonus));
         if (item.SingleTargetBonuses.Count > 0)

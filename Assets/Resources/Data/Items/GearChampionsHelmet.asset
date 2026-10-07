@@ -34,3 +34,4 @@ MonoBehaviour:
   TwoHanded: 0
   GrantsAirHover: 0
   IsShield: 0
+  Icon: {fileID: 21300000, guid: ab30f2b5d33fc3847ad3f299b18e51a9, type: 3}

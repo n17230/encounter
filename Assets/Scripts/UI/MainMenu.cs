@@ -3,12 +3,12 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
-// Pregame menu (skills / gear / options / enter) and, once in the testing
+// Pregame menu (skills / equipment / options / enter) and, once in the testing
 // area, the Escape menu that reuses the same panels. All choices are read
 // from and written to ProfileStore.Current, which persists across restarts.
 public class MainMenu : MonoBehaviour
 {
-    private enum Panel { None, Skills, Gear, Appearance, Options, Summon }
+    private enum Panel { None, Skills, Equipment, Appearance, Options, Summon }
 
     // Live character preview shown on the Appearance panel - see
     // CharacterPreview. Both are optional (null until the Editor-side
@@ -26,6 +26,7 @@ public class MainMenu : MonoBehaviour
     [SerializeField] private MenuShellController menuShellUI;
     [SerializeField] private SummonPanelController summonPanelUI;
     [SerializeField] private SkillsPanelController skillsPanelUI;
+    [SerializeField] private EquipmentPanelController equipmentPanelUI;
 
     private static readonly KeyCode[] AllKeyCodes = (KeyCode[])System.Enum.GetValues(typeof(KeyCode));
     private static readonly string[] MovementActionNames = System.Enum.GetNames(typeof(MovementAction));
@@ -36,7 +37,7 @@ public class MainMenu : MonoBehaviour
     public static bool IsOpen { get; private set; }
 
     // Fired when the in-game menu closes, so owner-side player components can
-    // re-send any skill/gear changes to the server.
+    // re-send any skill/equipment changes to the server.
     public static event System.Action Closed;
 
     private Panel activePanel = Panel.None;
@@ -70,13 +71,14 @@ public class MainMenu : MonoBehaviour
         if (menuShellUI != null)
         {
             menuShellUI.SkillsClicked += () => OpenPanel(Panel.Skills);
-            menuShellUI.GearClicked += () => OpenPanel(Panel.Gear);
+            menuShellUI.EquipmentClicked += () => OpenPanel(Panel.Equipment);
             menuShellUI.AppearanceClicked += () => OpenPanel(Panel.Appearance);
             menuShellUI.SummonClicked += () => OpenPanel(Panel.Summon);
             menuShellUI.OptionsClicked += () => OpenPanel(Panel.Options);
             menuShellUI.RespawnClicked += () => LocalPlayer<CharacterStats>()?.RequestRespawn();
             menuShellUI.EnterTestingAreaClicked += EnterTestingArea;
             menuShellUI.ResumeClicked += CloseInGameMenu;
+            menuShellUI.ExitClicked += QuitGame;
         }
         else
         {
@@ -104,10 +106,24 @@ public class MainMenu : MonoBehaviour
             skillsPanelUI.SlotClicked += ToggleSelectedSkillSlot;
             skillsPanelUI.RemoveClicked += RemoveSkillSlot;
             skillsPanelUI.SetKeyBindingClicked += BeginCaptureAbilityKey;
+            skillsPanelUI.SlotReordered += ReorderSkillSlots;
         }
         else
         {
             Debug.LogWarning("MainMenu: Skills Panel Ui isn't assigned - the Skills panel won't open.");
+        }
+
+        if (equipmentPanelUI != null)
+        {
+            equipmentPanelUI.BackRequested += LeavePanel;
+            equipmentPanelUI.EquipSlotClicked += OnEquipSlotClicked;
+            equipmentPanelUI.InventoryItemClicked += EquipInventoryItem;
+            equipmentPanelUI.UnequipClicked += OnUnequipClicked;
+            equipmentPanelUI.CategoryTabClicked += _ => pinnedEquipmentSlot = null;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Equipment Panel Ui isn't assigned - the Equipment panel won't open.");
         }
     }
 
@@ -191,6 +207,20 @@ public class MainMenu : MonoBehaviour
         RefreshPanelVisibility();
     }
 
+    // Application.Quit() is a no-op in the Editor (Play Mode just keeps
+    // running) - stopping Play Mode is the Editor's own equivalent of
+    // closing the window, so it's handled separately here rather than
+    // leaving the button looking broken while testing.
+    private void QuitGame()
+    {
+        ProfileStore.Save();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
     private void SelectSummonMob(int index)
     {
         summonMobIndex = index;
@@ -266,6 +296,19 @@ public class MainMenu : MonoBehaviour
         skillsPanelUI?.RefreshSelection(selectedSlot, awaitingKeyForSlot);
     }
 
+    private void ReorderSkillSlots(int from, int to)
+    {
+        Profile.SwapSlots(from, to);
+        // Same reasoning as RemoveSkillSlot - after a swap, selectedSlot as
+        // a plain index would now point at whatever ability just moved INTO
+        // that slot, not the one the user actually had open, so close the
+        // sub-row rather than show a stale/wrong selection.
+        selectedSlot = -1;
+        awaitingKeyForSlot = -1;
+        RebuildSkillsLists();
+        skillsPanelUI?.RefreshSelection(selectedSlot, awaitingKeyForSlot);
+    }
+
     private void BeginCaptureAbilityKey(int index)
     {
         awaitingKeyForSlot = awaitingKeyForSlot == index ? -1 : index;
@@ -313,7 +356,7 @@ public class MainMenu : MonoBehaviour
 
             KeyBindingOption? slotKey = Profile.GetSlotKey(i);
             string keyLabel = slotAbility.IsAuraSpell
-                ? "Always On"
+                ? "Passive"
                 : (slotKey.HasValue ? slotKey.Value.DisplayName : "Unbound");
             slots.Add(new SkillSlotDisplay
             {
@@ -347,6 +390,7 @@ public class MainMenu : MonoBehaviour
         if (activePanel == Panel.Options) optionsPanelUI?.Show(); else optionsPanelUI?.Hide();
         if (activePanel == Panel.Summon) summonPanelUI?.Show(); else summonPanelUI?.Hide();
         if (activePanel == Panel.Skills) skillsPanelUI?.Show(); else skillsPanelUI?.Hide();
+        if (activePanel == Panel.Equipment) equipmentPanelUI?.Show(); else equipmentPanelUI?.Hide();
     }
 
     private void HandleEscape()
@@ -501,8 +545,9 @@ public class MainMenu : MonoBehaviour
                 // Rendered by SkillsPanelController (UI Toolkit), not IMGUI -
                 // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
-            case Panel.Gear:
-                DrawGearPanel();
+            case Panel.Equipment:
+                // Rendered by EquipmentPanelController (UI Toolkit), not IMGUI -
+                // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
             case Panel.Appearance:
                 DrawAppearancePanel();
@@ -537,140 +582,155 @@ public class MainMenu : MonoBehaviour
         appearanceTabIndex = 0;
         appearanceTabScrollPosition = Vector2.zero;
         if (panel == Panel.Skills) RebuildSkillsLists();
+        if (panel == Panel.Equipment)
+        {
+            pinnedEquipmentSlot = null;
+            RebuildEquipmentLists();
+        }
         RefreshPanelVisibility();
     }
 
-    // Main/in-game menu shell, Summon, and Skills panels are rendered by
-    // MenuShellController/SummonPanelController/SkillsPanelController (UI
-    // Toolkit) - see RefreshPanelVisibility().
+    // Main/in-game menu shell, Summon, Skills, and Equipment panels are
+    // rendered by MenuShellController/SummonPanelController/
+    // SkillsPanelController/EquipmentPanelController (UI Toolkit) - see
+    // RefreshPanelVisibility().
 
-    // Indexed by GearSlot.
+    // Indexed by EquipmentSlot - moved into EquipmentPanelController along
+    // with the rest of the equipment grid's presentation (slot-category
+    // outline colors, the grid layout itself); this array stays here since
+    // RebuildEquipmentLists is what actually builds each
+    // EquipmentSlotDisplay.Label.
     private static readonly string[] SlotShortNames =
     {
         "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots",
         "Ring 1", "Ring 2", "Trinket", "Main", "Off",
     };
 
-    // Slot-category outline colors for the gear grid (both the equipment
-    // paper-doll and the inventory side, keyed by whichever slot an item
-    // actually belongs to - GearSlotExtensions.IsRing() means either ring
-    // slot maps the same way). Slots not listed here (Helmet, Cape,
-    // Gloves, Legs) get no colored outline.
-    private static Color? GetSlotOutlineColor(GearSlot slot)
+    // Inventory tab categories - one per distinct value an item's own Slot
+    // can actually hold. Ring1/Ring2 collapse into a single "Rings" tab
+    // since a ring item's Slot is always just the Ring1 category (see
+    // EquipmentSlotExtensions.IsRing()) - no item's Slot is ever Ring2, so
+    // that physical slot has no corresponding tab of its own.
+    private static readonly EquipmentSlot[] InventoryCategorySlots =
     {
-        if (slot.IsRing()) return Color.red;
-        switch (slot)
+        EquipmentSlot.Helmet, EquipmentSlot.Necklace, EquipmentSlot.Chest, EquipmentSlot.Cape,
+        EquipmentSlot.Gloves, EquipmentSlot.Legs, EquipmentSlot.Boots, EquipmentSlot.Ring1,
+        EquipmentSlot.Trinket, EquipmentSlot.MainHand, EquipmentSlot.OffHand,
+    };
+    private static readonly string[] InventoryCategoryNames =
+    {
+        "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots", "Rings", "Trinket", "Main", "Off",
+    };
+
+    private void RebuildEquipmentLists()
+    {
+        if (equipmentPanelUI == null) return;
+
+        EquipmentSlot[] slotValues = (EquipmentSlot[])System.Enum.GetValues(typeof(EquipmentSlot));
+        List<EquipmentSlotDisplay> slots = new List<EquipmentSlotDisplay>();
+        for (int i = 0; i < slotValues.Length; i++)
         {
-            case GearSlot.Trinket: return Color.green;
-            case GearSlot.MainHand: return Color.cyan;
-            case GearSlot.OffHand: return new Color(0.6f, 0f, 1f);
-            case GearSlot.Necklace: return Color.yellow;
-            case GearSlot.Chest: return Color.blue;
-            case GearSlot.Boots: return Color.black;
-            default: return null;
-        }
-    }
-
-    // Drawn just before the slot's button, slightly larger than it, so the
-    // button's own opaque background covers the middle and only a border a
-    // little bolder than the default button bevel shows around the edge.
-    private static void DrawSlotOutline(Rect rect, GearSlot slot)
-    {
-        Color? color = GetSlotOutlineColor(slot);
-        if (!color.HasValue) return;
-
-        const float thickness = 2f;
-        Color previous = GUI.color;
-        GUI.color = color.Value;
-        GUI.DrawTexture(new Rect(rect.x - thickness, rect.y - thickness, rect.width + thickness * 2f, rect.height + thickness * 2f), Texture2D.whiteTexture);
-        GUI.color = previous;
-    }
-
-    // Paper-doll on the left, inventory grid on the right. Items draw as an
-    // "X" placeholder until there's 2D art; hovering tells you what it is.
-    // "Inventory" is every item in the game that isn't equipped - there's
-    // no real inventory/loot system yet.
-    private void DrawGearPanel()
-    {
-        const float cell = 60f;
-        const float gap = 6f;
-        const float inventoryX = 240f;
-        const int inventoryColumns = 6;
-
-        GUILayout.BeginArea(new Rect(UIScale.Width / 2f - 320, UIScale.Height / 2f - 220, 640, 440));
-        GUI.Label(new Rect(0, 0, 200, 20), "Equipment");
-        GUI.Label(new Rect(inventoryX, 0, 200, 20), "Inventory");
-
-        GUIStyle icon = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter, fontSize = 22, fontStyle = FontStyle.Bold };
-        GUIStyle tag = new GUIStyle(GUI.skin.label) { fontSize = 9, alignment = TextAnchor.UpperLeft };
-
-        GearSlot[] slots = (GearSlot[])System.Enum.GetValues(typeof(GearSlot));
-        for (int i = 0; i < slots.Length; i++)
-        {
-            Rect rect = new Rect((i % 3) * (cell + gap), 24f + (i / 3) * (cell + gap), cell, cell);
-            ItemData equipped = Profile.GetGear(slots[i]);
-            string tooltip = equipped != null ? TooltipText.BuildItemTooltip(equipped) + "\n(click to unequip)" : $"{SlotShortNames[i]} (empty)";
-
-            DrawSlotOutline(rect, slots[i]);
-            if (GUI.Button(rect, new GUIContent(equipped != null ? "X" : "", tooltip), icon) && equipped != null)
+            slots.Add(new EquipmentSlotDisplay
             {
-                Profile.SetGear(slots[i], null);
-            }
-            GUI.Label(new Rect(rect.x + 3f, rect.y + 2f, cell - 6f, 14f), SlotShortNames[i], tag);
+                Slot = slotValues[i],
+                Label = SlotShortNames[i],
+                Equipped = Profile.GetEquipment(slotValues[i]),
+            });
         }
 
-        int index = 0;
+        List<InventoryCategoryDisplay> inventory = new List<InventoryCategoryDisplay>();
+        for (int i = 0; i < InventoryCategorySlots.Length; i++)
+        {
+            inventory.Add(new InventoryCategoryDisplay { CategoryName = InventoryCategoryNames[i], Items = new List<ItemData>() });
+        }
         foreach (ItemData item in GameDatabase.Items)
         {
             if (Profile.IsEquipped(item)) continue;
-
-            Rect rect = new Rect(inventoryX + (index % inventoryColumns) * (cell + gap), 24f + (index / inventoryColumns) * (cell + gap), cell, cell);
-            index++;
-
-            DrawSlotOutline(rect, item.Slot);
-            if (GUI.Button(rect, new GUIContent("X", TooltipText.BuildItemTooltip(item) + "\n(click to equip)"), icon))
-            {
-                GearSlot targetSlot = TargetSlotFor(item);
-
-                // A two-handed weapon and an off-hand item can't coexist -
-                // equipping either one auto-clears whichever conflicts with
-                // it, mirroring CharacterEquipment.SetGearServerRpc's
-                // authoritative rule (so the server never has to silently
-                // reject what this menu just showed as equipped).
-                if (targetSlot == GearSlot.MainHand && item.TwoHanded)
-                {
-                    Profile.SetGear(GearSlot.OffHand, null);
-                }
-                else if (targetSlot == GearSlot.OffHand)
-                {
-                    ItemData mainHand = Profile.GetGear(GearSlot.MainHand);
-                    if (mainHand != null && mainHand.TwoHanded) Profile.SetGear(GearSlot.MainHand, null);
-                }
-
-                Profile.SetGear(targetSlot, item);
-            }
+            int categoryIndex = System.Array.IndexOf(InventoryCategorySlots, item.Slot);
+            if (categoryIndex >= 0) inventory[categoryIndex].Items.Add(item);
         }
-        if (index == 0) GUI.Label(new Rect(inventoryX, 24f, 300f, 20f), "(nothing left to equip)");
 
-        if (GUI.Button(new Rect(0, 410f, 100f, 26f), "Back")) LeavePanel();
-        GUILayout.EndArea();
+        equipmentPanelUI.Rebuild(slots, inventory);
     }
 
-    // Rings equip into whichever physical ring slot is free (Ring1 first);
-    // if both are occupied, Ring1 is overwritten, same as any other slot.
-    private static GearSlot TargetSlotFor(ItemData item)
+    // Which exact physical slot an equip/unequip click in the inventory
+    // grid should affect - set when a paper-doll slot is clicked (so Ring1
+    // vs Ring2 stays disambiguated even though they share one "Rings" tab),
+    // cleared whenever the user clicks a tab button directly or the panel
+    // is freshly opened. See ResolveTargetSlot.
+    private EquipmentSlot? pinnedEquipmentSlot;
+
+    // Paper-doll click: browse that slot's category instead of unequipping
+    // directly. SelectCategory is the silent path (doesn't raise
+    // CategoryTabClicked), so this pin isn't immediately cleared by its own
+    // programmatic tab switch.
+    private void OnEquipSlotClicked(EquipmentSlot slot)
     {
-        if (!item.Slot.IsRing()) return item.Slot;
-        if (Profile.GetGear(GearSlot.Ring1) == null) return GearSlot.Ring1;
-        if (Profile.GetGear(GearSlot.Ring2) == null) return GearSlot.Ring2;
-        return GearSlot.Ring1;
+        pinnedEquipmentSlot = slot;
+        equipmentPanelUI.SelectCategory(CategoryIndexForSlot(slot));
+    }
+
+    private static int CategoryIndexForSlot(EquipmentSlot slot)
+    {
+        return System.Array.IndexOf(InventoryCategorySlots, slot.IsRing() ? EquipmentSlot.Ring1 : slot);
+    }
+
+    private void OnUnequipClicked()
+    {
+        EquipmentSlot targetSlot = ResolveTargetSlot();
+        if (Profile.GetEquipment(targetSlot) == null) return;
+        Profile.SetEquipment(targetSlot, null);
+        RebuildEquipmentLists();
+    }
+
+    private void EquipInventoryItem(ItemData item)
+    {
+        EquipmentSlot targetSlot = ResolveTargetSlot();
+
+        // A two-handed weapon and an off-hand item can't coexist - equipping
+        // either one auto-clears whichever conflicts with it, mirroring
+        // CharacterEquipment.SetEquipmentServerRpc's authoritative rule (so
+        // the server never has to silently reject what this menu just showed
+        // as equipped).
+        if (targetSlot == EquipmentSlot.MainHand && item.TwoHanded)
+        {
+            Profile.SetEquipment(EquipmentSlot.OffHand, null);
+        }
+        else if (targetSlot == EquipmentSlot.OffHand)
+        {
+            ItemData mainHand = Profile.GetEquipment(EquipmentSlot.MainHand);
+            if (mainHand != null && mainHand.TwoHanded) Profile.SetEquipment(EquipmentSlot.MainHand, null);
+        }
+
+        Profile.SetEquipment(targetSlot, item);
+        RebuildEquipmentLists();
+    }
+
+    // Resolves which physical EquipmentSlot an inventory-grid click (a real
+    // item, or "None") in the currently-selected category should affect. A
+    // paper-doll click pins the exact slot; otherwise falls back to
+    // auto-resolve (first empty ring, else Ring1 - same rule the old
+    // per-item TargetSlotFor used) for whichever category is showing.
+    private EquipmentSlot ResolveTargetSlot()
+    {
+        if (pinnedEquipmentSlot.HasValue) return pinnedEquipmentSlot.Value;
+
+        int categoryIndex = equipmentPanelUI.SelectedCategoryIndex;
+        EquipmentSlot categorySlot = categoryIndex >= 0 && categoryIndex < InventoryCategorySlots.Length
+            ? InventoryCategorySlots[categoryIndex]
+            : EquipmentSlot.Ring1;
+        if (!categorySlot.IsRing()) return categorySlot;
+
+        if (Profile.GetEquipment(EquipmentSlot.Ring1) == null) return EquipmentSlot.Ring1;
+        if (Profile.GetEquipment(EquipmentSlot.Ring2) == null) return EquipmentSlot.Ring2;
+        return EquipmentSlot.Ring1;
     }
 
     // Cosmetic-only: everything except weapons is selectable, independently
     // per category (not locked to the pack's pre-built class presets), plus
     // two recolor swatches. No stat effect - see CharacterAppearance.
     // Weapons are never shown here (see the character creation plan notes -
-    // a visually-equipped weapon is planned as a future Gear-driven feature
+    // a visually-equipped weapon is planned as a future Equipment-driven feature
     // instead). A live preview (CharacterPreview, rendered into
     // previewRenderTexture) sits alongside the choices so a pick's effect is
     // visible immediately. With nine selectable categories, a flat row of
@@ -773,7 +833,7 @@ public class MainMenu : MonoBehaviour
         int objectCount = palette != null && palette.ObjectColors != null ? palette.ObjectColors.Length : 0;
 
         DrawColorStepper("Body Color", ref Profile.AppearanceBodyColorIndex, bodyCount);
-        DrawColorStepper("Gear Color", ref Profile.AppearanceObjectColorIndex, objectCount);
+        DrawColorStepper("Equipment Color", ref Profile.AppearanceObjectColorIndex, objectCount);
 
         GUILayout.Space(10);
         if (GUILayout.Button("Back")) LeavePanel();
@@ -875,7 +935,7 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndScrollView();
     }
 
-    // Shared by the Body/Gear color rows of DrawAppearancePanel.
+    // Shared by the Body/Equipment color rows of DrawAppearancePanel.
     private static void DrawColorStepper(string label, ref int index, int count)
     {
         GUILayout.BeginHorizontal();

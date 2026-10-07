@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearBootsOfLightness
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: boots_of_lightness
   ItemName: Boots of Lightness
   Slot: 7
@@ -24,3 +24,7 @@ MonoBehaviour:
   Weapon: {fileID: 0}
   TwoHanded: 0
   GrantsAirHover: 1
+  IsShield: 0
+  Icon: {fileID: 21300000, guid: 1bcc2075e5d9a954daeb98c0debcfbcc, type: 3}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

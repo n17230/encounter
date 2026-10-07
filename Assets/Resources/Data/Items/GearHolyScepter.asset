@@ -19,8 +19,18 @@ MonoBehaviour:
   - Stat: 9
     ModifierType: 1
     Value: 0.1
+  HpThresholdEffects: []
   Immunities: []
   Auras: []
   Reveals: 0
   BroadcastsLocation: 0
-  Weapon: {fileID: 0}
+  Weapon: {fileID: 11400000, guid: f63b9869737ff46c07aa2292ef64ded7, type: 2}
+  TwoHanded: 0
+  GrantsAirHover: 0
+  IsShield: 0
+  Icon: {fileID: 21300000, guid: 5e0d7861bde7e054f920a6d4560d997e, type: 3}
+  WeaponModelPrefab: {fileID: 4260819330917749670, guid: 3b4b27421c2a6de4f88b36cc36531976,
+    type: 3}
+  AttachProfile: {fileID: 11400000, guid: a3efe4008fb40b3991a7bb8d61bfad55, type: 2}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

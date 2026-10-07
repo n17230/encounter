@@ -20,4 +20,21 @@ public static class VfxScale
             ps.transform.localScale *= scale;
         }
     }
+
+    // For a VFX instance that's meant to stay ON a moving character (an
+    // aura at their feet, a buff above their head): these packs author
+    // their systems in World simulation space, where a particle stays
+    // wherever it was emitted - so moving the instance only moves where
+    // NEW particles appear, and a long-lived one (an aura's ground ring)
+    // is simply left behind at the spot the effect started. Local space
+    // makes every particle ride along with the instance instead. Same
+    // per-instance approach as Apply - never touches the shared prefab.
+    public static void FollowInstance(GameObject instance)
+    {
+        foreach (ParticleSystem ps in instance.GetComponentsInChildren<ParticleSystem>(true))
+        {
+            ParticleSystem.MainModule main = ps.main;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        }
+    }
 }

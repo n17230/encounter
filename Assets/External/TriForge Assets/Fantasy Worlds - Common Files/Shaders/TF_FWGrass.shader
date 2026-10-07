@@ -819,7 +819,7 @@ Shader "TriForge/FWGrass"
 				float3 objToWorld6_g222 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g221 = tex2D( _ColorVarianceMask, (( objToWorld6_g222 / ( TF_GrassVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g221 = RGBToHSV( temp_output_13_0_g221.rgb );
-				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( tex2DNode8_g221.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
+				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( abs(tex2DNode8_g221.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
 				float4 lerpResult38_g221 = lerp( temp_output_13_0_g221 , float4( hsvTorgb1_g221 , 0.0 ) , ( _ColorVarianceIntensity * TF_GrassVarianceIntensity ));
 				float Value_Mask39_g221 = tex2DNode8_g221.a;
 				float4 lerpResult44_g221 = lerp( lerpResult38_g221 , ( lerpResult38_g221 * Value_Mask39_g221 ) , ( _BrightnessVarianceIntensity * TF_GrassBrightnessVariance ));
@@ -861,7 +861,7 @@ Shader "TriForge/FWGrass"
 				
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -1576,7 +1576,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -2042,7 +2042,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -2534,7 +2534,7 @@ Shader "TriForge/FWGrass"
 				float3 objToWorld6_g222 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g221 = tex2D( _ColorVarianceMask, (( objToWorld6_g222 / ( TF_GrassVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g221 = RGBToHSV( temp_output_13_0_g221.rgb );
-				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( tex2DNode8_g221.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
+				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( abs(tex2DNode8_g221.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
 				float4 lerpResult38_g221 = lerp( temp_output_13_0_g221 , float4( hsvTorgb1_g221 , 0.0 ) , ( _ColorVarianceIntensity * TF_GrassVarianceIntensity ));
 				float Value_Mask39_g221 = tex2DNode8_g221.a;
 				float4 lerpResult44_g221 = lerp( lerpResult38_g221 , ( lerpResult38_g221 * Value_Mask39_g221 ) , ( _BrightnessVarianceIntensity * TF_GrassBrightnessVariance ));
@@ -2551,7 +2551,7 @@ Shader "TriForge/FWGrass"
 				
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -3034,7 +3034,7 @@ Shader "TriForge/FWGrass"
 				float3 objToWorld6_g222 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g221 = tex2D( _ColorVarianceMask, (( objToWorld6_g222 / ( TF_GrassVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g221 = RGBToHSV( temp_output_13_0_g221.rgb );
-				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( tex2DNode8_g221.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
+				float3 hsvTorgb1_g221 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_GrassVarianceBiasShift ) +  (( _ColorVarianceMin * TF_GrassVarianceMin ) + ( pow( abs(tex2DNode8_g221.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_GrassVarianceMax ) - ( _ColorVarianceMin * TF_GrassVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g221.x ),hsvTorgb3_g221.y,hsvTorgb3_g221.z) );
 				float4 lerpResult38_g221 = lerp( temp_output_13_0_g221 , float4( hsvTorgb1_g221 , 0.0 ) , ( _ColorVarianceIntensity * TF_GrassVarianceIntensity ));
 				float Value_Mask39_g221 = tex2DNode8_g221.a;
 				float4 lerpResult44_g221 = lerp( lerpResult38_g221 , ( lerpResult38_g221 * Value_Mask39_g221 ) , ( _BrightnessVarianceIntensity * TF_GrassBrightnessVariance ));
@@ -3051,7 +3051,7 @@ Shader "TriForge/FWGrass"
 				
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -3562,7 +3562,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -4041,7 +4041,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -4493,7 +4493,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				
@@ -4875,7 +4875,7 @@ Shader "TriForge/FWGrass"
 				float4 tex2DNode1_g95 = tex2D( _ColorMap, texCoord62_g95 );
 				float OpacityMap35 = tex2DNode1_g95.a;
 				float lerpResult433 = lerp( _FadeDistance , ( _FadeDistance * TF_GrassFadeDistance ) , TF_GrassFadeDistance);
-				float Distance_Mask290 = ( 1.0 - saturate( pow( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) , _FadeFalloff ) ) );
+				float Distance_Mask290 = ( 1.0 - saturate( pow( abs( ( distance( PositionWS , _WorldSpaceCameraPos ) / lerpResult433 ) ) , _FadeFalloff ) ) );
 				float lerpResult297 = lerp( 0.0 , OpacityMap35 , Distance_Mask290);
 				float Opacity300 = lerpResult297;
 				

@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Encounter",
+        "Unity.Netcode.Runtime",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

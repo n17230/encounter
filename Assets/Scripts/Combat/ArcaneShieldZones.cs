@@ -19,6 +19,12 @@ public static class ArcaneShieldZones
 
     private static readonly List<Zone> zones = new List<Zone>();
 
+    // Called when a server session ends / the process starts - see NetworkBootstrap.
+    public static void Clear()
+    {
+        zones.Clear();
+    }
+
     public static void Add(Vector3 position, float radius, float duration)
     {
         zones.Add(new Zone { Position = position, Radius = radius, ExpireTime = Time.time + duration });

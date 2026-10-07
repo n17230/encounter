@@ -27,3 +27,4 @@ MonoBehaviour:
   Weapon: {fileID: 0}
   TwoHanded: 0
   GrantsAirHover: 0
+  Icon: {fileID: 21300000, guid: 6fe9d1a63464f9349b6b034aaa9bdb6b, type: 3}

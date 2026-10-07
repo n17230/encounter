@@ -643,7 +643,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -1553,7 +1553,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -2056,7 +2056,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -2596,7 +2596,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -3236,7 +3236,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -3853,7 +3853,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -4596,7 +4596,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -5374,7 +5374,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -5852,7 +5852,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )
@@ -6330,7 +6330,7 @@ Shader "TriForge/Tree Bark"
 				float ChildRotation43_g114 = radians( ( simplePerlin2D53_g114 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g114 = RotateAroundAxis( SelfPivot28_g114, input.positionOS.xyz, normalize( WindVector226_g114 ), ChildRotation43_g114 );
 				float3 ChildRotationResult119_g114 = ( ( ChildMask26_g114 * SelfBendMask34_g114 ) * ( rotatedValue81_g114 - input.positionOS.xyz ) );
-				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( SelfBendMask34_g114 , _BendingMaskStrength1 ) ) );
+				float temp_output_113_0_g114 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g114) , _BendingMaskStrength1 ) ) );
 				float dotResult9_g114 = dot( temp_output_19_0_g114 , temp_output_19_0_g114 );
 				float ifLocalVar189_g114 = 0;
 				if( dotResult9_g114 > 0.0001 )

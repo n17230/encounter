@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearArmorbreaker
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: armorbreaker
   ItemName: Armorbreaker
   Slot: 11
@@ -25,3 +25,9 @@ MonoBehaviour:
   TwoHanded: 0
   GrantsAirHover: 0
   IsShield: 0
+  Icon: {fileID: 21300000, guid: 5a0b53428882b114ab781893b6c93f2d, type: 3}
+  WeaponModelPrefab: {fileID: 5527825859747042223, guid: 0c3b91932444187489cbb5036bcf9cff,
+    type: 3}
+  AttachProfile: {fileID: 11400000, guid: 3ef76a6704c62b89dd0053d3e1f92c35, type: 2}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

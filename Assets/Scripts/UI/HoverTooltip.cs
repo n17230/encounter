@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 // Cursor-following hover tooltip for UI Toolkit panels - there's no
 // equivalent of IMGUI's automatic GUI.tooltip tracking, so this is the
 // shared replacement mechanism every migrated panel with hoverable rows
-// (Skills, and Gear once it migrates) attaches to its own document. Plain
+// (Skills, Equipment) attaches to its own document. Plain
 // C# helper, not a MonoBehaviour - one instance per panel document, created
 // by that panel's controller and given its own root to add the floating
 // tooltip element into.

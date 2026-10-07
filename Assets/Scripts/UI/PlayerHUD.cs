@@ -19,8 +19,8 @@ public class PlayerHUD : NetworkBehaviour
     private PlayerAutoAttack autoAttack;
     private CharacterEquipment equipment;
 
-    // Refreshed once per frame in Update rather than per OnGUI pass.
-    private Targetable[] minimapBlips = new Targetable[0];
+    // The live Targetable registry - no per-frame scene scan needed.
+    private static IReadOnlyList<Targetable> minimapBlips => Targetable.All;
     private MinimapReveal minimapReveals;
     private readonly List<Vector3> mobPingPositions = new List<Vector3>();
     private float nextMobPing;
@@ -40,15 +40,12 @@ public class PlayerHUD : NetworkBehaviour
         if (!IsOwner) return;
 
         minimapReveals = MinimapReveal.None;
-        foreach (GearSlot slot in System.Enum.GetValues(typeof(GearSlot)))
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
         {
-            ItemData item = ProfileStore.Current.GetGear(slot);
+            ItemData item = ProfileStore.Current.GetEquipment(slot);
             if (item != null) minimapReveals |= item.Reveals;
         }
         if (equipment.CastAuraRevealsMobs.Value) minimapReveals |= MinimapReveal.Mobs;
-
-        // Always gathered: a broadcasting ally draws even with no reveals.
-        minimapBlips = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
 
         UpdateMobPings();
     }

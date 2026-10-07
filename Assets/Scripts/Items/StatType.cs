@@ -29,7 +29,7 @@ public enum StatType
     // CharacterStats.DealDamage.
     DamageReflectPercent,
     // Chance to block an incoming HitSource.Melee hit outright, 0 damage
-    // (base 0). Gear and effects both just add Flat modifiers here, so
+    // (base 0). Equipment and effects both just add Flat modifiers here, so
     // they stack additively (e.g. a 0.05 shield + a 0.25 effect = 0.30
     // total) rather than one overriding the other. See
     // CharacterStats.RollBlock.

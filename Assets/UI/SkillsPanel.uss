@@ -1,8 +1,18 @@
 /* Panel-specific layout for the Skills screen. Shared look lives in Theme.uss. */
 
 #skills-panel {
+    /* No min-height - a forced 540px minimum left tons of empty panel
+       space below any tab with only a couple of abilities in it. Let the
+       panel size to whatever its actual content (header + kit toolbar +
+       tabs + however many cards) needs. */
     width: 720px;
-    min-height: 540px;
+}
+
+/* Theme.uss's .panel__title is shared by every panel and defaults to
+   centered - overridden here rather than in Theme.uss so this stays scoped
+   to Skills instead of re-centering every other panel's title too. */
+#skills-panel .panel__title {
+    -unity-text-align: middle-left;
 }
 
 /* "Your Kit" toolbar - mirrors the real in-game ability bar's row-of-slots
@@ -16,13 +26,13 @@
 
 .kit-slot {
     width: 76px;
-    height: 60px;
+    height: 90px;
     margin-right: 6px;
     background-color: var(--color-surface);
     border-width: 1px;
     border-color: var(--color-panel-border);
     border-radius: 6px;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
 }
 
@@ -35,16 +45,25 @@
     border-color: var(--color-accent);
 }
 
+.kit-slot--dragging {
+    opacity: 0.5;
+}
+
+.kit-slot--drop-target {
+    border-width: 2px;
+    border-color: var(--color-accent-hover);
+}
+
 .kit-slot__empty-label {
     color: var(--color-text-secondary);
     font-size: 11px;
-    -unity-text-align: middle-center;
+    -unity-text-align: middle-left;
 }
 
 .kit-slot__button {
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0);
@@ -52,11 +71,14 @@
     padding: 4px;
 }
 
-.kit-slot__name {
-    color: var(--color-text);
-    font-size: 11px;
-    -unity-text-align: middle-center;
-    white-space: normal;
+.kit-slot__icon {
+    /* Same fixed 64x64 as .ability-card__icon in the Available Abilities
+       list, for consistent icon size between the two - the slot itself
+       (90px tall) is sized to fit this plus the key label below it. */
+    width: 64px;
+    height: 64px;
+    background-color: var(--color-surface-alt);
+    border-radius: 4px;
 }
 
 .kit-slot__key {
@@ -87,24 +109,6 @@
     margin-left: 6px;
 }
 
-.category-tabs {
-    flex-direction: row;
-    margin-top: 4px;
-    margin-bottom: 6px;
-}
-
-.category-tab {
-    margin-right: 4px;
-    padding: 4px 10px;
-    font-size: 11px;
-}
-
-.category-tab--selected {
-    background-color: var(--color-surface-hover);
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-}
-
 #available-scroll {
     max-height: 280px;
     margin-top: 4px;
@@ -127,8 +131,10 @@
 }
 
 .ability-card__icon {
-    width: 40px;
-    height: 40px;
+    /* Fixed size, not stretched to the row's height - stretching left the
+       actual icon art small and centered inside a tall, mostly-empty box. */
+    width: 64px;
+    height: 64px;
     margin-right: 10px;
     flex-shrink: 0;
     background-color: var(--color-surface-alt);
@@ -144,7 +150,10 @@
 .ability-card__name-row {
     flex-direction: row;
     justify-content: space-between;
-    align-items: baseline;
+    /* UI Toolkit's USS has no "baseline" value (unlike web CSS) - flex-end
+       is the closest approximation for aligning the differently-sized name
+       and meta text. */
+    align-items: flex-end;
     align-self: stretch;
     margin-bottom: 3px;
 }
@@ -153,11 +162,13 @@
     color: var(--color-text);
     font-size: 15px;
     -unity-font-style: bold;
+    -unity-text-align: upper-left;
 }
 
 .ability-card__meta {
     color: var(--color-text-secondary);
     font-size: 12px;
+    -unity-text-align: upper-right;
 }
 
 .ability-card__description {
@@ -169,4 +180,12 @@
     color: var(--color-text-secondary);
     font-size: 12px;
     white-space: normal;
+    /* ability-card is a Button, and Unity's default runtime theme sets
+       Button text-align to middle-center - that's an INHERITED USS
+       property, so every unstyled descendant Label picks it up too. It
+       was invisible on Name/Meta (their own box is content-sized, so
+       center vs. left looks identical) but this Label is stretched to
+       the card's full width, so the inherited center-align was visibly
+       centering the whole description paragraph. */
+    -unity-text-align: upper-left;
 }

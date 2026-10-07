@@ -37,6 +37,7 @@ public class SkillsPanelController : MonoBehaviour
     public event Action<int> SlotClicked;
     public event Action<int> RemoveClicked;
     public event Action<int> SetKeyBindingClicked;
+    public event Action<int, int> SlotReordered;
 
     private UIDocument document;
     private VisualElement root;
@@ -46,20 +47,23 @@ public class SkillsPanelController : MonoBehaviour
     private Label kitSubRowLabel;
     private Button removeButton;
     private Button keyBindingButton;
-    private VisualElement categoryTabs;
+    // Owns which category tab is showing - view state, see CategoryTabBar.
+    private CategoryTabBar categoryTabs;
     private ScrollView availableScroll;
+    private HoverTooltip hoverTooltip;
 
     private readonly List<VisualElement> kitSlotBoxes = new List<VisualElement>();
-    private readonly List<Button> categoryTabButtons = new List<Button>();
+    private readonly List<string> categoryNameScratch = new List<string>();
     private IReadOnlyList<SkillSlotDisplay> lastSlots = Array.Empty<SkillSlotDisplay>();
     private IReadOnlyList<AbilityCategoryDisplay> lastCategories = Array.Empty<AbilityCategoryDisplay>();
     private int currentSelectedSlot = -1;
-    // Which category tab is showing - purely a navigation/view concern with
-    // no bearing on Profile/game data (unlike selectedSlot/awaitingKeyForSlot,
-    // which MainMenu owns), so it's kept here rather than threaded through
-    // MainMenu, the same way a ScrollView already manages its own scroll
-    // offset without MainMenu's involvement.
-    private int selectedCategoryIndex;
+
+    // Click-vs-drag state for the kit toolbar's reordering - a single drag
+    // can only ever involve one slot at a time, so these live at the
+    // controller level rather than per-element.
+    private int dragSourceIndex = -1;
+    private bool isDragging;
+    private const float DragThreshold = 6f;
 
     private bool initialized;
 
@@ -77,8 +81,16 @@ public class SkillsPanelController : MonoBehaviour
         kitSubRowLabel = root.Q<Label>("kit-subrow-label");
         removeButton = root.Q<Button>("remove-button");
         keyBindingButton = root.Q<Button>("key-binding-button");
-        categoryTabs = root.Q<VisualElement>("category-tabs");
+        categoryTabs = new CategoryTabBar(root.Q<VisualElement>("category-tabs"));
+        categoryTabs.SelectionChanged += _ => RenderSelectedCategory();
         availableScroll = root.Q<ScrollView>("available-scroll");
+
+        // HoverTooltip's floating element is added directly to rootVisualElement,
+        // which is NOT the named "theme-root" child the UXML/USS actually scope
+        // --color-* custom properties under - without this, the tooltip renders
+        // with unthemed defaults (black text, no background). See CLAUDE.md.
+        root.AddToClassList("theme-root");
+        hoverTooltip = new HoverTooltip(root);
 
         backButton.clicked += () => BackRequested?.Invoke();
         // Remove/Set Key Binding are single shared buttons (not one pair per
@@ -118,7 +130,6 @@ public class SkillsPanelController : MonoBehaviour
 
         lastSlots = slots;
         lastCategories = categories;
-        if (selectedCategoryIndex < 0 || selectedCategoryIndex >= categories.Count) selectedCategoryIndex = 0;
 
         kitToolbar.Clear();
         kitSlotBoxes.Clear();
@@ -139,57 +150,143 @@ public class SkillsPanelController : MonoBehaviour
             }
             else
             {
-                Button clickable = new Button(() => SlotClicked?.Invoke(index));
+                // A plain VisualElement, not a Button - dragging needs to
+                // suppress the "click" that a plain PointerDown+PointerUp
+                // would otherwise fire, and Unity's built-in Button/Clickable
+                // manipulator can't be reliably intercepted once a drag is
+                // already under way. RegisterDragHandlers below drives both
+                // the click (select/open the sub-row) and the drag itself.
+                VisualElement clickable = new VisualElement();
                 clickable.AddToClassList("kit-slot__button");
 
-                Label name = new Label(slot.Ability.AbilityName);
-                name.AddToClassList("kit-slot__name");
+                Image icon = new Image { sprite = slot.Ability.Icon, scaleMode = ScaleMode.ScaleToFit };
+                icon.AddToClassList("kit-slot__icon");
                 Label key = new Label(slot.KeyLabel);
                 key.AddToClassList("kit-slot__key");
 
-                clickable.Add(name);
+                clickable.Add(icon);
                 clickable.Add(key);
                 box.Add(clickable);
+
+                hoverTooltip.Attach(clickable, () => BuildKitSlotTooltipText(slot.Ability));
+                RegisterDragHandlers(clickable, index);
             }
 
             kitToolbar.Add(box);
             kitSlotBoxes.Add(box);
         }
 
-        categoryTabs.Clear();
-        categoryTabButtons.Clear();
-        for (int i = 0; i < categories.Count; i++)
-        {
-            int index = i;
-            Button tab = new Button(() => SelectCategoryTab(index)) { text = categories[i].CategoryName };
-            tab.AddToClassList("button");
-            tab.AddToClassList("category-tab");
-            categoryTabs.Add(tab);
-            categoryTabButtons.Add(tab);
-        }
+        categoryNameScratch.Clear();
+        foreach (AbilityCategoryDisplay category in categories) categoryNameScratch.Add(category.CategoryName);
+        categoryTabs.Rebuild(categoryNameScratch);
 
         RenderSelectedCategory();
     }
 
-    private void SelectCategoryTab(int index)
+    // Click-to-select and drag-to-reorder on the same element: PointerDown
+    // captures the pointer without deciding yet, PointerMove only commits to
+    // "this is a drag" once the pointer has actually moved past a small
+    // threshold (so a normal click still reaches SlotClicked), and PointerUp
+    // fires whichever one actually happened.
+    private void RegisterDragHandlers(VisualElement element, int index)
     {
-        selectedCategoryIndex = index;
-        RenderSelectedCategory();
+        Vector2 dragStartPosition = default;
+
+        element.RegisterCallback<PointerDownEvent>(evt =>
+        {
+            dragSourceIndex = index;
+            dragStartPosition = evt.position;
+            isDragging = false;
+            element.CapturePointer(evt.pointerId);
+        });
+
+        element.RegisterCallback<PointerMoveEvent>(evt =>
+        {
+            if (dragSourceIndex != index || !element.HasPointerCapture(evt.pointerId)) return;
+
+            if (!isDragging && Vector2.Distance(evt.position, dragStartPosition) > DragThreshold)
+            {
+                isDragging = true;
+                kitSlotBoxes[index].AddToClassList("kit-slot--dragging");
+            }
+
+            if (isDragging) UpdateDropTargetHighlight(evt.position);
+        });
+
+        element.RegisterCallback<PointerUpEvent>(evt =>
+        {
+            if (dragSourceIndex != index || !element.HasPointerCapture(evt.pointerId)) return;
+
+            // Read everything needed BEFORE releasing the pointer -
+            // ReleasePointer can synchronously fire PointerCaptureOutEvent,
+            // whose handler (below) resets isDragging/dragSourceIndex, so
+            // reading those fields after the release call isn't safe.
+            bool wasDragging = isDragging;
+            int dropIndex = wasDragging ? FindSlotIndexAt(evt.position) : -1;
+
+            element.ReleasePointer(evt.pointerId);
+            ClearDragVisuals();
+            dragSourceIndex = -1;
+            isDragging = false;
+
+            if (wasDragging)
+            {
+                if (dropIndex >= 0 && dropIndex != index) SlotReordered?.Invoke(index, dropIndex);
+            }
+            else
+            {
+                SlotClicked?.Invoke(index);
+            }
+        });
+
+        // Defensive reset for capture being lost some other way (e.g. the
+        // panel closing mid-drag) - the normal PointerUp path above already
+        // clears dragSourceIndex first, so this is a no-op on that path.
+        element.RegisterCallback<PointerCaptureOutEvent>(_ =>
+        {
+            if (dragSourceIndex != index) return;
+            ClearDragVisuals();
+            dragSourceIndex = -1;
+            isDragging = false;
+        });
+    }
+
+    private int FindSlotIndexAt(Vector2 panelPosition)
+    {
+        for (int i = 0; i < kitSlotBoxes.Count; i++)
+        {
+            if (kitSlotBoxes[i].worldBound.Contains(panelPosition)) return i;
+        }
+        return -1;
+    }
+
+    private void UpdateDropTargetHighlight(Vector2 panelPosition)
+    {
+        int hoverIndex = FindSlotIndexAt(panelPosition);
+        for (int i = 0; i < kitSlotBoxes.Count; i++)
+        {
+            kitSlotBoxes[i].EnableInClassList("kit-slot--drop-target", i == hoverIndex && i != dragSourceIndex);
+        }
+    }
+
+    private void ClearDragVisuals()
+    {
+        for (int i = 0; i < kitSlotBoxes.Count; i++)
+        {
+            kitSlotBoxes[i].RemoveFromClassList("kit-slot--dragging");
+            kitSlotBoxes[i].RemoveFromClassList("kit-slot--drop-target");
+        }
     }
 
     // Rebuilds only the card list for whichever tab is currently selected -
     // called on every RebuildLists() and whenever the tab selection changes.
     private void RenderSelectedCategory()
     {
-        for (int i = 0; i < categoryTabButtons.Count; i++)
-        {
-            categoryTabButtons[i].EnableInClassList("category-tab--selected", i == selectedCategoryIndex);
-        }
-
         availableScroll.Clear();
-        if (selectedCategoryIndex < 0 || selectedCategoryIndex >= lastCategories.Count) return;
+        int selected = categoryTabs.SelectedIndex;
+        if (selected < 0 || selected >= lastCategories.Count) return;
 
-        foreach (AbilityData ability in lastCategories[selectedCategoryIndex].Abilities)
+        foreach (AbilityData ability in lastCategories[selected].Abilities)
         {
             Button card = new Button(() => AvailableAbilityClicked?.Invoke(ability));
             card.AddToClassList("ability-card");
@@ -230,6 +327,15 @@ public class SkillsPanelController : MonoBehaviour
             card.Add(textColumn);
             availableScroll.Add(card);
         }
+    }
+
+    // Same name/mana-or-passive/body content as an Available Abilities card,
+    // just as one flat hover tooltip string instead of separate elements -
+    // the kit slot itself only has room for an icon, not this much text.
+    private static string BuildKitSlotTooltipText(AbilityData ability)
+    {
+        string meta = ability.IsAuraSpell ? "(passive)" : $"Mana: {ability.ManaCost}";
+        return $"{ability.AbilityName} - {meta}\n\n{TooltipText.BuildAbilityBody(ability)}";
     }
 
     // Called once per frame while the panel is showing - only toggles the

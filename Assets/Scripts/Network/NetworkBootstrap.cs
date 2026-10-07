@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -16,14 +17,20 @@ public class NetworkBootstrap : MonoBehaviour
         // onto the primary display every launch avoids that. Editor-only
         // (there's no "wrong monitor" for the Game view) and skipped in
         // batch mode (a dedicated server has no window at all).
+        // Screen.MoveMainWindowTo takes a DisplayInfo (the current
+        // multi-display API), not the older Display class - Display.displays
+        // still exists but is no longer an accepted argument type here.
 #if !UNITY_EDITOR
-        if (!Application.isBatchMode && Display.displays.Length > 0)
+        if (!Application.isBatchMode)
         {
-            Screen.MoveMainWindowTo(Display.displays[0], Vector2Int.zero);
+            List<DisplayInfo> displays = new List<DisplayInfo>();
+            Screen.GetDisplayLayout(displays);
+            if (displays.Count > 0) Screen.MoveMainWindowTo(displays[0], Vector2Int.zero);
         }
 #endif
 
         transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        NetworkManager.Singleton.OnServerStopped += HandleServerStopped;
 
         string saved = ProfileStore.Current.ServerAddress;
         address = string.IsNullOrWhiteSpace(saved) ? DefaultAddress() : saved;
@@ -31,6 +38,31 @@ public class NetworkBootstrap : MonoBehaviour
 #if UNITY_SERVER && !UNITY_EDITOR
         NetworkManager.Singleton.StartServer();
 #endif
+    }
+
+    private void OnDestroy()
+    {
+        if (NetworkManager.Singleton != null) NetworkManager.Singleton.OnServerStopped -= HandleServerStopped;
+    }
+
+    private static void HandleServerStopped(bool wasHost) => ResetServerSessionState();
+
+    // Server-only bookkeeping kept in statics (one server process, not
+    // per-object) has to start every session empty - statics otherwise
+    // survive stopping and re-hosting within the same process (and, with
+    // domain reload off, a whole Editor play session), leaving stale item
+    // claims that block players from their own equipment and stale Arcane
+    // Shield domes that block ranged attacks at empty ground.
+    //
+    // Cleared when a session ENDS (and once at startup), deliberately not
+    // on NetworkManager.OnServerStarted: StartHost spawns the host's own
+    // player - which claims its equipment - BEFORE that event fires, so
+    // clearing there would wipe the host's claims out from under it.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetServerSessionState()
+    {
+        CharacterEquipment.ResetServerSessionState();
+        ArcaneShieldZones.Clear();
     }
 
     // The scene's transport is authored with the real server's address, which

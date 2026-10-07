@@ -6,8 +6,8 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerCamera))]
 public class PlayerTargeting : NetworkBehaviour
 {
-    [SerializeField] private float maxTargetDistance = 100f;
-    [SerializeField] private float tabTargetRange = 70f;
+    [SerializeField] private float maxTargetDistance = 120f;
+    [SerializeField] private float tabTargetRange = 90f;
 
     // A right-click that doesn't move the mouse is a click; anything more
     // is the turn-drag that also uses the right button.
@@ -98,8 +98,12 @@ public class PlayerTargeting : NetworkBehaviour
         Camera cam = playerCameraComponent.Camera;
         if (cam == null) return null;
 
+        // Triggers ignored: a fire/ice patch, a following zone, or a mana orb
+        // sitting between the camera and a mob is a trigger volume, and
+        // would otherwise swallow the click before it ever reaches the mob
+        // standing inside it.
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        return Physics.Raycast(ray, out RaycastHit hit, maxTargetDistance)
+        return Physics.Raycast(ray, out RaycastHit hit, maxTargetDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
             ? hit.collider.GetComponentInParent<Targetable>()
             : null;
     }
@@ -110,8 +114,7 @@ public class PlayerTargeting : NetworkBehaviour
     // nothing if nobody occupies that row.
     private void TargetPartySlot(int rowIndex)
     {
-        Targetable[] all = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
-        IReadOnlyList<PartyFrames.Slot> party = PartyFrames.GetDisplayOrder(all, OwnerClientId);
+        IReadOnlyList<PartyFrames.Slot> party = PartyFrames.GetDisplayOrder(Targetable.All, OwnerClientId);
         if (rowIndex < party.Count) CurrentTarget = party[rowIndex].Member;
     }
 
@@ -120,10 +123,9 @@ public class PlayerTargeting : NetworkBehaviour
     // back to the start once the end of the list is reached.
     private void CycleTarget()
     {
-        Targetable[] all = FindObjectsByType<Targetable>(FindObjectsSortMode.None);
         List<Targetable> candidates = new List<Targetable>();
 
-        foreach (Targetable candidate in all)
+        foreach (Targetable candidate in Targetable.All)
         {
             if (candidate == null || candidate == self) continue;
             if (candidate.Stats != null && candidate.Stats.CurrentHealth.Value <= 0f) continue;

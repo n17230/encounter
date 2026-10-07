@@ -29,3 +29,4 @@ MonoBehaviour:
   BroadcastsLocation: 0
   Weapon: {fileID: 0}
   TwoHanded: 0
+  Icon: {fileID: 21300000, guid: 934e25a692dc8a44cb27bed393b3398a, type: 3}

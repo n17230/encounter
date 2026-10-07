@@ -293,7 +293,7 @@ public class PlayerMovement : NetworkBehaviour
     // same "the owner already trusts itself for movement" model as every
     // other input this script reads (RunSpeed, jump, etc.); no server
     // round trip needed since movement here is owner-authoritative.
-    private bool HasHoverBoots => ProfileStore.Current.GetGear(GearSlot.Boots)?.GrantsAirHover ?? false;
+    private bool HasHoverBoots => ProfileStore.Current.GetEquipment(EquipmentSlot.Boots)?.GrantsAirHover ?? false;
 
     // The int fed to the Animator's "weaponPose" parameter, same owner-local
     // ProfileStore read as HasHoverBoots above. OneHandShield (2) is a
@@ -302,13 +302,13 @@ public class PlayerMovement : NetworkBehaviour
     // being one of WeaponPoseType's own cases.
     private int ResolveWeaponPoseParameter()
     {
-        ItemData mainHand = ProfileStore.Current.GetGear(GearSlot.MainHand);
+        ItemData mainHand = ProfileStore.Current.GetEquipment(EquipmentSlot.MainHand);
         WeaponData weapon = mainHand?.Weapon;
         WeaponPoseType pose = weapon != null ? weapon.PoseType : WeaponPoseType.Unarmed;
 
         if (pose == WeaponPoseType.OneHand)
         {
-            ItemData offHand = ProfileStore.Current.GetGear(GearSlot.OffHand);
+            ItemData offHand = ProfileStore.Current.GetEquipment(EquipmentSlot.OffHand);
             if (offHand != null && offHand.IsShield) return 2; // OneHandShield
         }
 

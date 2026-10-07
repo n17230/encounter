@@ -52,14 +52,11 @@ public class PlayerRespawn : NetworkBehaviour
         movement.ServerTeleportTo(OnTerrain(respawnPoint));
     }
 
-    // Wipes this player's own entry from every mob's ThreatTable in the
-    // scene (not a full-table clear - other players' threat is
-    // untouched), same FindObjectsByType scan CharacterStats
-    // .GenerateHealingThreat already uses for the same "every ThreatTable
-    // in the scene" reasoning.
+    // Wipes this player's own entry from every mob's ThreatTable (not a
+    // full-table clear - other players' threat is untouched).
     private void ResetThreatGenerated()
     {
-        foreach (ThreatTable table in FindObjectsByType<ThreatTable>(FindObjectsSortMode.None))
+        foreach (ThreatTable table in ThreatTable.All)
         {
             table.RemoveThreatFor(OwnerClientId);
         }

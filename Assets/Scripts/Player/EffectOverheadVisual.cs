@@ -88,6 +88,8 @@ public class EffectOverheadVisual : NetworkBehaviour
         {
             activeVfx[index] = Instantiate(mapping.VfxPrefab);
             VfxScale.Apply(activeVfx[index], mapping.Scale > 0f ? mapping.Scale : 1f);
+            // Repositioned above the head every frame below - see FollowInstance.
+            VfxScale.FollowInstance(activeVfx[index]);
         }
 
         Vector3 position = transform.position;

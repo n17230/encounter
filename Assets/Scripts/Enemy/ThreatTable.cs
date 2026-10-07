@@ -9,6 +9,13 @@ public class ThreatTable : UnityEngine.MonoBehaviour
 
     public IReadOnlyDictionary<ulong, float> ThreatByClientId => threatByClientId;
 
+    // Every currently-active ThreatTable - see Registry. Healing threat and
+    // death-time threat wipes both need "every mob's table".
+    public static IReadOnlyList<ThreatTable> All => Registry<ThreatTable>.All;
+
+    private void OnEnable() => Registry<ThreatTable>.Add(this);
+    private void OnDisable() => Registry<ThreatTable>.Remove(this);
+
     public void AddThreat(ulong clientId, float amount)
     {
         if (amount <= 0f) return;

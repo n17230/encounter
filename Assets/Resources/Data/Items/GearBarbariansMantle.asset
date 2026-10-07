@@ -31,3 +31,4 @@ MonoBehaviour:
   Reveals: 0
   BroadcastsLocation: 0
   Weapon: {fileID: 0}
+  Icon: {fileID: 21300000, guid: ab1a93e4f4718f34cb03cb4add66d172, type: 3}

@@ -117,6 +117,28 @@
     margin-bottom: 10px;
 }
 
+/* Tab bar for switching between a fixed set of categories - shared by
+   Skills (ability categories) and Equipment (inventory slot categories). */
+.category-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+
+.category-tab {
+    margin-right: 4px;
+    margin-bottom: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.category-tab--selected {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 .field-row__label {
     width: 220px;
     color: var(--color-text);
@@ -151,7 +173,7 @@
 }
 
 /* Cursor-following hover tooltip (see HoverTooltip.cs) - shared by every
-   panel with hoverable rows (Skills, Gear once migrated). pickingMode is
+   panel with hoverable rows (Skills, Equipment). pickingMode is
    set to Ignore in code so the tooltip itself never intercepts pointer
    events. */
 .hover-tooltip {

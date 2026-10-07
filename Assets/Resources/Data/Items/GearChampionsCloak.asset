@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearChampionsCloak
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: champions_cloak
   ItemName: Champion's Cloak
   Slot: 3
@@ -31,3 +31,6 @@ MonoBehaviour:
   TwoHanded: 0
   GrantsAirHover: 0
   IsShield: 0
+  Icon: {fileID: 21300000, guid: 31a7320bb11139a4e95a9ae77f33aa65, type: 3}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

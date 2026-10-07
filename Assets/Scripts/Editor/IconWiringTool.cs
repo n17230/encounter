@@ -4,9 +4,13 @@ using UnityEngine;
 // One-off batch tool: wires Sprite icons (from the imported 6000FantasyIcons
 // pack's used subset, Assets/External/6000FantasyIcons/...) onto the
 // matching ItemData/AbilityData assets' Icon field - a menu command instead
-// of ~19 manual Inspector drags. Lives under a nested "Editor" folder so
-// Unity treats it as Editor-only while Tools/CompileCheck.csproj still
-// picks it up (its Assets/Scripts/** glob doesn't care about nesting).
+// of ~19 manual Inspector drags. Editor-only via this folder's own
+// Encounter.Editor.asmdef (includePlatforms: Editor) - the folder being
+// named "Editor" is NOT enough on its own here, since Unity ignores that
+// special name inside another asmdef's folder (Encounter.asmdef), which
+// would otherwise pull this into the runtime assembly and break player
+// builds. Tools/CompileCheck.csproj still picks it up either way (its
+// Assets/Scripts/** glob doesn't care about nesting or asmdefs).
 public static class IconWiringTool
 {
     private readonly struct Entry
@@ -40,7 +44,13 @@ public static class IconWiringTool
         new Entry("Assets/Resources/Data/Items/GearStaff.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Staff_v2_09.png"),
         new Entry("Assets/Resources/Data/Items/GearTwoHandedAxe.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Axe_v2_21.png"),
         new Entry("Assets/Resources/Data/Items/GearHuntersBow.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Bow_v2_09.png"),
-        new Entry("Assets/Resources/Data/Items/GearTombOfTheMagi.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Shield_v2_24.png"),
+        new Entry("Assets/Resources/Data/Items/GearShieldOfTheMagi.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Shield_v2_24.png"),
+        new Entry("Assets/Resources/Data/Items/GearHolyScepter.asset", IconRoot + "WeaponIcons/WeaponIconsVol2/Wand_v2_65.png"),
+        new Entry("Assets/Resources/Data/Items/GearChampionsHelmet.asset", IconRoot + "ArmorIcons/BasicArmor_Icons/Helm_24.png"),
+        new Entry("Assets/Resources/Data/Items/GearAmuletOfTheBerserker.asset", IconRoot + "ArmorIcons/RingAndNeck_Icons/necklace_30_scull.png"),
+        new Entry("Assets/Resources/Data/Items/GearAmuletOfVitality.asset", IconRoot + "ArmorIcons/RingAndNeck_Icons/Neck_b_03.png"),
+        new Entry("Assets/Resources/Data/Items/GearBarbariansMantle.asset", IconRoot + "MedievalIcons/ArmorMedieval/BarbarianChest.png"),
+        new Entry("Assets/Resources/Data/Items/GearHuntersCloak.asset", IconRoot + "ArmorIcons/ArmorSet_Icons/Cloak/cloak_32.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityFirebolt.asset", IconRoot + "SkillsIcons/Bonus/Skill1_Nobg/Big_fire_arrow_nobg.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityIcebolt.asset", IconRoot + "SkillsIcons/Bonus/Skill1_Nobg/Big_frost_arrow_nobg.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilitySoulSiphon.asset", IconRoot + "SkillsIcons/Bonus/Skill1_Standart/Y_fellCloak.png"),

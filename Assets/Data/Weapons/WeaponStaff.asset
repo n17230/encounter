@@ -13,8 +13,11 @@ MonoBehaviour:
   m_Name: WeaponStaff
   m_EditorClassIdentifier: 
   WeaponName: Staff
-  Damage: 20
+  Damage: 75
   SwingInterval: 2
   Effect: {fileID: 0}
-  Range: 2
+  Range: 40
   PoseType: 3
+  ArrowPrefab: {fileID: 6140006693554785414, guid: 29337822660ffc44c8088ce4efcf30e5,
+    type: 3}
+  PlaysHealSwingAnimation: 1

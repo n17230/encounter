@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
   m_Name: AbilityAuraOfRegeneration
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: aura_of_regeneration
   AbilityName: Aura of Regeneration
   RequiresTarget: 0
@@ -26,6 +26,9 @@ MonoBehaviour:
   MissileSpeed: 15
   ProjectilePrefab: {fileID: 0}
   CastVfxPrefab: {fileID: 0}
+  CastVfxScale: 1
+  TargetVfxPrefab: {fileID: 0}
+  TargetVfxScale: 1
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0
@@ -45,6 +48,7 @@ MonoBehaviour:
   ConeAroundCaster: 0
   ConeAngle: 90
   RequiresMeleeWeapon: 0
+  RequiresShield: 0
   WeaponDamagePercent: 0
   ChargeForwardDistance: 0
   ChargeToTarget: 0
@@ -53,3 +57,12 @@ MonoBehaviour:
   AuraRange: 40
   AuraReveals: 0
   RemovesNegativeEffect: 0
+  IsPersistentStructure: 0
+  StructurePrefab: {fileID: 0}
+  StructureWidth: 0
+  StructureHeight: 5
+  StructureThickness: 2
+  IsFollowingZone: 0
+  FollowingZonePrefab: {fileID: 0}
+  SelfBuff: 0
+  Icon: {fileID: 21300000, guid: d2cbfa10a16394a429936e3b1ff0c84d, type: 3}

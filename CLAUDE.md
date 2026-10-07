@@ -116,12 +116,32 @@ committed from outside the Editor need hand-written `.meta` files
 cannot be safely hand-authored this way — its `GlobalObjectIdHash` and
 mesh/material references need the Editor to actually serialize them;
 that kind of asset is left as an Editor step for the user (see "Not yet
-done").
+done"). **It also can't catch anything gated behind `#if !UNITY_EDITOR`**
+(e.g. `NetworkBootstrap`'s Standalone-only window-placement code) — it
+references the Editor's own DLLs, so that code is never actually
+compiled by it at all. A bug there only ever surfaces from a real
+Player/Standalone build.
 
 ## Architecture
 
 Scripts live in `Assets/Scripts/` (assembly `Encounter`, see
 `Encounter.asmdef`); tests in `Assets/Tests/EditMode/` (`Encounter.Tests`).
+Editor-only tools live in `Assets/Scripts/Editor/` under their own
+`Encounter.Editor.asmdef` (`includePlatforms: Editor`) — **the folder being
+named `Editor` is not enough**: Unity ignores that special name inside
+another asmdef's folder, so without its own asmdef anything there compiles
+into the runtime `Encounter` assembly and breaks player/server builds on
+`using UnityEditor`. `Tools/CompileCheck.csproj` can't catch that (it
+defines `UNITY_EDITOR` and compiles everything as one assembly). **asmdef
+references aren't transitive for base-type resolution**: `Encounter.Editor`
+and `Encounter.Tests` both reference `Encounter`, but referencing a type
+that *extends* a type from a package (e.g. `CharacterWeaponVisual : 
+NetworkBehaviour`) needs `Unity.Netcode.Runtime` listed directly in the
+referencing asmdef too, not just inherited via the `Encounter` reference —
+`Tools/CompileCheck.csproj` can't catch this either, for the same
+one-assembly reason. Caught by the Editor's own compile, not by
+`CompileCheck` — if the Editor reports a `CS0012` on a package type that
+`Tools/CompileCheck.csproj` didn't, it's this.
 Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
 
 - **Authority split**: movement is owner-authoritative, combat is
@@ -151,7 +171,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     cooldown on key press (drives the ability bar's cooldown sweep), and
     rolls it back if the server rejects the cast
     (`NotifyCastRejectedClientRpc`). Cooldowns are otherwise never
-    synced.
+    synced. Both sides share one start path each — the owner's
+    `BeginPredictedCast`, the server's `RejectIfNotReady` (one cast at a
+    time → global cooldown → own cooldown) + `StartServerCast` — for
+    unit-targeted and ground-targeted casts alike. **Dying cancels a cast
+    in flight**: `ResetCooldowns` (called from `PlayerRespawn.HandleDeath`)
+    stops the pending resolve coroutine and clears `serverCastEndTime`
+    along with the cooldowns, and the owner's cast bar with them —
+    otherwise the respawned player is "Already casting" until the dead
+    cast's timer runs out, and it resolves from the respawn point. The
+    coroutine only clears `pendingCast` if `castSerial` still matches its
+    own, since a new cast can be accepted in the same frame an old one
+    finishes waiting.
   - **Mana is spent on successful cast, not cast start**:
     `HasEnoughMana` (read-only) gates whether a cast can start;
     `TrySpendMana` only fires in `ResolveAbility`/`ResolveGroundAbility`,
@@ -239,6 +270,69 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     these are full imported multi-layer particle VFX and scale is what
     reliably fades "the whole effect" without reaching into every
     sub-emitter's own color curves.
+    Both `AuraGroundVisual` and `EffectOverheadVisual` reposition an
+    unparented VFX instance onto their character every frame, which only
+    moves the *emitter*: these packs author their particle systems in
+    World simulation space, where an already-emitted particle stays where
+    it was born — so a long-lived one (an aura's ground ring) is simply
+    left behind where the effect started. Both call
+    `VfxScale.FollowInstance` right after instantiating, which switches
+    every `ParticleSystem` on that *instance* (never the shared prefab)
+    to Local simulation space so the particles ride along too.
+    `CharacterWeaponVisual` (`Scripts/Player/CharacterWeaponVisual.cs`) is
+    the same everyone-sees-it pattern applied to equipped weapons/shields:
+    shows `ItemData.WeaponModelPrefab` in the wearer's equip socket
+    (`CharacterAppearance.GetEquipSocket` - the rig's own purpose-built
+    `R_equip_joint`/`L_equip_joint`, children of the wrist joints, looked
+    up by name and cached per active rig; falls back to the Humanoid hand
+    bone for a rig without them) for as long as it's equipped in
+    MainHand/OffHand, reacting to
+    `CharacterEquipment.MainHandItemId`/`OffHandItemId` (two more
+    `NetworkVariable<FixedString32Bytes>`, Server-written like
+    `BroadcastsLocation` rather than owner-written like
+    `CharacterAppearance`'s cosmetic Ids, since this must reflect what the
+    server actually validated as equipped). Polls every `Update()` instead
+    of only reacting to `OnValueChanged` — a still-unresolved socket (the
+    rig not ready yet) just means "retry next frame", since the applied
+    state is only recorded once the attach actually happens, with no
+    explicit ordering needed against `CharacterAppearance`'s own
+    `OnNetworkSpawn`. It rebuilds when the item Id *or the resolved
+    socket* changes (`NeedsRebuild`, pure + tested) — a gender switch
+    swaps which rig is live, same case `HeadwearNeedsRebuild` covers for
+    headwear. A two-handed MainHand weapon leaves `OffHandItemId` empty
+    (already true of `equippedItems[OffHand]`), so only one model ever
+    shows, never a second one on the off hand.
+    **Alignment is per weapon *category*, not per item**:
+    `ItemData.AttachProfile` points at a shared `WeaponAttachProfile`
+    asset (`Assets/Data/WeaponAttachProfiles/` — Sword/Staff/Axe2H/Bow/
+    Mace/Shield/Wand; socket-local `Position`/`Rotation`/`Scale` plus an
+    `AttachHand` override, since models from the same pack/type share a
+    pivot convention — the same reasoning as the single shared headwear
+    offset in `CharacterAppearanceApplier`). A new weapon of an existing
+    category just points at that category's profile and needs no tuning;
+    an outlier gets its own profile asset rather than a per-item override
+    layer. The Bow profile is `Hand = Left` (the rig pack parents its own
+    `BowRig` under `L_equip_joint`) even though a bow is a MainHand item.
+    `CharacterWeaponVisual.ApplyAttachment` is the one place the
+    socket-local transform is computed; its scale term cancels the
+    skeleton's *internal* bone scaling (`rigRoot.lossyScale /
+    socket.lossyScale`) so a model renders at its authored size with no
+    fudge factor, while still following a scale applied to the whole
+    character. Profiles are tuned visually, not typed:
+    `Encounter → Weapon Attach Tuner` (`WeaponAttachTuner.cs`) spawns a
+    throwaway `CharacterRig_M` in edit mode, attaches the item's model
+    through that same `ApplyAttachment`, and **Save To Profile** writes the
+    gizmo-adjusted local transform back (its exact inverse); in the Editor
+    the component also re-applies the profile every frame, so editing a
+    profile asset during Play mode shows live and persists. Models +
+    profiles are wired in bulk via `Encounter → Wire Weapon Models`
+    (`WeaponModelWiringTool.cs`, same shape as `IconWiringTool.cs`). Not a
+    NetworkObject — purely cosmetic,
+    each client instantiates its own local copy, same approach
+    `PlayCastVfxClientRpc` already uses for cast VFX, just persistent
+    instead of timed. The Character Creation preview (`CharacterPreview`)
+    deliberately does **not** show weapons — see the Appearance panel notes
+    below; this is gameplay-only.
     `AbilityData.TargetVfxPrefab` is the target-side counterpart to
     `CastVfxPrefab` (which plays on the *caster*, for the cast-time
     window) — a purely cosmetic one-shot VFX played once at the
@@ -285,20 +379,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **Following zones**: `AbilityData.IsFollowingZone` +
     `FollowingZonePrefab`, unit-targeted (not ground-targeted). On
     resolve, `PlayerAbilities.ResolveFollowingZone` spawns
-    `FollowingZonePrefab` on the target and calls `Initialize` with the
-    target's `Transform`, `Effect`, and two fields reused from the
-    ground-patch system for their existing meaning — `GroundEffectRadius`
-    (zone radius) and `PatchDuration` (how long the zone lasts). The new
-    `FollowingZone` component (`Scripts/Abilities/FollowingZone.cs`,
-    `RequireComponent(SphereCollider)`) is `GroundPatch`'s trigger/
-    occupant-refresh logic with two additions: every `FixedUpdate` it
-    re-centers itself on the followed `Transform` (so the zone chases
-    its target instead of staying put), and it never affects the caster
-    themselves even if they end up standing inside it (matched by
-    `NetworkObjectId`, not `clientId`). Despawns itself once its own
-    duration elapses, independent of what happens to the target. Arctic
-    Winds uses this — its prefab still needs Editor setup, see "Not yet
-    done".
+    `FollowingZonePrefab` on the target and calls `GroundPatch.Initialize`
+    with `Effect` and two fields reused from the ground-patch system for
+    their existing meaning — `GroundEffectRadius` (zone radius) and
+    `PatchDuration` (how long the zone lasts) — plus the two optional
+    arguments that make it a following zone rather than a fixed patch:
+    `follow` (the target's `Transform`) and `excludedId` (the caster's
+    `NetworkObjectId`). **There is no separate zone class** — a following
+    zone and a fixed fire/ice patch are the same `GroundPatch`
+    (`Scripts/Abilities/GroundPatch.cs`, `RequireComponent(SphereCollider)`)
+    component: given a `follow` target it re-centers on it every
+    `FixedUpdate` and scales uniformly (a dome) instead of horizontally
+    only (a disc); given an `excludedId` it never affects that one
+    character even if they stand inside it. Either way it drops any
+    occupant that was destroyed while still inside (a mob that burned to
+    death, a disconnected player — neither ever fires `OnTriggerExit`) and
+    despawns itself once its own duration elapses, independent of what
+    happens to the target. Arctic Winds uses this — its prefab still needs
+    Editor setup, see "Not yet done".
   - **Weapon-scaling damage**: `AbilityData.WeaponDamagePercent` (0 =
     none) — total damage is `Damage + WeaponDamage × WeaponDamagePercent`,
     computed in `PlayerAbilities.ResolveTotalDamage` and used everywhere
@@ -314,10 +412,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **Self-buffs**: `AbilityData.SelfBuff` — no targeting at all, `Effect`
     is applied directly to the caster's own `CharacterStats`. Distinct
     from `AreaAroundCaster` (hits every ally in radius) and aura spells
-    (permanent, gear-less) — this is just a plain timed buff on whoever
+    (permanent, equipment-less) — this is just a plain timed buff on whoever
     cast it. **Block chance**: `StatType.BlockChancePercent` — rolled in
     `CharacterStats.RollBlock` against any `HitSource.Melee` hit,
-    zeroing the damage outright on success. Gear and effects both just
+    zeroing the damage outright on success. Melee only, literally: a
+    ranged weapon's basic attack (a player's bow, a Skeleton Archer's or
+    Mage's shot) lands as `HitSource.Ranged` instead, via
+    `WeaponData.BasicAttackSource` (`IsRanged` = `Range >
+    BasicAttackRange` — the one shared definition of "ranged weapon", also
+    what Arcane Shield and auto-attack line of sight key off), so arrows
+    are never blockable. Equipment and effects both just
     add `Flat` `StatModifier`s to it like any other stat, so they stack
     additively through the normal `Stat` machinery (e.g. a 5%-from-gear
     shield plus a 25%-from-effect buff nets 30%) rather than one
@@ -369,9 +473,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `(item, index, bool)` tuples. Hunter's Cloak (+15% `DamageMultiplier`)
     uses this.
   - **Two-handed weapons**: `ItemData.TwoHanded` — a two-handed MainHand
-    item occupies OffHand too. Enforced in `MainMenu`'s gear-equip click
+    item occupies OffHand too. Enforced in `MainMenu`'s equip click
     handler (auto-clears the conflicting slot) and authoritatively in
-    `CharacterEquipment.SetGearServerRpc` (MainHand, slot 11, is always
+    `CharacterEquipment.SetEquipmentServerRpc` (MainHand, slot 11, is always
     processed before OffHand, slot 12, so OffHand is forced null if
     MainHand resolved to a two-handed item).
   - **Dispel**: `AbilityData.RemovesNegativeEffect` strips one active
@@ -428,8 +532,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   menu paths are all under `Encounter/`.
 - **Player profile** (`Scripts/Settings/PlayerProfile.cs`): one
   `[Serializable]` object for everything the local player has chosen —
-  skill slot Ids + hotkeys (`KeyCode` + shift flag), gear Ids per
-  `GearSlot`, movement `KeyCode[]` indexed by `MovementAction`, UI scale.
+  skill slot Ids + hotkeys (`KeyCode` + shift flag), equipment Ids per
+  `EquipmentSlot`, movement `KeyCode[]` indexed by `MovementAction`, UI scale.
   `ProfileStore.Current` loads it from
   `Application.persistentDataPath/profile.json` on first access and
   `Save()` is called when leaving a menu panel / closing the Escape menu
@@ -452,8 +556,27 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   invert the mitigation formula into bonus damage taken),
   1 threat per point of mitigated damage goes to the target's optional
   `ThreatTable`, `ExtraThreat` is added on top (taunts), then the effect
-  is applied. `HitInfo.Source` (`Melee`/`Ability`/`GroundPatch`) says
-  where a hit came from. **Effect immunities**: `ItemData.Immunities`
+  is applied. `HitInfo.Source` (`Melee`/`Ranged`/`Ability`/`GroundPatch`/
+  `Aura` — new values are always appended, never reordered) says where a
+  hit came from. **Line of sight** is one shared rule,
+  `CombatPhysics.HasLineOfSight` (`Scripts/Combat/CombatPhysics.cs`), used
+  by every unit-targeted ability and by ranged auto-attacks (melee swings
+  don't check it): only real environment geometry blocks — never a
+  creature (anything under a `Targetable`), never a trigger volume (ground
+  patches, following zones, pickups) — and it tests *every* collider along
+  the line, not just the nearest, so a mob standing in front of a wall
+  can't hide the wall. The right-click targeting raycast and the
+  ground-aim raycast ignore triggers for the same reason.
+  **Live registries, not scene scans**: `Registry<T>`
+  (`Scripts/Data/Registry.cs`) is a self-maintained list of every enabled
+  instance (`Add` in `OnEnable`, `Remove` in `OnDisable`), exposed as
+  `Targetable.All` / `CharacterStats.All` / `EnemyAI.All` /
+  `ThreatTable.All`. Nothing calls `FindObjectsByType` any more — anything
+  needing "every mob", "every character", "every threat table" reads
+  these. Code that deals hits while iterating (a hit can kill, a death can
+  despawn) iterates `Registry<T>.Snapshot()` instead of the live list —
+  one reused scratch copy per `T`, so two snapshot loops over the same
+  type must never nest. **Effect immunities**: `ItemData.Immunities`
   (`EffectImmunity {Effect, GroundOnly}`) are registered on
   `CharacterStats` by source (the item) on equip, like stat modifiers,
   and checked in `ReceiveHit` before an effect is applied —
@@ -581,7 +704,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `NetworkVariable`s each server `FixedUpdate` (compare-then-write). **UI
   and owner movement must read the `Synced*` values**, never `Stat.Value`
   on a client.
-- **Gear**: `CharacterEquipment` re-syncs on `MainMenu.Closed`; only the
+- **Equipment**: `CharacterEquipment` re-syncs on `MainMenu.Closed`; only the
   first server-side application calls `RestoreFull()`, later swaps
   `ClampToMax()` (no free mid-fight heal). Wrong-slot items are rejected
   server-side. `CharacterStats.GetStat(StatType)` is the shared stat
@@ -589,15 +712,24 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   - **Server-wide item uniqueness**: at most one connected player may
     have a given item Id equipped at a time — `CharacterEquipment
     .globalItemOwners` (`static`, server-only, keyed by item Id) is
-    claimed in `SetGearServerRpc` and released whenever that item
+    claimed in `SetEquipmentServerRpc` and released whenever that item
     leaves a slot (`Equip`) or its owner disconnects
     (`OnNetworkDespawn`). Losing the race just silently drops that item
     from the requester's loadout, the same way an item in the wrong
     slot already does — there's no client-side awareness of who else
-    holds what, so the Gear menu can't warn you before you try, and if
-    you lose the race your menu will keep showing it equipped locally
-    (from `Profile`) until you reopen the Gear page after the rejected
-    sync.
+    holds what, so the Equipment menu can't warn you before you try, and
+    if you lose the race your menu will keep showing it equipped locally
+    (from `Profile`) until you reopen the Equipment page after the
+    rejected sync. **Server-side statics start every session empty**:
+    `globalItemOwners` and `ArcaneShieldZones` would otherwise survive
+    stopping and re-hosting in the same process (or a whole Editor play
+    session with domain reload off), leaving stale item claims and stale
+    domes. `NetworkBootstrap.ResetServerSessionState` clears both on
+    `NetworkManager.OnServerStopped` and once at startup
+    (`RuntimeInitializeOnLoadMethod`) — deliberately **not** on
+    `OnServerStarted`, because `StartHost` spawns the host's own player
+    (which claims its equipment) *before* that event fires. Any new
+    server-only static belongs in that reset too.
 - **Enemy targeting**: `TargetingMode` (`Proximity`/`HighestThreat`/
   `LowestThreat`/`FarthestPlayer`) and the pure `TargetSelector.Select`
   live in `Scripts/Enemy/TargetSelector.cs`; `EnemyAI` just builds
@@ -617,7 +749,23 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `Animator` it finds via `GetComponentInChildren<Animator>()` into
     the shared `NetworkAnimator` on the mob's root, and `FixedUpdate`
     drives `speed`/`attack`/`death` the same way for every mob
-    regardless of which controller/clips it has. The clips themselves
+    regardless of which controller/clips it has. **That wiring has two
+    hard requirements, both from how Netcode's `NetworkAnimator` is
+    written**: its `Awake` only builds its parameter caches if its
+    `Animator` is already non-null at that moment, and the server then
+    calls `CheckParametersChanged()` every network tick with no null
+    guard — so a `NetworkAnimator` that woke up first, or never gets an
+    `Animator`, throws a `NullReferenceException` every tick. Hence
+    `EnemyAI` carries `[DefaultExecutionOrder(-100)]` (its `Awake` must
+    win the race rather than rely on Unity's unspecified component
+    order), and it never leaves `NetworkAnimator.Animator` null — a mob
+    with no `Animator` anywhere gets a bare placeholder one (a non-null
+    `Animator` with no controller is handled safely by Netcode). `EnemyAI`'s
+    *own* `animator` field, by contrast, is only set when the visual's
+    `Animator` actually has a controller, so a controller-less mob skips
+    every animation call instead of logging a warning per call. Mobs turn
+    to face their target while attacking in range, not only while chasing.
+    The clips themselves
     are generic Humanoid animations (the "Stander" rig, from
     `Assets/External/Shinabro`/`Shinabro-combat`) retargeted onto each
     creature's own Humanoid Avatar — not creature-specific animations —
@@ -636,12 +784,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     both an instant heal and each individual HoT tick (both funnel
     through this one method, so every healing ability picks it up
     automatically). A heal never hits one specific mob, so there's no
-    single `ThreatTable` to credit — `GenerateHealingThreat` scans every
-    `ThreatTable` in the scene and adds threat for the healer on every
+    single `ThreatTable` to credit — `GenerateHealingThreat` walks
+    `ThreatTable.All` and adds threat for the healer on every
     mob that **already has the healed character in its own table** (i.e.
     every mob currently fighting them). Gated on
     `healerClientId != NoAttacker`, which excludes aura-pulsed healing
-    entirely (same reasoning `HealingMultiplier` uses).
+    entirely (same reasoning `HealingMultiplier` uses), and on the healed
+    character being a *player*: area heals hit mobs too, and a mob's
+    `OwnerClientId` is the server's id — which on a host is also the host
+    player's clientId — so healing a mob must not run that lookup at all.
+    `Heal` itself is a no-op on a dead character (only `RestoreFull`
+    brings one back), so a HoT tick or delayed heal landing in a mob's
+    death-despawn window can't lift it back above 0 health.
   - **Mana orb drops**: every mob has a flat 5% chance
     (`EnemyAI.ManaOrbDropChance`) on death to spawn a `ManaOrb`
     (`Scripts/Enemy/ManaOrb.cs`) at its death position — a
@@ -661,10 +815,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (Healer holds position instead of chasing; Tactician gets its own
     movement state machine entirely) the normal chase-and-attack loop.
     Ally-awareness (HP-threshold heals/shields, nearest-Warrior
-    repositioning, escort head-count) is done by scanning
-    `FindObjectsByType<EnemyAI>()` for matching `MobRole`s each check,
-    not any kind of registry — fine at this scale (one encounter, a
-    handful of mobs). **Tactical Instruction**: while an alive
+    repositioning, escort head-count) walks `EnemyAI.All` for matching
+    `MobRole`s each check. The Tactician latches into melee for the rest
+    of the fight once a player has attacked it (`HasBeenAttacked` — any
+    `ThreatTable` entry above 0; healing threat can't create one, it only
+    adds to an existing entry), gets within `tacticianMeleeEngageRange`,
+    or fewer than 3 escort remain. **Tactical Instruction**: while an alive
     Tactician is within `tacticalInstructionRange` of an escort member,
     `UpdateTacticalInstruction` (state-change-gated, not re-applied
     every tick) grants that member a flat `ManaRegenRate` bonus and
@@ -690,15 +846,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     fired through the ordinary basic-attack path, not an actual cast —
     it does the same damage and applies the same slow, but doesn't
     spawn ice ground patches the way the player version does.
-- **Menus / dev UI** (`Scripts/UI/`, still mostly IMGUI `OnGUI` — deliberately
-  disposable, don't invest further in the remaining IMGUI panels; real UI is
-  UI Toolkit, see Options below for the first migrated panel): pregame
-  `MainMenu` (Choose Skills / Choose Gear / Options / Enter Testing Area)
-  and, after `TestingAreaGate.Entered`, the same panels as an **Escape
-  menu** (`MainMenu.IsOpen`). The Gear page is a paper-doll: 3×5 grid of
-  equipment slots on the left, inventory grid (every unequipped item in
-  the game, no real inventory yet) on the right; items are an "X"
-  placeholder with a hover tooltip until there's 2D art. While open,
+- **Menus / dev UI** (`Scripts/UI/`, one remaining IMGUI `OnGUI` panel —
+  deliberately disposable, don't invest further in it; real UI is UI
+  Toolkit, see the migration paragraph below): pregame `MainMenu` (Skills /
+  Equipment / Options / Enter Testing Area) and, after
+  `TestingAreaGate.Entered`, the same panels as an **Escape menu**
+  (`MainMenu.IsOpen`). The Equipment page is a paper-doll: 3×5 grid of
+  equipment slots on the left, inventory grid (every unequipped item in the
+  game, no real inventory yet) on the right - see the UI Toolkit migration
+  paragraph below for `EquipmentPanelController`'s specifics. While open,
   `PlayerMovement`, `PlayerCamera`, `PlayerTargeting`, `PlayerAbilities`
   ignore gameplay input; on close `MainMenu.Closed` triggers
   loadout/gear re-sync. Options page: UI scale and look sensitivity are
@@ -754,10 +910,47 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `AbilityData`) formatted in the standard MMO spell-tooltip convention
   (WoW's, specifically): a compact cast-time/cooldown/range block first,
   then the effect as a plain-language sentence ("Deals 40 damage.") rather
-  than bare "Label: value" lines. Which tab is selected is controller-local
-  view state, not threaded through `MainMenu`, since it has no bearing on
-  `Profile`/game data.) — `Gear`/`Appearance`
-  are still IMGUI (`DrawGearPanel`/`DrawAppearancePanel`), unaffected. Each `*Controller`
+  than bare "Label: value" lines. The tab row itself is `CategoryTabBar`
+  (`Scripts/UI/CategoryTabBar.cs`, a plain C# helper owned by the
+  controller, like `HoverTooltip`) - shared with the Equipment panel; which
+  tab is selected is view state it owns, not threaded through `MainMenu`,
+  since it has no bearing on `Profile`/game data. Each kit slot's icon shows a `HoverTooltip` with the
+  same name/mana-or-passive/body content as its Available Abilities card
+  (`SkillsPanelController.BuildKitSlotTooltipText`). Kit slots are also
+  drag-to-reorder: a filled slot's icon handles `PointerDown`/`Move`/`Up`
+  itself (not a `Button` - Unity's built-in `Clickable` manipulator can't
+  be reliably suppressed once a drag has started) to distinguish a plain
+  click (open the sub-row, via `SlotClicked`) from a drag past
+  `DragThreshold` (raises `SlotReordered(from, to)`, handled by
+  `MainMenu.ReorderSkillSlots` → `PlayerProfile.SwapSlots` - swaps
+  ability/key/shift-flag together, works the same whether the drop target
+  is empty or occupied). `PointerUpEvent`'s handler reads `isDragging`
+  and computes the drop target *before* calling `ReleasePointer` -
+  releasing capture can synchronously fire `PointerCaptureOutEvent`,
+  whose handler resets that same drag state, so reading it afterward is
+  unsafe.), and Equipment (`EquipmentPanelController` — the same
+  paper-doll-left/inventory-grid-right layout and click-based interaction
+  the old `DrawGearPanel` had: click an inventory item to equip it into
+  `TargetSlotFor`'s resolved slot, click a filled slot to unequip it, same
+  two-handed-weapon/off-hand conflict auto-clearing. `ItemData.Icon` now
+  actually renders here (wired via `Encounter/Wire Icons`) instead of the
+  old "X" placeholder; a null `Icon` just shows an empty icon box, same
+  as an ability without one in Skills. Per-slot-category outline colors
+  (rings red, trinket green, main hand cyan, off hand purple, necklace
+  yellow, chest blue, boots black) are unchanged, just drawn as a
+  `VisualElement` border instead of `GUI.DrawTexture`. The inventory side
+  (not the equip grid) is a tab bar, one tab per equipment slot category
+  (Head/Neck/Chest/Cape/Gloves/Legs/Boots/Rings/Trinket/Main/Off - Ring1
+  and Ring2 collapse into one "Rings" tab since a ring item's own `Slot`
+  is always just the `Ring1` category), same
+  always-show-every-tab-even-empty convention and the same shared
+  `CategoryTabBar` Skills uses; `MainMenu
+  .InventoryCategorySlots`/`InventoryCategoryNames` bucket
+  `GameDatabase.Items` into each tab by `item.Slot`. `.category-tabs`/
+  `.category-tab`/`.category-tab--selected` live in `Theme.uss`, shared
+  between Skills and Equipment rather than duplicated per panel. Drag-and-
+  drop equip is a deliberate future follow-up, not this pass.) —
+  `Appearance` is still IMGUI (`DrawAppearancePanel`), unaffected. Each `*Controller`
   (`Scripts/UI/*Controller.cs`, on its own child GameObject under `MainMenu`,
   each driving its own sibling `UIDocument`, all sharing the same
   `EncounterPanelSettings.asset` — **`MainMenu` itself must never carry a
@@ -790,12 +983,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   consistent while some panels are still IMGUI and some aren't.
   **Hover tooltips**: `HoverTooltip` (`Scripts/UI/HoverTooltip.cs`, plain C#,
   not a `MonoBehaviour`) is the UI Toolkit replacement for IMGUI's automatic
-  `GUI.tooltip` hover-tracking — a panel that needs hoverable rows (Skills;
-  Gear once migrated) constructs one and calls `Attach(element, () =>
+  `GUI.tooltip` hover-tracking — a panel that needs hoverable rows (Skills,
+  Equipment) constructs one and calls `Attach(element, () =>
   tooltipText)` per hoverable element; it's a cursor-following floating box,
   content fetched fresh on every hover. `TooltipText`
   (`Scripts/UI/TooltipText.cs`) holds the actual pure ability/item tooltip
-  text formatting, shared by both this and the still-IMGUI Gear panel.
+  text formatting, shared by both.
   **Gotcha**: `HoverTooltip`'s floating element is added directly to
   `UIDocument.rootVisualElement`, which is a *different* element from the
   UXML's own named top-level element that actually carries the
@@ -853,14 +1046,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   cast. The reverse direction is `ItemData.BroadcastsLocation` →
   server-written `CharacterEquipment.BroadcastsLocation` NetworkVariable
   on the wearer; allies' minimaps draw a broadcasting player regardless
-  of their own reveals (**Transmitting Beacon**, Ring1). **Gear slots:
-  12** (`GearSlot` — no Belt, and `Ring1`/`Ring2` only, no Ring3/4).
-  Rings are **interchangeable**: a ring item's `Slot` is just the
-  `Ring1` category, `GearSlotExtensions.IsRing()` treats either physical
-  slot as valid for it in `CharacterEquipment.SetGearServerRpc`'s
-  placement check, and `MainMenu.TargetSlotFor` picks whichever physical
-  ring slot is free (Ring1 first) when equipping one from the inventory
-  grid. `GearSlot.Legs` is pinned to its old underlying value (`= 6`)
+  of their own reveals (**Transmitting Beacon**, Ring1). **Equipment
+  slots: 12** (`EquipmentSlot` — no Belt, and `Ring1`/`Ring2` only, no
+  Ring3/4). Rings are **interchangeable**: a ring item's `Slot` is just
+  the `Ring1` category, `EquipmentSlotExtensions.IsRing()` treats either
+  physical slot as valid for it in `CharacterEquipment
+  .SetEquipmentServerRpc`'s placement check, and `MainMenu.TargetSlotFor`
+  picks whichever physical ring slot is free (Ring1 first) when equipping
+  one from the inventory grid. `EquipmentSlot.Legs` is pinned to its old
+  underlying value (`= 6`)
   so removing Belt didn't shift every later slot's serialized value out
   from under existing item assets. No terrain by design. Disc/blip
   textures are generated at runtime.
@@ -888,7 +1082,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   Unarmed/OneHand/TwoHand/Staff/Bow/DualWield — set per weapon asset, e.g.
   Broad Sword is OneHand, 2H Axe is TwoHand) classifies what a weapon
   calls for; `PlayerMovement.ResolveWeaponPoseParameter` (owner-local,
-  same `ProfileStore.Current.GetGear` pattern `HasHoverBoots` uses)
+  same `ProfileStore.Current.GetEquipment` pattern `HasHoverBoots` uses)
   combines the equipped MainHand weapon's `PoseType` with an OffHand
   shield check (a `OneHand` weapon + a shield item resolves to a distinct
   `OneHandShield` pose) to drive a `weaponPose` int Animator parameter
@@ -1007,13 +1201,18 @@ renamed, or retuned.
 7. **Arctic Winds' zone prefab** — same situation as #6:
    `AbilityArcticWinds.FollowingZonePrefab` is null, so the spell
    currently fizzles with "Zone not configured yet". Editor steps: (1)
-   create a GameObject (a Sphere if you want it visible, or empty for
-   an invisible trigger), (2) add a `NetworkObject` component, (3) add
-   `FollowingZone` (`Scripts/Abilities/FollowingZone.cs` — its
-   `RequireComponent(SphereCollider)` adds the collider automatically;
-   `Initialize` sets its radius directly, no scaling needed), (4) save
+   create a GameObject (a default Sphere primitive if you want the dome
+   visible, or empty for an invisible trigger), (2) add a `NetworkObject`
+   component, (3) add `GroundPatch` (`Scripts/Abilities/GroundPatch.cs` —
+   the same component the fire/ice patches use; its
+   `RequireComponent(SphereCollider)` adds the collider automatically, and
+   `Initialize` scales the whole object so a default 1-unit sphere ends up
+   exactly the zone's radius, visual and trigger together), (4) save
    as a prefab, (5) register it in `DefaultNetworkPrefabs.asset`, (6)
-   drag it onto `AbilityArcticWinds`'s `FollowingZonePrefab` field.
+   drag it onto `AbilityArcticWinds`'s `FollowingZonePrefab` field. Like
+   the fixed patches, it has no `NetworkTransform` of its own — if you
+   want *clients* to see a visible dome track the target (rather than
+   only the server-side trigger following it), add one.
 8. **Mana orb pickup prefab** — the drop-chance roll and pickup logic
    are built (`EnemyAI.HandleDeath`, `ManaOrb.cs`), but nothing exists
    yet at `Resources/Prefabs/ManaOrb`, so `ManaOrb.TrySpawn` currently
@@ -1042,6 +1241,11 @@ renamed, or retuned.
    `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
    on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
    specified in the design, see `review_with_fable.md`.
+10. **Only weapons currently render a visual model on equip** (via
+    `CharacterWeaponVisual`/`WeaponAttachProfile`) — no other equipment slot
+    has a visual representation yet. Hunter's Cloak (Cape) has no 3D asset
+    and isn't wired; this is the current scope, not a gap specific to that
+    item.
 
 ## Notes for future sessions
 

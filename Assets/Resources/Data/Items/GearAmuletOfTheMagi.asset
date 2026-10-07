@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearAmuletOfTheMagi
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: amulet_of_the_magi
   ItemName: Amulet of the Magi
   Slot: 1
@@ -29,3 +29,8 @@ MonoBehaviour:
   BroadcastsLocation: 0
   Weapon: {fileID: 0}
   TwoHanded: 0
+  GrantsAirHover: 0
+  IsShield: 0
+  Icon: {fileID: 21300000, guid: 6873f9557a47446408a1a0e39e9bafe6, type: 3}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

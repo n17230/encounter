@@ -21,10 +21,16 @@ MonoBehaviour:
   ManaCost: 60
   ThreatValue: 10
   Damage: 140
+  HealAmount: 0
+  ShieldAmount: 0
   MissileSpeed: 30
   ProjectilePrefab: {fileID: 2881004069007213672, guid: 157a86356e801c947a7ae56e6cc193e4,
     type: 3}
-  CastVfxPrefab: {fileID: 8357042805450777661, guid: ab3404488d7b5f84394f8aeed7654211, type: 3}
+  CastVfxPrefab: {fileID: 8357042805450777661, guid: ab3404488d7b5f84394f8aeed7654211,
+    type: 3}
+  CastVfxScale: 1
+  TargetVfxPrefab: {fileID: 0}
+  TargetVfxScale: 1
   GroundPatchPrefab: {fileID: 6179438977361036716, guid: dbdc657f76b119141a7e11ae95b13691,
     type: 3}
   MinPatchCount: 5
@@ -34,3 +40,33 @@ MonoBehaviour:
   PatchDuration: 6
   Effect: {fileID: 11400000, guid: 73ee1124347b7beb5d4a4f1f869f2cdb, type: 2}
   DirectHitEffectDuration: 5
+  IsGroundTargeted: 0
+  GroundEffectRadius: 0
+  ForceSpeed: 0
+  PushAway: 0
+  RecallTarget: 0
+  ExclusiveSingleTarget: 0
+  AreaAroundCaster: 0
+  EnemiesAroundCaster: 0
+  ConeAroundCaster: 0
+  ConeAngle: 90
+  RequiresMeleeWeapon: 0
+  RequiresShield: 0
+  WeaponDamagePercent: 0
+  ChargeForwardDistance: 0
+  ChargeToTarget: 0
+  ChargeSpeed: 20
+  IsAuraSpell: 0
+  AuraRange: 40
+  AuraReveals: 0
+  RemovesNegativeEffect: 0
+  IsPersistentStructure: 0
+  StructurePrefab: {fileID: 0}
+  StructureWidth: 0
+  StructureHeight: 5
+  StructureThickness: 2
+  IsFollowingZone: 0
+  FollowingZonePrefab: {fileID: 0}
+  SelfBuff: 0
+  Icon: {fileID: 21300000, guid: 0938298f48f02d64eb3820ee480fb3f5, type: 3}
+  PlaysCastAttackAnimation: 1

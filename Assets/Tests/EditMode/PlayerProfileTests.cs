@@ -25,7 +25,7 @@ public class PlayerProfileTests
         {
             SlotKeys = new KeyCode[2],
             SlotAbilityIds = new string[20],
-            GearIds = null,
+            EquipmentIds = null,
             MovementKeys = new KeyCode[1],
             UiScale = 0f,
         };
@@ -34,7 +34,7 @@ public class PlayerProfileTests
 
         Assert.AreEqual(PlayerProfile.AbilitySlots, profile.SlotKeys.Length);
         Assert.AreEqual(PlayerProfile.AbilitySlots, profile.SlotAbilityIds.Length);
-        Assert.AreEqual(PlayerProfile.GearSlotCount, profile.GearIds.Length);
+        Assert.AreEqual(PlayerProfile.EquipmentSlotCount, profile.EquipmentIds.Length);
         CollectionAssert.AreEqual(MovementInput.Defaults, profile.MovementKeys);
         Assert.AreEqual(1f, profile.UiScale);
     }
@@ -57,7 +57,7 @@ public class PlayerProfileTests
         PlayerProfile profile = new PlayerProfile();
         profile.SlotAbilityIds[0] = "firebolt";
         profile.SetSlotKey(0, new KeyBindingOption(KeyCode.Q, false));
-        profile.GearIds[(int)GearSlot.OffHand] = "shield";
+        profile.EquipmentIds[(int)EquipmentSlot.OffHand] = "shield";
         profile.MovementKeys[(int)MovementAction.Forward] = KeyCode.UpArrow;
         profile.UiScale = 1.5f;
 
@@ -67,7 +67,7 @@ public class PlayerProfileTests
 
         Assert.AreEqual("firebolt", loaded.SlotAbilityIds[0]);
         Assert.AreEqual(KeyCode.Q, loaded.GetSlotKey(0).Value.Key);
-        Assert.AreEqual("shield", loaded.GearIds[(int)GearSlot.OffHand]);
+        Assert.AreEqual("shield", loaded.EquipmentIds[(int)EquipmentSlot.OffHand]);
         Assert.AreEqual(KeyCode.UpArrow, loaded.MovementKeys[(int)MovementAction.Forward]);
         Assert.AreEqual(1.5f, loaded.UiScale);
     }
@@ -75,10 +75,10 @@ public class PlayerProfileTests
     [Test]
     public void OnlyRing1AndRing2AreRingSlots()
     {
-        Assert.IsTrue(GearSlot.Ring1.IsRing());
-        Assert.IsTrue(GearSlot.Ring2.IsRing());
-        Assert.IsFalse(GearSlot.Trinket.IsRing());
-        Assert.IsFalse(GearSlot.MainHand.IsRing());
+        Assert.IsTrue(EquipmentSlot.Ring1.IsRing());
+        Assert.IsTrue(EquipmentSlot.Ring2.IsRing());
+        Assert.IsFalse(EquipmentSlot.Trinket.IsRing());
+        Assert.IsFalse(EquipmentSlot.MainHand.IsRing());
     }
 
     [Test]

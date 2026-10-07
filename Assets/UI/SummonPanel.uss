@@ -15,7 +15,18 @@
     padding: 4px 8px;
     border-radius: 4px;
     margin-bottom: 2px;
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
     color: var(--color-text);
+}
+
+.mob-row:hover {
+    background-color: var(--color-surface-hover);
+}
+
+.mob-row:active {
+    background-color: var(--color-surface-pressed);
 }
 
 .mob-row--selected {
@@ -27,6 +38,15 @@
     align-items: center;
     justify-content: center;
     margin-bottom: 12px;
+}
+
+/* Overrides Theme.uss's shared .field-row__label (220px, sized for the
+   wider Options panel) - in this narrower 320px panel that width was
+   eating most of the row, shoving the -/count/+ controls off-center
+   instead of letting #count-row's justify-content: center work. */
+#count-row .field-row__label {
+    width: auto;
+    margin-right: 8px;
 }
 
 .count-stepper {

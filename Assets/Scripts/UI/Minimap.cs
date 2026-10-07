@@ -38,7 +38,7 @@ public static class Minimap
     private static Texture2D ringTexture;
     private static GUIStyle compassStyle;
 
-    // reveals: which kinds of blip the wearer's gear lets them see (Players
+    // reveals: which kinds of blip the wearer's equipment lets them see (Players
     // draws live; Mobs are shown only via mobPingPositions - see below).
     // With MinimapReveal.None and no pings, only the player's own marker
     // draws. mobPingPositions/mobPingAlpha: mob positions captured at the
@@ -63,7 +63,7 @@ public static class Minimap
             if (blip == null || blip.transform == self) continue;
             if (blip.GetComponent<PlayerMovement>() == null) continue; // mobs draw via mobPings instead
 
-            bool broadcasting = blip.TryGetComponent(out CharacterEquipment gear) && gear.BroadcastsLocation.Value;
+            bool broadcasting = blip.TryGetComponent(out CharacterEquipment equipment) && equipment.BroadcastsLocation.Value;
             if ((reveals & MinimapReveal.Players) == 0 && !broadcasting) continue;
 
             Vector3 offset = blip.transform.position - self.position;

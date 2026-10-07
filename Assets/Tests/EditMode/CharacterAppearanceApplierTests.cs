@@ -3,7 +3,7 @@ using UnityEngine;
 
 // Uses real Ids/node names from the generated appearance catalog
 // (Assets/Resources/Data/AppearancePieces), same pattern PlayerProfileTests
-// already relies on for ability/gear Ids - these assets are expected to
+// already relies on for ability/equipment Ids - these assets are expected to
 // keep existing.
 public class CharacterAppearanceApplierTests
 {

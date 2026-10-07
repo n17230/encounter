@@ -11,7 +11,18 @@ public struct KeyBindingOption
         RequiresShift = requiresShift;
     }
 
-    public string DisplayName => RequiresShift ? $"Shift+{Key}" : Key.ToString();
+    public string DisplayName
+    {
+        get
+        {
+            // KeyCode.Alpha0-9.ToString() reads as "Alpha1" - show just the
+            // digit instead, same as every other game's keybind label.
+            string keyText = Key >= KeyCode.Alpha0 && Key <= KeyCode.Alpha9
+                ? ((int)(Key - KeyCode.Alpha0)).ToString()
+                : Key.ToString();
+            return RequiresShift ? $"Shift+{keyText}" : keyText;
+        }
+    }
 
     public bool WasPressedThisFrame()
     {

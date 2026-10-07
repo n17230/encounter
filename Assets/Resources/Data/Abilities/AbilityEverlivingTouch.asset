@@ -27,8 +27,10 @@ MonoBehaviour:
   ProjectilePrefab: {fileID: 634947618538231971, guid: f383dfd5303eb41479d1788d2d3055e0,
     type: 3}
   CastVfxPrefab: {fileID: 0}
+  CastVfxScale: 1
   TargetVfxPrefab: {fileID: 3671594976279353174, guid: 9c77f9c1191db9444b9aa844d3981727,
     type: 3}
+  TargetVfxScale: 1
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0
@@ -65,3 +67,5 @@ MonoBehaviour:
   IsFollowingZone: 0
   FollowingZonePrefab: {fileID: 0}
   SelfBuff: 0
+  Icon: {fileID: 21300000, guid: 069535c3bb5343e40acdbb76a93ae0a5, type: 3}
+  PlaysCastHealAnimation: 1

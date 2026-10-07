@@ -143,8 +143,9 @@ public class AbilityData : ScriptableObject
     // Cast once, no target: grants a permanent, party-wide aura centered on
     // the caster - Effect (above) is pulsed to everyone within AuraRange
     // (self included), and/or AuraReveals is granted on the caster's own
-    // minimap, exactly like the old gear-based auras did, except there's no
-    // gear to wear and no duration - it simply never expires on its own.
+    // minimap, exactly like the old equipment-based auras did, except
+    // there's no equipment to wear and no duration - it simply never
+    // expires on its own.
     // At most one aura spell is active per caster at a time: casting a
     // DIFFERENT one replaces whichever was active (see
     // CharacterEquipment.SetActiveAura). RequiresTarget should be false.
@@ -177,7 +178,9 @@ public class AbilityData : ScriptableObject
     // PatchDuration seconds, reapplying Effect to everyone caught within
     // GroundEffectRadius (both fields reused from the ground-patch system -
     // same meaning, just driving a moving zone instead of a fixed one).
-    // E.g. Arctic Winds.
+    // The prefab carries the same GroundPatch component a fixed fire/ice
+    // patch does - PlayerAbilities.ResolveFollowingZone just hands it a
+    // target to follow and a caster to never affect. E.g. Arctic Winds.
     public bool IsFollowingZone = false;
     public GameObject FollowingZonePrefab;
 
@@ -187,7 +190,29 @@ public class AbilityData : ScriptableObject
     // should be false. E.g. Aegis of the Ancient.
     public bool SelfBuff = false;
 
-    // Null for every ability today - mirrors ItemData.Icon. No rendering
-    // code reads this yet (the ability bar/Skills panel are still text-only).
+    // Mirrors ItemData.Icon. Read by the Skills panel's ability cards -
+    // wired via the Encounter/Wire Icons Editor tool, not by hand.
     public Sprite Icon;
+
+    // Plays the shared Stander@Magic_Attack1 swing (the "castAttack"
+    // Animator trigger) on the caster while this ability resolves - see
+    // PlayerAbilities.StartServerCast/ResolveAfterCastTime. For a cast-time
+    // ability it starts CastAnimationLeadTime before the cast actually
+    // resolves; for an instant ability it delays resolve by that same
+    // lead time so the animation still gets to play first. E.g. Firebolt,
+    // Icebolt, Soul Siphon.
+    public bool PlaysCastAttackAnimation = false;
+
+    // Same mechanism as PlaysCastAttackAnimation, but plays the shared
+    // Stander@Sub_Spell1 (1) heal gesture (the "castHeal" Animator trigger)
+    // instead - for abilities whose cast is itself a heal, not a damage
+    // spell. Mutually exclusive with PlaysCastAttackAnimation in practice
+    // (nothing enforces it - just don't set both). E.g. Blessing of
+    // Vitality, Radiant Embrace, Seraph's Grace, Everliving Touch.
+    public bool PlaysCastHealAnimation = false;
+
+    // Whichever of the two above is set, if either - the one place
+    // PlayerAbilities checks "does this ability need the animation-lead-
+    // time treatment at all".
+    public bool PlaysAnyCastAnimation => PlaysCastAttackAnimation || PlaysCastHealAnimation;
 }

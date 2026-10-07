@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // Singleton asset (one instance, loaded by fixed path - see GameDatabase)
-// holding the pack's fixed body-skin and clothing/gear recolor textures.
+// holding the pack's fixed body-skin and clothing/equipment recolor textures.
 // Referenced by plain array index rather than by Id like every other data
 // asset here: this is a bounded, pack-defined palette that won't grow
 // independently of the pack itself, so 22 near-empty single-texture Id

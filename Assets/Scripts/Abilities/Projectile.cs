@@ -11,13 +11,19 @@ public class Projectile : NetworkBehaviour
     private ulong targetNetworkObjectId;
     private AbilityData ability;
     private ulong casterClientId;
+    private float damage;
     private bool initialized;
 
-    public void Initialize(ulong targetId, AbilityData abilityData, ulong casterId)
+    // damage is resolved by the caster at cast time (PlayerAbilities
+    // .ResolveTotalDamage - flat + weapon-scaled), not re-read off
+    // ability.Damage here, so a weapon-scaling projectile can't silently
+    // drop its WeaponDamagePercent share.
+    public void Initialize(ulong targetId, AbilityData abilityData, ulong casterId, float resolvedDamage)
     {
         targetNetworkObjectId = targetId;
         ability = abilityData;
         casterClientId = casterId;
+        damage = resolvedDamage;
         initialized = true;
     }
 
@@ -54,7 +60,7 @@ public class Projectile : NetworkBehaviour
         {
             target.Stats.ReceiveHit(new HitInfo
             {
-                Damage = ability.Damage,
+                Damage = damage,
                 ExtraThreat = ability.ThreatValue,
                 AttackerClientId = casterClientId,
                 Source = HitSource.Ability,

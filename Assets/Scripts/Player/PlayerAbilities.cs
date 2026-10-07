@@ -21,6 +21,14 @@ public class PlayerAbilities : NetworkBehaviour
     [SerializeField] private float globalCooldownDuration = 1.5f;
     public float FacingConeAngle => facingConeAngle;
 
+    // How long before an AbilityData.PlaysCastAttackAnimation ability's
+    // resolve() the cast-attack animation trigger fires - see
+    // StartServerCast/ResolveAfterCastTime. For an instant ability (CastTime
+    // <= 0) this becomes the ability's whole effective wait, so its
+    // animation still gets to play before the effect lands instead of both
+    // firing in the same instant.
+    private const float CastAnimationLeadTime = 0.15f;
+
     private PlayerTargeting targeting;
     private PlayerCamera playerCameraComponent;
     private CharacterStats stats;
@@ -78,6 +86,11 @@ public class PlayerAbilities : NetworkBehaviour
     // this is what actually enforces the rule against a desynced or
     // malicious client.
     private float serverCastEndTime;
+    // The cast-time cast currently waiting to resolve, if any - kept so
+    // dying mid-cast can cancel it (see ResetCooldowns) instead of letting
+    // it resolve from the respawn point.
+    private Coroutine pendingCast;
+    private int castSerial;
     // Server-authoritative global cooldown - see globalCooldownDuration.
     private float serverGlobalCooldownReadyTime;
 
@@ -190,16 +203,25 @@ public class PlayerAbilities : NetworkBehaviour
             }
 
             CastAbilityServerRpc(slot, targetNetworkObject != null ? targetNetworkObject.NetworkObjectId : 0);
-            predictedCooldownReady[ability] = Time.time + ability.Cooldown;
-            predictedGlobalCooldownReady = Time.time + globalCooldownDuration;
+            BeginPredictedCast(ability);
+        }
+    }
 
-            if (ability.CastTime > 0f)
-            {
-                isCasting = true;
-                castStartTime = Time.time;
-                castDuration = ability.CastTime;
-                castingAbilityName = ability.AbilityName;
-            }
+    // Owner-side optimistic start, shared by unit-targeted and
+    // ground-targeted casts: cooldown + global cooldown begin the instant
+    // the request is sent, and the cast bar starts for anything with a cast
+    // time. NotifyCastRejectedClientRpc rolls all of it back.
+    private void BeginPredictedCast(AbilityData ability)
+    {
+        predictedCooldownReady[ability] = Time.time + ability.Cooldown;
+        predictedGlobalCooldownReady = Time.time + globalCooldownDuration;
+
+        if (ability.CastTime > 0f)
+        {
+            isCasting = true;
+            castStartTime = Time.time;
+            castDuration = ability.CastTime;
+            castingAbilityName = ability.AbilityName;
         }
     }
 
@@ -232,9 +254,12 @@ public class PlayerAbilities : NetworkBehaviour
         Camera cam = playerCameraComponent.Camera;
         if (cam == null) return;
 
+        // Triggers ignored too - a ground patch or following zone is a
+        // trigger volume, not ground, and would otherwise catch the ray and
+        // float the reticle up onto its surface.
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
         int ignoreCharacters = ~LayerMask.GetMask("Characters");
-        if (Physics.Raycast(ray, out RaycastHit hit, 200f, ignoreCharacters))
+        if (Physics.Raycast(ray, out RaycastHit hit, 200f, ignoreCharacters, QueryTriggerInteraction.Ignore))
         {
             aimedGroundPoint = hit.point;
             reticle.SetPosition(hit.point);
@@ -263,16 +288,7 @@ public class PlayerAbilities : NetworkBehaviour
         CancelGroundTargeting();
 
         CastGroundTargetedAbilityServerRpc(slot, point);
-        predictedCooldownReady[ability] = Time.time + ability.Cooldown;
-        predictedGlobalCooldownReady = Time.time + globalCooldownDuration;
-
-        if (ability.CastTime > 0f)
-        {
-            isCasting = true;
-            castStartTime = Time.time;
-            castDuration = ability.CastTime;
-            castingAbilityName = ability.AbilityName;
-        }
+        BeginPredictedCast(ability);
     }
 
     // Mirrors the server's start-of-cast checks using replicated state, so
@@ -291,12 +307,12 @@ public class PlayerAbilities : NetworkBehaviour
         // loadout instead.
         if (ability.RequiresMeleeWeapon)
         {
-            ItemData mainHand = ProfileStore.Current.GetGear(GearSlot.MainHand);
+            ItemData mainHand = ProfileStore.Current.GetEquipment(EquipmentSlot.MainHand);
             if (mainHand == null || mainHand.Weapon == null) return "Requires a melee weapon";
         }
         if (ability.RequiresShield)
         {
-            ItemData offHand = ProfileStore.Current.GetGear(GearSlot.OffHand);
+            ItemData offHand = ProfileStore.Current.GetEquipment(EquipmentSlot.OffHand);
             if (offHand == null || !offHand.IsShield) return "Requires a shield";
         }
 
@@ -392,7 +408,7 @@ public class PlayerAbilities : NetworkBehaviour
             if (ability == null) continue;
 
             GUI.Label(new Rect(rect.x, rect.y + 4f, rect.width, 28f), ability.AbilityName, small);
-            string keyText = ability.IsAuraSpell ? "Always On" : (profile.GetSlotKey(i)?.DisplayName ?? "-");
+            string keyText = ability.IsAuraSpell ? "Passive" : (profile.GetSlotKey(i)?.DisplayName ?? "-");
             GUI.Label(new Rect(rect.x, rect.yMax - 16f, rect.width, 14f), keyText, small);
 
             if (ability.IsAuraSpell) continue; // no cooldown to show - always active
@@ -417,15 +433,21 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     // Server-only. Called on death (see PlayerRespawn.HandleDeath) -
-    // clears every ability's cooldown and the global cooldown, both
-    // server-side and (via RPC) the owner's own predicted copy, so a
-    // fresh respawn doesn't still show abilities on cooldown from the
-    // fight that killed them.
+    // clears every ability's cooldown and the global cooldown, and cancels
+    // any cast still in progress, both server-side and (via RPC) the
+    // owner's own predicted copy - so a fresh respawn doesn't still show
+    // abilities on cooldown from the fight that killed them, isn't stuck
+    // "Already casting" until the dead cast's timer runs out, and doesn't
+    // have that cast resolve from the respawn point.
     public void ResetCooldowns()
     {
         if (!IsServer) return;
         cooldownReadyTime.Clear();
         serverGlobalCooldownReadyTime = 0f;
+        if (pendingCast != null) StopCoroutine(pendingCast);
+        pendingCast = null;
+        serverCastEndTime = 0f;
+        autoAttack.ServerCastLockUntil = 0f;
         ResetCooldownsClientRpc();
     }
 
@@ -435,6 +457,7 @@ public class PlayerAbilities : NetworkBehaviour
         if (!IsOwner) return;
         predictedCooldownReady.Clear();
         predictedGlobalCooldownReady = 0f;
+        isCasting = false;
     }
 
     // Start-of-cast rejection: undo the optimistic cooldown and cast bar.
@@ -461,21 +484,7 @@ public class PlayerAbilities : NetworkBehaviour
         AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null) return;
 
-        if (Time.time < serverCastEndTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Already casting");
-            return;
-        }
-        if (Time.time < serverGlobalCooldownReadyTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Global cooldown");
-            return;
-        }
-        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Not ready");
-            return;
-        }
+        if (RejectIfNotReady(ability)) return;
 
         if (ability.RequiresTarget)
         {
@@ -518,21 +527,59 @@ public class PlayerAbilities : NetworkBehaviour
         }
 
         // Mana is only actually spent once the cast succeeds - see
-        // ResolveAbility - not here at cast start. This check just stops an
-        // unaffordable cast from starting in the first place.
+        // ResolveAbility - not here at cast start. The check above just
+        // stops an unaffordable cast from starting in the first place.
+        StartServerCast(ability, () => ResolveAbility(ability, targetNetworkObjectId));
+    }
+
+    // The start-of-cast gate every cast shares, whatever it targets: one
+    // cast at a time, the global cooldown, then the ability's own cooldown.
+    // Returns true (and tells the owner why) if the cast may not start.
+    private bool RejectIfNotReady(AbilityData ability)
+    {
+        if (Time.time < serverCastEndTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Already casting");
+            return true;
+        }
+        if (Time.time < serverGlobalCooldownReadyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Global cooldown");
+            return true;
+        }
+        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
+        {
+            NotifyCastRejectedClientRpc(ability.Id, "Not ready");
+            return true;
+        }
+        return false;
+    }
+
+    // Every start-of-cast check has passed: commit the cooldowns, then
+    // either resolve now (instant) or after the cast time, with the hand
+    // VFX playing for everyone in the meantime. A PlaysAnyCastAnimation
+    // ability always waits at least CastAnimationLeadTime before resolving,
+    // even if it's normally instant - see ResolveAfterCastTime - so its
+    // animation always gets to play before the effect lands.
+    private void StartServerCast(AbilityData ability, Action resolve)
+    {
         cooldownReadyTime[ability] = Time.time + ability.Cooldown;
         serverGlobalCooldownReadyTime = Time.time + globalCooldownDuration;
 
-        if (ability.CastTime > 0f)
+        if (ability.CastTime <= 0f && !ability.PlaysAnyCastAnimation)
         {
-            serverCastEndTime = Time.time + ability.CastTime;
-            PlayCastVfxClientRpc(ability.Id, ability.CastTime);
-            StartCoroutine(ResolveAfterCastTime(ability, targetNetworkObjectId, ability.CastTime));
+            resolve();
+            return;
         }
-        else
-        {
-            ResolveAbility(ability, targetNetworkObjectId);
-        }
+
+        float totalWait = ability.PlaysAnyCastAnimation
+            ? Mathf.Max(ability.CastTime, CastAnimationLeadTime)
+            : ability.CastTime;
+
+        serverCastEndTime = Time.time + totalWait;
+        autoAttack.ServerCastLockUntil = serverCastEndTime;
+        if (ability.CastTime > 0f) PlayCastVfxClientRpc(ability.Id, ability.CastTime);
+        pendingCast = StartCoroutine(ResolveAfterCastTime(ability, totalWait, ++castSerial, resolve));
     }
 
     // Everyone sees the caster's hand-glow VFX, not just the owner - it's
@@ -557,10 +604,57 @@ public class PlayerAbilities : NetworkBehaviour
         Destroy(vfxInstance, duration);
     }
 
-    private IEnumerator ResolveAfterCastTime(AbilityData ability, ulong targetNetworkObjectId, float castTime)
+    // serial identifies WHICH cast this coroutine belongs to: a new cast can
+    // be accepted (network messages are processed early in the frame) in
+    // the same frame this one finishes waiting (coroutines resume later in
+    // it), by which point pendingCast already points at the NEW cast - so
+    // only clear the handle if it's still this cast's own, or a death
+    // during that second cast would find nothing to cancel.
+    //
+    // totalWait is the actual total delay before resolve() (computed by the
+    // caller - see StartServerCast): for a PlaysAnyCastAnimation ability
+    // this is at least CastAnimationLeadTime even if CastTime is 0, so the
+    // animation trigger always fires CastAnimationLeadTime before resolve()
+    // rather than in the same instant.
+    private IEnumerator ResolveAfterCastTime(AbilityData ability, float totalWait, int serial, Action resolve)
     {
-        yield return new WaitForSeconds(castTime);
-        ResolveAbility(ability, targetNetworkObjectId);
+        if (ability.PlaysAnyCastAnimation)
+        {
+            yield return new WaitForSeconds(totalWait - CastAnimationLeadTime);
+            if (ability.PlaysCastAttackAnimation) PlayCastAttackAnimationClientRpc();
+            if (ability.PlaysCastHealAnimation) PlayCastHealAnimationClientRpc();
+            yield return new WaitForSeconds(CastAnimationLeadTime);
+        }
+        else
+        {
+            yield return new WaitForSeconds(totalWait);
+        }
+
+        if (serial == castSerial) pendingCast = null;
+        resolve();
+    }
+
+    // Purely cosmetic - the caster's Stander@Magic_Attack1 swing (see
+    // AbilityData.PlaysCastAttackAnimation), fired via the shared
+    // "castAttack" Animator trigger. Same owner-authoritative-NetworkAnimator
+    // pattern PlayerAutoAttack.PlayAttackSwingClientRpc uses for basic-attack
+    // swings: the server decides the cast is happening, but only the
+    // owner's own SetTrigger call actually replicates to everyone else.
+    [ClientRpc]
+    private void PlayCastAttackAnimationClientRpc()
+    {
+        if (!IsOwner) return;
+        appearance.ActiveAnimator?.SetTrigger("castAttack");
+    }
+
+    // Same pattern as PlayCastAttackAnimationClientRpc, for the shared
+    // Stander@Sub_Spell1 (1) heal gesture (see
+    // AbilityData.PlaysCastHealAnimation) via the "castHeal" trigger.
+    [ClientRpc]
+    private void PlayCastHealAnimationClientRpc()
+    {
+        if (!IsOwner) return;
+        appearance.ActiveAnimator?.SetTrigger("castHeal");
     }
 
     private void ResolveAbility(AbilityData ability, ulong targetNetworkObjectId)
@@ -615,7 +709,7 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Target out of facing cone");
             return;
         }
-        if (!HasLineOfSight(targetObject))
+        if (!CombatPhysics.HasLineOfSight(transform.position, targetObject.transform.position))
         {
             NotifyCastFizzledClientRpc("Line of sight blocked");
             return;
@@ -629,11 +723,7 @@ public class PlayerAbilities : NetworkBehaviour
         // Every fizzle check above has passed - the cast is actually
         // succeeding, so this is where mana is spent (not at cast start;
         // a fizzled cast costs nothing).
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         if (ability.ChargeToTarget)
         {
@@ -667,10 +757,21 @@ public class PlayerAbilities : NetworkBehaviour
         }
         else if (ability.ProjectilePrefab != null)
         {
-            Vector3 spawnPosition = transform.position + Vector3.up * 1.5f + transform.forward * 0.5f;
+            // Right hand if resolvable (see CharacterAppearance.Apply() -
+            // the rig is now kept active server-side too, not just on
+            // clients), otherwise the old fixed offset from the root - e.g.
+            // the very first frame or two before Apply() has ever run.
+            // Rotation is always Quaternion.identity regardless: Projectile
+            // .FixedUpdate overwrites it via LookRotation toward the target
+            // starting the very first tick after spawn, so spawn rotation
+            // is never actually visible.
+            Transform rightHand = appearance != null ? appearance.GetRightHandBone() : null;
+            Vector3 spawnPosition = rightHand != null
+                ? rightHand.position
+                : transform.position + Vector3.up * 1.5f + transform.forward * 0.5f;
             GameObject projectileInstance = Instantiate(ability.ProjectilePrefab, spawnPosition, Quaternion.identity);
             projectileInstance.GetComponent<NetworkObject>().Spawn();
-            projectileInstance.GetComponent<Projectile>().Initialize(targetNetworkObjectId, ability, OwnerClientId);
+            projectileInstance.GetComponent<Projectile>().Initialize(targetNetworkObjectId, ability, OwnerClientId, ResolveTotalDamage(ability));
         }
         else
         {
@@ -725,18 +826,12 @@ public class PlayerAbilities : NetworkBehaviour
     // resolve paths.
     private void ResolveAreaAroundCaster(AbilityData ability)
     {
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
-        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
-        {
-            if (candidate == null || candidate.Stats == null || candidate.Stats.CurrentHealth.Value <= 0f) continue;
-            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
-
-            candidate.Stats.ReceiveHit(new HitInfo
+        Vector3 center = transform.position;
+        ForEachLivingTarget(includeCaster: true,
+            candidate => Vector3.Distance(center, candidate.transform.position) <= ability.GroundEffectRadius,
+            candidate => candidate.Stats.ReceiveHit(new HitInfo
             {
                 Heal = ability.HealAmount,
                 ShieldAmount = ability.ShieldAmount,
@@ -744,27 +839,59 @@ public class PlayerAbilities : NetworkBehaviour
                 Source = HitSource.Ability,
                 Effect = ability.Effect,
                 EffectDuration = ability.DirectHitEffectDuration,
-            });
+            }));
+    }
+
+    // Mana is spent at the moment a cast actually succeeds, never at cast
+    // start - every resolve path calls this once its own fizzle checks have
+    // passed. Returns false (and tells the owner) if it can't be paid.
+    private bool TrySpendOrFizzle(AbilityData ability)
+    {
+        if (stats.TrySpendMana(ability.ManaCost)) return true;
+        NotifyCastFizzledClientRpc("Not enough mana");
+        return false;
+    }
+
+    // The one area-effect loop: every living Targetable (player or mob -
+    // area effects hit anyone, by design) that inArea accepts. Iterates a
+    // snapshot rather than the live registry, since apply() deals hits and
+    // a hit can kill. includeCaster is false for every damaging shape
+    // (never hits yourself) and true for the friendly/neutral ones.
+    private void ForEachLivingTarget(bool includeCaster, Func<Targetable, bool> inArea, Action<Targetable> apply)
+    {
+        foreach (Targetable candidate in Registry<Targetable>.Snapshot())
+        {
+            if (candidate == null || candidate.Stats == null) continue;
+            if (!includeCaster && candidate.transform == transform) continue;
+            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
+            if (!inArea(candidate)) continue;
+            apply(candidate);
         }
     }
+
+    // The damaging-hit shape every weapon/area attack shares.
+    private HitInfo DamageHit(AbilityData ability, float damage) => new HitInfo
+    {
+        Damage = damage,
+        AttackerClientId = OwnerClientId,
+        Source = HitSource.Ability,
+        Effect = ability.Effect,
+        EffectDuration = ability.DirectHitEffectDuration,
+    };
 
     // No targeting: applies Effect directly to the caster's own
     // CharacterStats - a plain timed self-buff, not an AoE and not a
     // permanent aura. E.g. Aegis of the Ancient.
     private void ResolveSelfBuff(AbilityData ability)
     {
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
     }
 
 
     // What this caster actually swings with right now (equipped main hand,
-    // or fists), including flat gear bonuses (StatType.WeaponDamageBonus -
+    // or fists), including flat equipment bonuses (StatType.WeaponDamageBonus -
     // e.g. Amulet of the Berserker) - same total PlayerAutoAttack's basic
     // swing deals.
     private float ResolveWeaponDamage()
@@ -795,30 +922,13 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Requires a melee weapon");
             return;
         }
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         float damage = ResolveTotalDamage(ability);
-
-        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
-        {
-            if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.transform == transform) continue; // never hits the caster
-            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
-            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
-
-            candidate.Stats.ReceiveHit(new HitInfo
-            {
-                Damage = damage,
-                AttackerClientId = OwnerClientId,
-                Source = HitSource.Ability,
-                Effect = ability.Effect,
-                EffectDuration = ability.DirectHitEffectDuration,
-            });
-        }
+        Vector3 center = transform.position;
+        ForEachLivingTarget(includeCaster: false,
+            candidate => Vector3.Distance(center, candidate.transform.position) <= ability.GroundEffectRadius,
+            candidate => candidate.Stats.ReceiveHit(DamageHit(ability, damage)));
     }
 
     // Same as ResolveEnemiesAroundCaster, but only targets within ConeAngle
@@ -830,31 +940,14 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Requires a melee weapon");
             return;
         }
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         float damage = ResolveTotalDamage(ability);
-
-        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
-        {
-            if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.transform == transform) continue; // never hits the caster
-            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
-            if (Vector3.Distance(transform.position, candidate.transform.position) > ability.GroundEffectRadius) continue;
-            if (!FacingCone.IsWithin(transform, candidate.transform.position, ability.ConeAngle)) continue;
-
-            candidate.Stats.ReceiveHit(new HitInfo
-            {
-                Damage = damage,
-                AttackerClientId = OwnerClientId,
-                Source = HitSource.Ability,
-                Effect = ability.Effect,
-                EffectDuration = ability.DirectHitEffectDuration,
-            });
-        }
+        Vector3 center = transform.position;
+        ForEachLivingTarget(includeCaster: false,
+            candidate => Vector3.Distance(center, candidate.transform.position) <= ability.GroundEffectRadius
+                && FacingCone.IsWithin(transform, candidate.transform.position, ability.ConeAngle),
+            candidate => candidate.Stats.ReceiveHit(DamageHit(ability, damage)));
     }
 
     // No targeting: the caster charges straight forward (their own current
@@ -864,11 +957,7 @@ public class PlayerAbilities : NetworkBehaviour
     // abilities use for the actual movement. E.g. Trample.
     private void ResolveChargeForward(AbilityData ability)
     {
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         Vector3 start = transform.position;
         Vector3 flatForward = transform.forward;
@@ -877,25 +966,15 @@ public class PlayerAbilities : NetworkBehaviour
         Vector3 end = start + flatForward * ability.ChargeForwardDistance;
 
         const float pathHitRadius = 2.5f; // how close to the charge line a target needs to be to get hit
-        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
-        {
-            if (candidate == null || candidate.Stats == null) continue;
-            if (candidate.transform == transform) continue; // never hits the caster
-            if (candidate.Stats.CurrentHealth.Value <= 0f) continue;
-
-            Vector3 flatPos = candidate.transform.position;
-            flatPos.y = start.y;
-            if (Vector3.Distance(flatPos, ClosestPointOnSegment(start, end, flatPos)) > pathHitRadius) continue;
-
-            candidate.Stats.ReceiveHit(new HitInfo
+        float damage = ResolveTotalDamage(ability);
+        ForEachLivingTarget(includeCaster: false,
+            candidate =>
             {
-                Damage = ability.Damage,
-                AttackerClientId = OwnerClientId,
-                Source = HitSource.Ability,
-                Effect = ability.Effect,
-                EffectDuration = ability.DirectHitEffectDuration,
-            });
-        }
+                Vector3 flatPos = candidate.transform.position;
+                flatPos.y = start.y;
+                return Vector3.Distance(flatPos, ClosestPointOnSegment(start, end, flatPos)) <= pathHitRadius;
+            },
+            candidate => candidate.Stats.ReceiveHit(DamageHit(ability, damage)));
 
         float duration = ability.ChargeForwardDistance / Mathf.Max(0.01f, ability.ChargeSpeed) + 0.5f;
         movement.ServerBeginPull(end, ability.ChargeSpeed, duration);
@@ -921,7 +1000,7 @@ public class PlayerAbilities : NetworkBehaviour
         target.Stats.ApplyEffect(ability.Effect, ability.DirectHitEffectDuration, OwnerClientId, HitSource.Ability);
     }
 
-    // Unit-targeted: spawns a FollowingZone centered on the target that
+    // Unit-targeted: spawns a following GroundPatch centered on the target that
     // tracks their position for the ability's duration, reapplying Effect
     // to everyone caught inside - e.g. Arctic Winds. Reuses GroundEffectRadius
     // for the zone's radius and PatchDuration for how long it lasts (same
@@ -930,7 +1009,10 @@ public class PlayerAbilities : NetworkBehaviour
     {
         GameObject instance = Instantiate(ability.FollowingZonePrefab, targetObject.transform.position, Quaternion.identity);
         instance.GetComponent<NetworkObject>().Spawn();
-        instance.GetComponent<FollowingZone>().Initialize(targetObject.transform, ability.Effect, ability.PatchDuration, ability.GroundEffectRadius, OwnerClientId, NetworkObjectId);
+        // Same GroundPatch component a fixed fire/ice patch uses - just told
+        // to follow the target and never affect this caster.
+        instance.GetComponent<GroundPatch>().Initialize(ability.Effect, ability.PatchDuration, ability.GroundEffectRadius, OwnerClientId,
+            follow: targetObject.transform, excludedId: NetworkObjectId);
     }
 
     private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 point)
@@ -950,21 +1032,7 @@ public class PlayerAbilities : NetworkBehaviour
         AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null || !ability.IsGroundTargeted) return;
 
-        if (Time.time < serverCastEndTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Already casting");
-            return;
-        }
-        if (Time.time < serverGlobalCooldownReadyTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Global cooldown");
-            return;
-        }
-        if (cooldownReadyTime.TryGetValue(ability, out float readyTime) && Time.time < readyTime)
-        {
-            NotifyCastRejectedClientRpc(ability.Id, "Not ready");
-            return;
-        }
+        if (RejectIfNotReady(ability)) return;
         if (Vector3.Distance(transform.position, groundPosition) > ability.Range)
         {
             NotifyCastRejectedClientRpc(ability.Id, "Out of range");
@@ -976,26 +1044,8 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        // Spent at resolve, not here - see ResolveGroundAbility.
-        cooldownReadyTime[ability] = Time.time + ability.Cooldown;
-        serverGlobalCooldownReadyTime = Time.time + globalCooldownDuration;
-
-        if (ability.CastTime > 0f)
-        {
-            serverCastEndTime = Time.time + ability.CastTime;
-            PlayCastVfxClientRpc(ability.Id, ability.CastTime);
-            StartCoroutine(ResolveGroundAbilityAfterCastTime(ability, groundPosition, ability.CastTime));
-        }
-        else
-        {
-            ResolveGroundAbility(ability, groundPosition);
-        }
-    }
-
-    private IEnumerator ResolveGroundAbilityAfterCastTime(AbilityData ability, Vector3 groundPosition, float castTime)
-    {
-        yield return new WaitForSeconds(castTime);
-        ResolveGroundAbility(ability, groundPosition);
+        // Mana is spent at resolve, not here - see ResolveGroundAbility.
+        StartServerCast(ability, () => ResolveGroundAbility(ability, groundPosition));
     }
 
     // No range/facing/LoS re-check at resolve time (unlike unit-targeted
@@ -1012,11 +1062,7 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         if (ability.ForceSpeed <= 0f || ability.GroundEffectRadius <= 0f) return;
 
@@ -1028,14 +1074,9 @@ public class PlayerAbilities : NetworkBehaviour
         const float pushClearance = 8f; // how far past the radius a push sends its victims
         float pushDistance = ability.GroundEffectRadius + pushClearance;
 
-        foreach (Targetable candidate in FindObjectsByType<Targetable>(FindObjectsSortMode.None))
+        ForEachLivingTarget(includeCaster: true, candidate => FlatOffset(candidate).magnitude <= ability.GroundEffectRadius, candidate =>
         {
-            if (candidate == null) continue;
-            if (candidate.Stats != null && candidate.Stats.CurrentHealth.Value <= 0f) continue;
-
-            Vector3 offset = candidate.transform.position - groundPosition;
-            offset.y = 0f;
-            if (offset.magnitude > ability.GroundEffectRadius) continue;
+            Vector3 offset = FlatOffset(candidate);
 
             Vector3 forceTarget;
             if (ability.PushAway)
@@ -1060,6 +1101,13 @@ public class PlayerAbilities : NetworkBehaviour
             {
                 enemyAi.ServerBeginPull(forceTarget, ability.ForceSpeed, duration);
             }
+        });
+
+        Vector3 FlatOffset(Targetable candidate)
+        {
+            Vector3 offset = candidate.transform.position - groundPosition;
+            offset.y = 0f;
+            return offset;
         }
     }
 
@@ -1075,11 +1123,7 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Structure not configured yet");
             return;
         }
-        if (!stats.TrySpendMana(ability.ManaCost))
-        {
-            NotifyCastFizzledClientRpc("Not enough mana");
-            return;
-        }
+        if (!TrySpendOrFizzle(ability)) return;
 
         if (activeStructures.TryGetValue(ability, out NetworkObject previous) && previous != null)
         {
@@ -1103,18 +1147,4 @@ public class PlayerAbilities : NetworkBehaviour
         return FacingCone.IsWithin(transform, targetObject.transform.position, facingConeAngle);
     }
 
-    private bool HasLineOfSight(NetworkObject targetObject)
-    {
-        Vector3 origin = transform.position + Vector3.up * 1.5f;
-        Vector3 destination = targetObject.transform.position + Vector3.up * 1.5f;
-
-        if (!Physics.Linecast(origin, destination, out RaycastHit hit)) return true;
-
-        // Other creatures never block line of sight, only real environment
-        // geometry does - anything with a Targetable (player or mob) is a
-        // creature, regardless of whether it's the caster/target or some
-        // unrelated mob standing in the way. Stops casts fizzling just
-        // because mobs happened to stack up between you and your target.
-        return hit.collider.GetComponentInParent<Targetable>() != null;
-    }
 }

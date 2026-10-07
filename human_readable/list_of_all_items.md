@@ -1,7 +1,7 @@
 # All items
 
-Every item currently in `Assets/Resources/Data/Items/`, sorted by gear
-slot (in `GearSlot` enum order). Regenerate/update this by hand whenever
+Every item currently in `Assets/Resources/Data/Items/`, sorted by
+equipment slot (in `EquipmentSlot` enum order). Regenerate/update this by hand whenever
 items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 
 ## Helmet
@@ -59,10 +59,10 @@ items are added, renamed, or retuned — it's a snapshot, not auto-generated.
 | Item | Weapon | Effect |
 |---|---|---|
 | Broad Sword | 100 damage / 1.5s swing, 2 range | +40% threat generated, +100 Max Health |
-| Staff of the Magi | 20 damage / 2s swing, 2 range | +250 Max Mana, +5 mana per 5s. Two-handed |
+| Staff of the Magi | 75 damage / 2s swing, 40 range | +250 Max Mana, +5 mana per 5s. Two-handed |
 | 2H Axe | 150 damage / 3s swing, 2 range | Two-handed, no other bonus |
-| Holy Scepter | none | +10% healing done |
-| Hunter's Bow | 60 damage / 2.5s swing, 50 range | No other bonus |
+| Holy Scepter | heals target for 25 / 1.5s swing, 40 range | Your auto attacks now heal the target for 25. +10% healing done |
+| Hunter's Bow | 100 damage / 2s swing, 50 range | Two-handed, no other bonus |
 | Armorbreaker | 100 damage / 1.5s swing, 2 range | On hit, reduces the target's Armor by 2 for 10s, stacking up to 5 times |
 
 ## Off Hand

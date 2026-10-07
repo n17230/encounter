@@ -11,10 +11,16 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ad0f38d90dd851c4bb6817bf45620099, type: 3}
   m_Name: WeaponHuntersBow
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   WeaponName: Hunter's Bow
-  Damage: 60
-  SwingInterval: 2.5
-  Effect: {fileID: 0}
+  Damage: 100
   Range: 50
+  SwingInterval: 2
+  HealAmount: 0
+  Effect: {fileID: 0}
   PoseType: 4
+  AttackAnimationLeadTime: 1
+  ArrowPrefab: {fileID: 2119868889409394066, guid: 6c43eceb099aa4641a85ca6c77208bd0,
+    type: 3}
+  ArrowMissileSpeed: 40
+  ArrowModelRotationOffset: {x: 0, y: -90, z: 0}

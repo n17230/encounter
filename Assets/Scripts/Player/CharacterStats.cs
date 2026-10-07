@@ -22,7 +22,7 @@ public class CharacterStats : NetworkBehaviour
 
     // Regen is paid out in discrete ticks rather than continuously: every
     // regenTickInterval seconds, rate x interval is added. Rates stay in
-    // per-second units so gear/aura bonuses read naturally.
+    // per-second units so equipment/aura bonuses read naturally.
     [SerializeField] private float regenTickInterval = 5f;
 
     public Stat MaxHealth { get; private set; }
@@ -50,7 +50,7 @@ public class CharacterStats : NetworkBehaviour
     public readonly NetworkVariable<float> ShieldAmount =
         new NetworkVariable<float>(0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // The Stat objects above only carry modifiers on the server (gear and
+    // The Stat objects above only carry modifiers on the server (equipment and
     // effects are applied there). Clients need the resulting values for the
     // HUD and, for the owner, for local movement - so the server mirrors
     // them out here whenever they change.
@@ -83,7 +83,7 @@ public class CharacterStats : NetworkBehaviour
     private float combatExpireTime;
 
     // Server-only rolling record of which specific enemies this player has
-    // recently damaged or debuffed - powers single-target-focused gear
+    // recently damaged or debuffed - powers single-target-focused equipment
     // like Hunter's Cloak (CharacterEquipment.UpdateSingleTargetBonuses).
     // Keyed by the mob's NetworkObjectId. Pruned lazily against a generous
     // fixed bound rather than a per-item window, so different items can
@@ -97,6 +97,12 @@ public class CharacterStats : NetworkBehaviour
     public bool IsMob { get; private set; }
 
     public event Action OnDeath;
+
+    // Every currently-active character (players and mobs) - see Registry.
+    public static IReadOnlyList<CharacterStats> All => Registry<CharacterStats>.All;
+
+    private void OnEnable() => Registry<CharacterStats>.Add(this);
+    private void OnDisable() => Registry<CharacterStats>.Remove(this);
 
     private void Awake()
     {
@@ -197,7 +203,7 @@ public class CharacterStats : NetworkBehaviour
 
         if (hit.Effect != null) ApplyEffect(hit.Effect, hit.EffectDuration, hit.AttackerClientId, hit.Source);
 
-        // Single-target-focus gear tracking (e.g. Hunter's Cloak) - narrower
+        // Single-target-focus equipment tracking (e.g. Hunter's Cloak) - narrower
         // than RefreshCombatState above (which fires on any hostile
         // interaction): only real damage or an actual debuff counts,
         // per the design's explicit "damage dealt, or debuff" trigger.
@@ -216,7 +222,7 @@ public class CharacterStats : NetworkBehaviour
     // mob-applied DoT only refreshes this at the moment it's first
     // applied, not on every subsequent tick. Relies on hit.Attacker being
     // set for a mob-sourced hit (every EnemyAI.ReceiveHit call site sets
-    // it) - GroundPatch/FollowingZone never set it, which is fine today
+    // it) - GroundPatch (fixed or following) never sets it, which is fine today
     // since only player-cast abilities spawn those, but a future
     // mob-sourced patch/zone would silently fail to mark this player in
     // combat unless it also sets Attacker.
@@ -234,7 +240,7 @@ public class CharacterStats : NetworkBehaviour
 
     // Server-only. Called on THIS player's own CharacterStats (see
     // ReceiveHit) whenever they damage or debuff mobNetworkObjectId -
-    // powers single-target-focused gear (CharacterEquipment
+    // powers single-target-focused equipment (CharacterEquipment
     // .UpdateSingleTargetBonuses), which queries DistinctEnemiesTouchedWithin.
     public void RecordEnemyInteraction(ulong mobNetworkObjectId)
     {
@@ -292,7 +298,7 @@ public class CharacterStats : NetworkBehaviour
         if (!IsInCombat.Value) IsInCombat.Value = true;
     }
 
-    // Gear (e.g. Aegis of the Unstoppable) and effects (e.g. Aegis of the
+    // Equipment (e.g. Aegis of the Unstoppable) and effects (e.g. Aegis of the
     // Ancient) both just add Flat StatModifiers to BlockChancePercent, so
     // they stack additively through the normal Stat machinery - no
     // special-casing needed here.
@@ -369,7 +375,7 @@ public class CharacterStats : NetworkBehaviour
         return 0f;
     }
 
-    // Immunities are keyed by source the same way modifiers are, so gear
+    // Immunities are keyed by source the same way modifiers are, so equipment
     // can grant and revoke them cleanly on equip/unequip.
     public void AddImmunity(EffectImmunity rule, object source)
     {
@@ -540,7 +546,7 @@ public class CharacterStats : NetworkBehaviour
         return percent > 0f;
     }
 
-    // Threat is scaled by the attacker's own ThreatMultiplier (gear).
+    // Threat is scaled by the attacker's own ThreatMultiplier (equipment).
     private void AddThreat(float amount, ulong attackerClientId)
     {
         if (attackerClientId == NoAttacker || threatTable == null) return;
@@ -662,7 +668,7 @@ public class CharacterStats : NetworkBehaviour
         isDead = false;
     }
 
-    // For when a max stat drops (e.g. unequipping +MaxHealth gear) so the
+    // For when a max stat drops (e.g. unequipping +MaxHealth equipment) so the
     // current value can't sit above the new ceiling.
     public void ClampToMax()
     {
@@ -672,7 +678,7 @@ public class CharacterStats : NetworkBehaviour
     }
 
     // healerClientId (optional) looks up the healer's own HealingMultiplier
-    // (gear) and scales the amount by it, mirroring how DealDamage applies
+    // (equipment) and scales the amount by it, mirroring how DealDamage applies
     // the attacker's DamageMultiplier. NoAttacker (the default) = no
     // scaling, for regen ticks and other sourceless healing - and also
     // means no healing threat below, same reasoning as
@@ -681,6 +687,11 @@ public class CharacterStats : NetworkBehaviour
     public void Heal(float amount, ulong healerClientId = NoAttacker)
     {
         if (!IsServer) return;
+        // A heal landing after death (a HoT tick, a delayed mob heal) would
+        // otherwise lift a dead character back above 0 health while it's
+        // still flagged dead - alive to the UI and tab-targeting, dead to
+        // its own AI. Only RestoreFull brings a character back.
+        if (isDead) return;
         CharacterStats healer = AttackerStats(healerClientId);
         if (healer != null) amount *= healer.HealingMultiplier.Value;
 
@@ -703,12 +714,18 @@ public class CharacterStats : NetworkBehaviour
     private void GenerateHealingThreat(float healAmount, ulong healerClientId)
     {
         if (healAmount <= 0f) return;
+        // Only healing a PLAYER pulls aggro. A mob can be healed by a
+        // player too (area heals hit anyone in range by design), but a
+        // mob's OwnerClientId is the server's id - which on a host is also
+        // the host player's clientId - so the lookup below would credit
+        // threat as if the host had been healed.
+        if (IsMob) return;
 
         CharacterStats healer = AttackerStats(healerClientId);
         float multiplier = healer != null ? healer.ThreatMultiplier.Value : 1f;
         float threatAmount = healAmount * HealingThreatPercent * multiplier;
 
-        foreach (ThreatTable table in FindObjectsByType<ThreatTable>(FindObjectsSortMode.None))
+        foreach (ThreatTable table in ThreatTable.All)
         {
             if (table == null) continue;
             if (!table.ThreatByClientId.TryGetValue(OwnerClientId, out float existingThreat) || existingThreat <= 0f) continue;
@@ -726,7 +743,7 @@ public class CharacterStats : NetworkBehaviour
     }
 
     // baseCost is the ability's listed cost; the character's ManaCostMultiplier
-    // (gear) is applied here so every caller pays the discounted price.
+    // (equipment) is applied here so every caller pays the discounted price.
     public bool TrySpendMana(float baseCost)
     {
         if (!IsServer) return false;

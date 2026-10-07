@@ -110,6 +110,9 @@ public class AuraGroundVisual : NetworkBehaviour
         {
             aura.Instance = Instantiate(prefab);
             aura.Instance.transform.localScale = Vector3.one * sizeMultiplier;
+            // Repositioned under the player every frame below - the
+            // particles themselves have to follow too, not just the emitter.
+            VfxScale.FollowInstance(aura.Instance);
             aura.Renderers.Clear();
             aura.BaseAlpha.Clear();
             foreach (ParticleSystemRenderer renderer in aura.Instance.GetComponentsInChildren<ParticleSystemRenderer>())
@@ -150,13 +153,13 @@ public class AuraGroundVisual : NetworkBehaviour
 
     // This player's rank (1-based) among all currently connected players,
     // sorted by OwnerClientId - the same "join order" identity
-    // PartyFrames.PartyNumber already uses, computed the same
-    // scan-the-scene way (NetworkManager.ConnectedClientsList is
+    // PartyFrames.PartyNumber already uses, computed from the live
+    // character registry (NetworkManager.ConnectedClientsList is
     // server-only, so this can't just read that directly on a client).
     private int ComputePlayerNumber()
     {
         List<ulong> ids = new List<ulong>();
-        foreach (CharacterStats candidate in FindObjectsByType<CharacterStats>(FindObjectsSortMode.None))
+        foreach (CharacterStats candidate in CharacterStats.All)
         {
             if (candidate.GetComponent<PlayerMovement>() == null) continue; // players only
             ids.Add(candidate.OwnerClientId);

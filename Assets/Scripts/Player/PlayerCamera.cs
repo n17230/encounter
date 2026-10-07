@@ -11,8 +11,8 @@ public class PlayerCamera : NetworkBehaviour
     [SerializeField] private float maxPitch = 75f;
     [SerializeField] private float freeLookYawSensitivity = 30f;
 
-    // Up/Down arrow zoom - fixed keys (not rebindable), same pattern as
-    // Tab/backtick/F1-F5. Distance is how far back along the camera's own
+    // Up/Down arrow zoom by default (MovementAction.ZoomIn/ZoomOut,
+    // rebindable on the Options page). Distance is how far back along the camera's own
     // local Z the camera sits from the pivot; held-key, not a per-press
     // step, so it feels like a continuous zoom rather than notches.
     // Saved to the profile via CameraZoomScale (min/max live there, same
@@ -155,14 +155,29 @@ public class PlayerCamera : NetworkBehaviour
             RenderSettings.fogStartDistance = visionRange * 0.6f;
             RenderSettings.fogEndDistance = visionRange;
         }
-        else if (visionEffectActive)
+        else
         {
-            visionEffectActive = false;
-            RenderSettings.fog = cachedFogEnabled;
-            RenderSettings.fogMode = cachedFogMode;
-            RenderSettings.fogStartDistance = cachedFogStart;
-            RenderSettings.fogEndDistance = cachedFogEnd;
-            RenderSettings.fogColor = cachedFogColor;
+            RestoreFog();
         }
+    }
+
+    private void RestoreFog()
+    {
+        if (!visionEffectActive) return;
+        visionEffectActive = false;
+        RenderSettings.fog = cachedFogEnabled;
+        RenderSettings.fogMode = cachedFogMode;
+        RenderSettings.fogStartDistance = cachedFogStart;
+        RenderSettings.fogEndDistance = cachedFogEnd;
+        RenderSettings.fogColor = cachedFogColor;
+    }
+
+    // RenderSettings outlives this player object - leaving (disconnect,
+    // returning to the menu) while still darkened would otherwise strand
+    // the scene in black fog, since nothing is left to notice the effect
+    // ending.
+    public override void OnNetworkDespawn()
+    {
+        if (IsOwner) RestoreFog();
     }
 }

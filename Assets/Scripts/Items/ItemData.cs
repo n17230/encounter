@@ -20,7 +20,7 @@ public class ItemData : ScriptableObject
     // Stable identity used over the network and in saved profiles.
     public string Id;
     public string ItemName;
-    public GearSlot Slot;
+    public EquipmentSlot Slot;
     public List<StatBonus> Bonuses = new List<StatBonus>();
     // Empty for every item except ones with health-percentage-conditional
     // bonuses (currently just Barbarian's Mantle) - see HpThresholdEffect.
@@ -38,8 +38,8 @@ public class ItemData : ScriptableObject
 
     // Only meaningful on a MainHand item: occupies OffHand too, so the two
     // can never both be equipped at once - see
-    // CharacterEquipment.SetGearServerRpc (authoritative) and MainMenu's
-    // gear-equip click handler (mirrors it for immediate UX).
+    // CharacterEquipment.SetEquipmentServerRpc (authoritative) and MainMenu's
+    // equip click handler (mirrors it for immediate UX).
     public bool TwoHanded = false;
 
     // Wearer can press Jump again while airborne to hover in place
@@ -52,10 +52,20 @@ public class ItemData : ScriptableObject
     // CharacterEquipment.HasShieldEquipped.
     public bool IsShield = false;
 
-    // Null for every item today - nothing renders this yet (the Gear menu
-    // still shows every item as an "X" placeholder), this just gives the
-    // data a place to live for whenever icon art gets wired up.
+    // Read by the Equipment panel's equip/inventory grids - wired via the
+    // Encounter/Wire Icons Editor tool, not by hand. Null for whichever
+    // items weren't given an icon yet (e.g. Ember Stone, Holy Scepter) -
+    // those just render an empty icon box.
     public Sprite Icon;
+
+    // Only meaningful on MainHand/OffHand items - the 3D model
+    // CharacterWeaponVisual attaches to the wearer's equip socket while
+    // this item is equipped. Null = nothing shown. AttachProfile is how the
+    // model sits in the socket - shared per weapon category (every sword
+    // points at the same Sword profile), so a new item of an existing
+    // category needs no tuning at all. Null profile = no offset.
+    public GameObject WeaponModelPrefab;
+    public WeaponAttachProfile AttachProfile;
 
     // Active only while CharacterStats.DistinctEnemiesTouchedWithin
     // (SingleTargetWindowSeconds) is <= 1 - i.e. this player has only

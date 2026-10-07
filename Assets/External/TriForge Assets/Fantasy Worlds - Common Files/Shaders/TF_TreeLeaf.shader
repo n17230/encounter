@@ -614,7 +614,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -910,7 +910,7 @@ Shader "TriForge/Tree Branch"
 				float3 objToWorld6_g221 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g223 = tex2D( _ColorVarianceMask, (( objToWorld6_g221 / ( TF_ColorVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g223 = RGBToHSV( temp_output_13_0_g223.rgb );
-				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( tex2DNode8_g223.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
+				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( abs(tex2DNode8_g223.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
 				float4 lerpResult38_g223 = lerp( temp_output_13_0_g223 , float4( hsvTorgb1_g223 , 0.0 ) , ( _ColorVarianceIntensity * TF_ColorVarianceIntensity ));
 				float Value_Mask39_g223 = tex2DNode8_g223.a;
 				float4 lerpResult44_g223 = lerp( lerpResult38_g223 , ( lerpResult38_g223 * Value_Mask39_g223 ) , ( _BrightnessVarianceIntensity * TF_BrightnessVariance ));
@@ -1509,7 +1509,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -2049,7 +2049,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -2598,7 +2598,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -2843,7 +2843,7 @@ Shader "TriForge/Tree Branch"
 				float3 objToWorld6_g221 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g223 = tex2D( _ColorVarianceMask, (( objToWorld6_g221 / ( TF_ColorVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g223 = RGBToHSV( temp_output_13_0_g223.rgb );
-				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( tex2DNode8_g223.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
+				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( abs(tex2DNode8_g223.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
 				float4 lerpResult38_g223 = lerp( temp_output_13_0_g223 , float4( hsvTorgb1_g223 , 0.0 ) , ( _ColorVarianceIntensity * TF_ColorVarianceIntensity ));
 				float Value_Mask39_g223 = tex2DNode8_g223.a;
 				float4 lerpResult44_g223 = lerp( lerpResult38_g223 , ( lerpResult38_g223 * Value_Mask39_g223 ) , ( _BrightnessVarianceIntensity * TF_BrightnessVariance ));
@@ -3214,7 +3214,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -3451,7 +3451,7 @@ Shader "TriForge/Tree Branch"
 				float3 objToWorld6_g221 = mul( GetObjectToWorldMatrix(), float4( float3( 0,0,0 ), 1 ) ).xyz;
 				float4 tex2DNode8_g223 = tex2D( _ColorVarianceMask, (( objToWorld6_g221 / ( TF_ColorVarianceMaskScale * _ColorVarianceMaskScale ) )).xz );
 				float3 hsvTorgb3_g223 = RGBToHSV( temp_output_13_0_g223.rgb );
-				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( tex2DNode8_g223.g , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
+				float3 hsvTorgb1_g223 = HSVToRGB( float3(( ( ( _ColorVarianceBiasShift * TF_ColorVarianceBiasShift ) +  (( _ColorVarianceMin * TF_ColorVarianceMin ) + ( pow( abs(tex2DNode8_g223.g) , _MaskContrast ) - 0.0 ) * ( ( _ColorVarianceMax * TF_ColorVarianceMax ) - ( _ColorVarianceMin * TF_ColorVarianceMin ) ) / ( 1.0 - 0.0 ) ) ) + hsvTorgb3_g223.x ),hsvTorgb3_g223.y,hsvTorgb3_g223.z) );
 				float4 lerpResult38_g223 = lerp( temp_output_13_0_g223 , float4( hsvTorgb1_g223 , 0.0 ) , ( _ColorVarianceIntensity * TF_ColorVarianceIntensity ));
 				float Value_Mask39_g223 = tex2DNode8_g223.a;
 				float4 lerpResult44_g223 = lerp( lerpResult38_g223 , ( lerpResult38_g223 * Value_Mask39_g223 ) , ( _BrightnessVarianceIntensity * TF_BrightnessVariance ));
@@ -3800,7 +3800,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -4391,7 +4391,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -4906,7 +4906,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )
@@ -5420,7 +5420,7 @@ Shader "TriForge/Tree Branch"
 				float ChildRotation43_g217 = radians( ( simplePerlin2D53_g217 * 12.0 * _ChildWindStrength ) );
 				float3 rotatedValue81_g217 = RotateAroundAxis( SelfPivot28_g217, input.positionOS.xyz, normalize( WindVector226_g217 ), ChildRotation43_g217 );
 				float3 ChildRotationResult119_g217 = ( ( ChildMask26_g217 * SelfBendMask34_g217 ) * ( rotatedValue81_g217 - input.positionOS.xyz ) );
-				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( SelfBendMask34_g217 , _BendingMaskStrength ) ) );
+				float temp_output_113_0_g217 = saturate( ( 4.0 * pow( abs(SelfBendMask34_g217) , _BendingMaskStrength ) ) );
 				float dotResult9_g217 = dot( temp_output_19_0_g217 , temp_output_19_0_g217 );
 				float ifLocalVar189_g217 = 0;
 				if( dotResult9_g217 > 0.0001 )

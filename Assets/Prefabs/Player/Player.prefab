@@ -199,6 +199,7 @@ GameObject:
   - component: {fileID: 7777777777777770005}
   - component: {fileID: 8550085969106812046}
   - component: {fileID: 4512126427681701384}
+  - component: {fileID: 8333786749308459092}
   m_Layer: 8
   m_Name: Player
   m_TagString: Untagged
@@ -259,7 +260,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 802842879
+  GlobalObjectIdHash: 347339570
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -433,8 +434,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerTargeting
   ShowTopMostFoldoutHeaderGroup: 1
-  maxTargetDistance: 100
-  tabTargetRange: 70
+  maxTargetDistance: 120
+  tabTargetRange: 90
   clickMaxPixels: 5
   clickMaxSeconds: 0.3
 --- !u!114 &1209163266940824263
@@ -489,6 +490,7 @@ MonoBehaviour:
   - {fileID: 5618338672735851254, guid: 4d2e9ccfd96ba5548be414c2f0d1c6b1, type: 3}
   - {fileID: 5504161804112135288, guid: cc58ecfb90d26f749a3e11ad466a94ff, type: 3}
   - {fileID: 5140896755906972945, guid: 2fad8f205f1a0854792cb276b33d9438, type: 3}
+  - {fileID: 1018177955179531192, guid: 5436daf10e114b64d8b6ececa1e263c7, type: 3}
   summonRadius: 100
   maxSummonCount: 20
   skeletonWarriorPrefab: {fileID: 5504161804112135288, guid: cc58ecfb90d26f749a3e11ad466a94ff,
@@ -571,7 +573,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e4fe234ae16d3515af87e2bc4588d416, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArcaneShieldVisual
   ShowTopMostFoldoutHeaderGroup: 1
   arcaneShieldVfxPrefab: {fileID: 7441502302898250610, guid: 48439413d7bc8ef4591ff58df0cfc946,
@@ -651,7 +653,35 @@ MonoBehaviour:
   NetworkAnimatorExpanded: 0
   AuthorityMode: 1
   m_Animator: {fileID: 4394363360616180111}
-  TransitionStateInfoList: []
+  TransitionStateInfoList:
+  - IsCrossFadeExit: 0
+    Layer: 0
+    OriginatingState: -713168467
+    DestinationState: -713168467
+    TransitionDuration: 0.1
+    TriggerNameHash: 1203776827
+    TransitionIndex: 0
+  - IsCrossFadeExit: 0
+    Layer: 0
+    OriginatingState: -1768906737
+    DestinationState: -1768906737
+    TransitionDuration: 0.1
+    TriggerNameHash: 1203776827
+    TransitionIndex: 0
+  - IsCrossFadeExit: 0
+    Layer: 0
+    OriginatingState: 247109846
+    DestinationState: 247109846
+    TransitionDuration: 0.1
+    TriggerNameHash: 1494526215
+    TransitionIndex: 0
+  - IsCrossFadeExit: 0
+    Layer: 0
+    OriginatingState: -1032234818
+    DestinationState: -1032234818
+    TransitionDuration: 0.1
+    TriggerNameHash: -1086519156
+    TransitionIndex: 0
   AnimatorParameterEntries:
     ParameterEntries:
     - name: speed
@@ -666,7 +696,36 @@ MonoBehaviour:
       NameHash: -1381885996
       Synchronize: 1
       ParameterType: 4
+    - name: attack
+      NameHash: 1203776827
+      Synchronize: 1
+      ParameterType: 9
+    - name: castAttack
+      NameHash: 1494526215
+      Synchronize: 1
+      ParameterType: 9
+    - name: isAttacking
+      NameHash: 973584577
+      Synchronize: 1
+      ParameterType: 4
+    - name: castHeal
+      NameHash: -1086519156
+      Synchronize: 1
+      ParameterType: 9
   AnimatorParametersExpanded: 0
+--- !u!114 &8333786749308459092
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8297905753372389552}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2aaca9e01c84b0cf8e086cb62619180, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Encounter::CharacterWeaponVisual
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1001 &750780691326442567
 PrefabInstance:
   m_ObjectHideFlags: 0

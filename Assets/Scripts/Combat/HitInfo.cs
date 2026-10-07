@@ -1,4 +1,8 @@
-public enum HitSource { Unknown, Melee, Ability, GroundPatch, Aura }
+// Ranged = a ranged weapon's basic attack (a bow shot, a mob's thrown/cast
+// basic attack) - distinct from Melee so "chance to block melee attacks"
+// (CharacterStats.RollBlock) doesn't also block arrows. Appended, never
+// reordered.
+public enum HitSource { Unknown, Melee, Ability, GroundPatch, Aura, Ranged }
 
 // Everything one hostile interaction can carry, so every source of harm
 // (projectile impact, instant cast, melee swing, ground patch) goes

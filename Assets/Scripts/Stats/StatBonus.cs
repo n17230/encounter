@@ -1,6 +1,6 @@
 using System;
 
-// A data-authored stat change: used by gear (permanent while equipped)
+// A data-authored stat change: used by equipment (permanent while equipped)
 // and status effects (while active). Applied as a StatModifier whose
 // source is the owning asset, so removal is by source.
 [Serializable]

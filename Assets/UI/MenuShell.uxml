@@ -4,7 +4,7 @@
     <ui:VisualElement name="shell-root" class="theme-root menu-overlay">
         <ui:VisualElement name="shell-panel" class="panel">
             <ui:Button name="skills-button" text="Skills" class="button shell-button" />
-            <ui:Button name="gear-button" text="Equipment" class="button shell-button" />
+            <ui:Button name="equipment-button" text="Equipment" class="button shell-button" />
             <ui:Button name="appearance-button" text="Character Creation" class="button shell-button" />
             <ui:VisualElement class="shell-spacer" />
             <ui:Button name="summon-button" text="Summon Mobs" class="button shell-button" />
@@ -14,6 +14,8 @@
             <ui:VisualElement class="shell-spacer" />
             <ui:Button name="enter-button" text="Enter Testing Area" class="button shell-button" />
             <ui:Button name="resume-button" text="Resume" class="button shell-button" />
+            <ui:VisualElement class="shell-spacer" />
+            <ui:Button name="exit-button" text="Exit Game" class="button shell-button" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

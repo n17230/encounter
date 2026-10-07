@@ -16,8 +16,15 @@ MonoBehaviour:
   ItemName: Transmitting Beacon
   Slot: 8
   Bonuses: []
+  HpThresholdEffects: []
   Immunities: []
   Auras: []
   Reveals: 0
   BroadcastsLocation: 1
   Weapon: {fileID: 0}
+  TwoHanded: 0
+  GrantsAirHover: 0
+  IsShield: 0
+  Icon: {fileID: 21300000, guid: 1e718d1f56562ce44a5c9c386d1be9ec, type: 3}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12

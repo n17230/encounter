@@ -25,14 +25,19 @@ public class ManaOrb : NetworkBehaviour
         instance.GetComponent<NetworkObject>().Spawn();
     }
 
+    // Two players can touch it within the same physics step - only the
+    // first gets the mana, and Despawn() is only ever called once.
+    private bool consumed;
+
     private void OnTriggerEnter(Collider other)
     {
-        if (!IsServer) return;
+        if (!IsServer || consumed) return;
 
         CharacterStats stats = other.GetComponentInParent<CharacterStats>();
         PlayerMovement player = other.GetComponentInParent<PlayerMovement>();
         if (stats == null || player == null) return;
 
+        consumed = true;
         stats.RestoreMana(ManaAmount);
         NetworkObject.Despawn();
     }

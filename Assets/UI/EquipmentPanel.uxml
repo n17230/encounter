@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="EquipmentPanel.uss" />
+    <ui:VisualElement name="equipment-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="equipment-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Button name="back-button" text="&#8592; Back" class="icon-button" />
+                <ui:Label text="Equipment" class="panel__title" />
+                <ui:VisualElement class="panel__header-spacer" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="equipment-columns">
+                <ui:VisualElement class="equipment-column">
+                    <ui:Label text="EQUIPMENT" class="section-label" />
+                    <ui:VisualElement name="equip-grid" class="equip-grid" />
+                </ui:VisualElement>
+                <ui:VisualElement class="equipment-column equipment-column--inventory">
+                    <ui:Label text="INVENTORY" class="section-label" />
+                    <ui:VisualElement name="category-tabs" class="category-tabs" />
+                    <ui:ScrollView name="inventory-scroll" class="inventory-scroll">
+                        <ui:VisualElement name="inventory-grid" class="inventory-grid" />
+                    </ui:ScrollView>
+                    <ui:Label name="inventory-empty-label" text="(nothing left to equip)" class="equipment-empty-label" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

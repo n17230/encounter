@@ -4,25 +4,25 @@ using System.IO;
 using UnityEngine;
 
 // Everything the local player has chosen that should survive a restart:
-// skill loadout + hotkeys, equipped gear, movement keys, UI scale. Stored
+// skill loadout + hotkeys, equipped equipment, movement keys, UI scale. Stored
 // as data-asset Ids (see GameDatabase) and plain KeyCodes so it's a flat
 // JSON file. Not yet the account-backed, unlock-gated profile from
 // DESIGN_IDEAS.md - but it's the shape that one will grow from.
 [Serializable]
 public class PlayerProfile
 {
-    public const int AbilitySlots = 8;
-    // GearSlot's underlying values aren't contiguous (Legs is pinned to 6
-    // so removing Belt didn't shift every later slot's serialized value),
-    // so GearIds must be sized by the highest underlying value + 1, not by
-    // how many names the enum has.
-    public static readonly int GearSlotCount = HighestGearSlotValue() + 1;
+    public const int AbilitySlots = 5;
+    // EquipmentSlot's underlying values aren't contiguous (Legs is pinned to
+    // 6 so removing Belt didn't shift every later slot's serialized value),
+    // so EquipmentIds must be sized by the highest underlying value + 1, not
+    // by how many names the enum has.
+    public static readonly int EquipmentSlotCount = HighestEquipmentSlotValue() + 1;
     public static readonly int MovementActionCount = Enum.GetValues(typeof(MovementAction)).Length;
 
-    private static int HighestGearSlotValue()
+    private static int HighestEquipmentSlotValue()
     {
         int highest = 0;
-        foreach (GearSlot slot in Enum.GetValues(typeof(GearSlot)))
+        foreach (EquipmentSlot slot in Enum.GetValues(typeof(EquipmentSlot)))
         {
             if ((int)slot > highest) highest = (int)slot;
         }
@@ -32,7 +32,7 @@ public class PlayerProfile
     public string[] SlotAbilityIds = new string[AbilitySlots];
     public KeyCode[] SlotKeys = new KeyCode[AbilitySlots];
     public bool[] SlotKeyShift = new bool[AbilitySlots];
-    public string[] GearIds = new string[GearSlotCount];
+    public string[] EquipmentIds = new string[EquipmentSlotCount];
     public KeyCode[] MovementKeys = (KeyCode[])MovementInput.Defaults.Clone();
     public float UiScale = 1f;
     // Multiplier applied on top of every hardcoded look-sensitivity value
@@ -48,7 +48,7 @@ public class PlayerProfile
     public string ServerAddress = "";
 
     // Cosmetic appearance - see CharacterAppearance. Entirely separate from
-    // GearIds (no stat effect); AppearanceHeadwearId/AppearanceFacialHairId
+    // EquipmentIds (no stat effect); AppearanceHeadwearId/AppearanceFacialHairId
     // empty means none. AppearanceAccessoryIds is a ';'-joined list (free
     // multi-select, any combination) - see CharacterAppearanceApplier.
     public bool AppearanceIsFemale = false;
@@ -83,20 +83,32 @@ public class PlayerProfile
         SlotKeyShift[slot] = key.HasValue && key.Value.RequiresShift;
     }
 
+    // Drag-to-reorder in the Skills panel - swaps two slots' ability, key,
+    // and shift-flag together so the binding stays attached to its ability
+    // rather than staying pinned to the slot index. Works unchanged whether
+    // the target slot is empty or occupied (an empty slot's fields are just
+    // null/None, which swap in the same way as any other value).
+    public void SwapSlots(int a, int b)
+    {
+        (SlotAbilityIds[a], SlotAbilityIds[b]) = (SlotAbilityIds[b], SlotAbilityIds[a]);
+        (SlotKeys[a], SlotKeys[b]) = (SlotKeys[b], SlotKeys[a]);
+        (SlotKeyShift[a], SlotKeyShift[b]) = (SlotKeyShift[b], SlotKeyShift[a]);
+    }
+
     public int IndexOfAbility(AbilityData ability)
     {
         if (ability == null) return -1;
         return Array.IndexOf(SlotAbilityIds, ability.Id);
     }
 
-    public ItemData GetGear(GearSlot slot) => GameDatabase.GetItem(GearIds[(int)slot]);
+    public ItemData GetEquipment(EquipmentSlot slot) => GameDatabase.GetItem(EquipmentIds[(int)slot]);
 
-    public void SetGear(GearSlot slot, ItemData item)
+    public void SetEquipment(EquipmentSlot slot, ItemData item)
     {
-        GearIds[(int)slot] = item != null ? item.Id : null;
+        EquipmentIds[(int)slot] = item != null ? item.Id : null;
     }
 
-    public bool IsEquipped(ItemData item) => item != null && Array.IndexOf(GearIds, item.Id) >= 0;
+    public bool IsEquipped(ItemData item) => item != null && Array.IndexOf(EquipmentIds, item.Id) >= 0;
 
     public AppearanceGender Gender => AppearanceIsFemale ? AppearanceGender.Female : AppearanceGender.Male;
 
@@ -125,7 +137,7 @@ public class PlayerProfile
         Array.Resize(ref SlotAbilityIds, AbilitySlots);
         Array.Resize(ref SlotKeys, AbilitySlots);
         Array.Resize(ref SlotKeyShift, AbilitySlots);
-        Array.Resize(ref GearIds, GearSlotCount);
+        Array.Resize(ref EquipmentIds, EquipmentSlotCount);
 
         // A slot holding an Id that no longer resolves (the ability was
         // renamed or removed since this profile was saved) would otherwise

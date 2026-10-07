@@ -46,3 +46,26 @@ MonoBehaviour:
   RecallTarget: 0
   ExclusiveSingleTarget: 0
   AreaAroundCaster: 0
+  EnemiesAroundCaster: 0
+  ConeAroundCaster: 0
+  ConeAngle: 90
+  RequiresMeleeWeapon: 0
+  RequiresShield: 0
+  WeaponDamagePercent: 0
+  ChargeForwardDistance: 0
+  ChargeToTarget: 0
+  ChargeSpeed: 20
+  IsAuraSpell: 0
+  AuraRange: 40
+  AuraReveals: 0
+  RemovesNegativeEffect: 0
+  IsPersistentStructure: 0
+  StructurePrefab: {fileID: 0}
+  StructureWidth: 0
+  StructureHeight: 5
+  StructureThickness: 2
+  IsFollowingZone: 0
+  FollowingZonePrefab: {fileID: 0}
+  SelfBuff: 0
+  Icon: {fileID: 21300000, guid: ba154716d34e75849a26a1f77272bd14, type: 3}
+  PlaysCastHealAnimation: 1

@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterStats))]
 public class CharacterEquipment : NetworkBehaviour
 {
-    private static readonly int SlotCount = PlayerProfile.GearSlotCount;
+    private static readonly int SlotCount = PlayerProfile.EquipmentSlotCount;
 
     // Auras are re-applied on everyone in range this often, with enough
     // duration to bridge the gap; step out of range and it simply lapses.
@@ -15,7 +16,7 @@ public class CharacterEquipment : NetworkBehaviour
 
     private CharacterStats stats;
     private readonly ItemData[] equippedItems = new ItemData[SlotCount];
-    private bool initialGearApplied;
+    private bool initialEquipmentApplied;
     private float nextAuraPulse;
 
     // Server-wide item uniqueness: at most one connected player may have a
@@ -23,6 +24,12 @@ public class CharacterEquipment : NetworkBehaviour
     // per-instance) and server-only - clients have no visibility into who
     // else holds what.
     private static readonly Dictionary<string, ulong> globalItemOwners = new Dictionary<string, ulong>();
+
+    // Called when a server session ends / the process starts - see NetworkBootstrap.
+    public static void ResetServerSessionState()
+    {
+        globalItemOwners.Clear();
+    }
 
     private static bool TryClaimItem(ItemData item, ulong clientId)
     {
@@ -54,8 +61,19 @@ public class CharacterEquipment : NetworkBehaviour
     public readonly NetworkVariable<bool> BroadcastsLocation =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    // Which item Id (if any) is in MainHand/OffHand, purely so
+    // CharacterWeaponVisual can show the right 3D model on every client -
+    // Server-written (not owner-written like CharacterAppearance's cosmetic
+    // Ids) since it must reflect what the server actually validated as
+    // equipped (two-handed clearing, server-wide uniqueness), not whatever
+    // the owner's client locally thinks is equipped.
+    public readonly NetworkVariable<FixedString32Bytes> MainHandItemId =
+        new NetworkVariable<FixedString32Bytes>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    public readonly NetworkVariable<FixedString32Bytes> OffHandItemId =
+        new NetworkVariable<FixedString32Bytes>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     // AbilityData.IsAuraSpell abilities currently in this caster's loadout -
-    // not gear, so not part of equippedItems. No cast/keybind needed: each
+    // not equipment, so not part of equippedItems. No cast/keybind needed: each
     // one pulses continuously (the same way an item's own Auras would) for
     // as long as it stays slotted, and any number can be active at once -
     // see SetActiveAuras, called by PlayerAbilities.SetLoadoutServerRpc
@@ -94,10 +112,10 @@ public class CharacterEquipment : NetworkBehaviour
     }
 
     // Server-side view of what the main hand swings with (null = unarmed).
-    public WeaponData MainHandWeapon => equippedItems[(int)GearSlot.MainHand] != null ? equippedItems[(int)GearSlot.MainHand].Weapon : null;
+    public WeaponData MainHandWeapon => equippedItems[(int)EquipmentSlot.MainHand] != null ? equippedItems[(int)EquipmentSlot.MainHand].Weapon : null;
 
     // Server-side check for AbilityData.RequiresShield gating.
-    public bool HasShieldEquipped => equippedItems[(int)GearSlot.OffHand] != null && equippedItems[(int)GearSlot.OffHand].IsShield;
+    public bool HasShieldEquipped => equippedItems[(int)EquipmentSlot.OffHand] != null && equippedItems[(int)EquipmentSlot.OffHand].IsShield;
 
     private void Awake()
     {
@@ -108,8 +126,8 @@ public class CharacterEquipment : NetworkBehaviour
     {
         if (!IsOwner) return;
 
-        SyncGearToServer();
-        MainMenu.Closed += SyncGearToServer;
+        SyncEquipmentToServer();
+        MainMenu.Closed += SyncEquipmentToServer;
     }
 
     public override void OnNetworkDespawn()
@@ -119,22 +137,22 @@ public class CharacterEquipment : NetworkBehaviour
             foreach (ItemData item in equippedItems) ReleaseItem(item, OwnerClientId);
         }
         if (!IsOwner) return;
-        MainMenu.Closed -= SyncGearToServer;
+        MainMenu.Closed -= SyncEquipmentToServer;
     }
 
-    private void SyncGearToServer()
+    private void SyncEquipmentToServer()
     {
-        SetGearServerRpc(string.Join(";", ProfileStore.Current.GearIds));
+        SetEquipmentServerRpc(string.Join(";", ProfileStore.Current.EquipmentIds));
     }
 
     [ServerRpc]
-    private void SetGearServerRpc(string joinedItemIds)
+    private void SetEquipmentServerRpc(string joinedItemIds)
     {
         string[] ids = (joinedItemIds ?? "").Split(';');
         for (int slot = 0; slot < SlotCount; slot++)
         {
             ItemData item = slot < ids.Length ? GameDatabase.GetItem(ids[slot]) : null;
-            GearSlot physicalSlot = (GearSlot)slot;
+            EquipmentSlot physicalSlot = (EquipmentSlot)slot;
 
             // A ring item's own Slot is just "Ring1" as a category; it's
             // valid in either physical ring slot. Everything else needs an
@@ -146,9 +164,9 @@ public class CharacterEquipment : NetworkBehaviour
             // MainHand (slot 11) is always processed before OffHand (slot 12)
             // in this loop, equippedItems[MainHand] already reflects this
             // sync's result by the time OffHand is reached.
-            if (physicalSlot == GearSlot.OffHand
-                && equippedItems[(int)GearSlot.MainHand] != null
-                && equippedItems[(int)GearSlot.MainHand].TwoHanded)
+            if (physicalSlot == EquipmentSlot.OffHand
+                && equippedItems[(int)EquipmentSlot.MainHand] != null
+                && equippedItems[(int)EquipmentSlot.MainHand].TwoHanded)
             {
                 item = null;
             }
@@ -165,11 +183,14 @@ public class CharacterEquipment : NetworkBehaviour
         foreach (ItemData equipped in equippedItems) broadcasts |= equipped != null && equipped.BroadcastsLocation;
         BroadcastsLocation.Value = broadcasts;
 
+        MainHandItemId.Value = equippedItems[(int)EquipmentSlot.MainHand]?.Id ?? "";
+        OffHandItemId.Value = equippedItems[(int)EquipmentSlot.OffHand]?.Id ?? "";
+
         // Only the spawn-time application tops the player off; a mid-fight
-        // gear swap from the menu must not double as a free full heal.
-        if (!initialGearApplied)
+        // equipment swap from the menu must not double as a free full heal.
+        if (!initialEquipmentApplied)
         {
-            initialGearApplied = true;
+            initialEquipmentApplied = true;
             stats.RestoreFull();
         }
         else
@@ -291,7 +312,7 @@ public class CharacterEquipment : NetworkBehaviour
         }
     }
 
-    private void Equip(GearSlot slot, ItemData item)
+    private void Equip(EquipmentSlot slot, ItemData item)
     {
         int index = (int)slot;
         ItemData previous = equippedItems[index];

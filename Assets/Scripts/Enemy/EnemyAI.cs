@@ -4,6 +4,15 @@ using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
 
+// Runs its Awake before NetworkAnimator's (default order 0) on purpose:
+// NetworkAnimator.Awake only builds its parameter/state caches if its
+// Animator is already assigned at that exact moment, and the server then
+// calls CheckParametersChanged() every network tick with no null guard - a
+// NetworkAnimator whose Awake ran first (or that never gets an Animator at
+// all) throws a NullReferenceException every tick. This Awake is what
+// assigns that Animator, so it has to win the ordering race rather than
+// leave it to Unity's unspecified component Awake order.
+[DefaultExecutionOrder(-100)]
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(CharacterStats))]
 public class EnemyAI : NetworkBehaviour
@@ -127,19 +136,33 @@ public class EnemyAI : NetworkBehaviour
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
         threatTable = GetComponent<ThreatTable>();
-        // Optional - mobs whose visual has no Animator (or no visual at
-        // all, e.g. the fallback capsule) just skip all animation calls.
-        animator = GetComponentInChildren<Animator>();
+        Animator visualAnimator = GetComponentInChildren<Animator>();
+        // Optional - only an Animator that actually has a controller is
+        // worth driving; a mob whose visual has none (or no visual at all,
+        // e.g. the fallback capsule) just skips every animation call rather
+        // than spamming "Animator is not playing an AnimatorController".
+        animator = visualAnimator != null && visualAnimator.runtimeAnimatorController != null ? visualAnimator : null;
 
         // NetworkAnimator lives on the shared MobNPC base, but each mob's
         // actual Animator is on a different nested visual child - so it
-        // can't be wired once via a prefab override. Assign it here instead.
+        // can't be wired once via a prefab override. Assign it here instead
+        // (see the DefaultExecutionOrder note on this class for why this
+        // must happen before NetworkAnimator's own Awake). It must never be
+        // left null: a non-null Animator with no controller is handled
+        // safely by NetworkAnimator, a null one throws every tick - so a
+        // mob with no Animator anywhere gets a bare placeholder.
         NetworkAnimator networkAnimator = GetComponent<NetworkAnimator>();
-        if (networkAnimator != null && animator != null)
+        if (networkAnimator != null)
         {
-            networkAnimator.Animator = animator;
+            networkAnimator.Animator = visualAnimator != null ? visualAnimator : gameObject.AddComponent<Animator>();
         }
     }
+
+    // Every currently-active mob - see Registry.
+    public static IReadOnlyList<EnemyAI> All => Registry<EnemyAI>.All;
+
+    private void OnEnable() => Registry<EnemyAI>.Add(this);
+    private void OnDisable() => Registry<EnemyAI>.Remove(this);
 
     public override void OnNetworkSpawn()
     {
@@ -169,17 +192,16 @@ public class EnemyAI : NetworkBehaviour
         StartCoroutine(DespawnAfterDelay());
     }
 
-    // "Death resets the tracker" for single-target-focused gear (e.g.
+    // "Death resets the tracker" for single-target-focused equipment (e.g.
     // Hunter's Cloak) - every player's own tracked-enemy record forgets
     // this mob, so switching to a new target after a kill doesn't count as
     // "already fighting 2 enemies" for whoever was single-target focused
-    // on it. Same scan-every-CharacterStats pattern PlayerRespawn
-    // .ResetThreatGenerated uses for the analogous "every ThreatTable" case.
+    // on it.
     private void NotifyEnemyDeathForTracking()
     {
-        foreach (CharacterStats stats in FindObjectsByType<CharacterStats>(FindObjectsSortMode.None))
+        foreach (CharacterStats character in CharacterStats.All)
         {
-            if (!stats.IsMob) stats.RemoveTrackedEnemy(NetworkObjectId);
+            if (!character.IsMob) character.RemoveTrackedEnemy(NetworkObjectId);
         }
     }
 
@@ -284,6 +306,10 @@ public class EnemyAI : NetworkBehaviour
         {
             MoveWithGravity(Vector3.zero);
             if (animator != null) animator.SetFloat("speed", 0f);
+            // Keep facing the target while standing in range - otherwise
+            // rotation only ever updates while chasing, and a player
+            // circling a mob ends up attacked by its back.
+            FaceTowards(toTarget);
 
             if (Time.time >= nextAttackTime)
             {
@@ -314,7 +340,7 @@ public class EnemyAI : NetworkBehaviour
                         Damage = weapon.Damage * modifier,
                         AttackerClientId = CharacterStats.NoAttacker,
                         Attacker = stats,
-                        Source = HitSource.Melee,
+                        Source = weapon.BasicAttackSource,
                         Effect = weapon.Effect,
                     });
                 }
@@ -457,7 +483,7 @@ public class EnemyAI : NetworkBehaviour
 
     private static EnemyAI FindAliveTactician()
     {
-        foreach (EnemyAI mob in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))
+        foreach (EnemyAI mob in All)
         {
             if (mob.mobRole == MobRole.SkeletonTactician && !mob.isDead) return mob;
         }
@@ -467,7 +493,7 @@ public class EnemyAI : NetworkBehaviour
     private static List<EnemyAI> FindAllAllies(MobRole role)
     {
         List<EnemyAI> result = new List<EnemyAI>();
-        foreach (EnemyAI mob in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))
+        foreach (EnemyAI mob in All)
         {
             if (mob.mobRole == role && !mob.isDead) result.Add(mob);
         }
@@ -478,7 +504,7 @@ public class EnemyAI : NetworkBehaviour
     {
         EnemyAI best = null;
         float bestDist = float.MaxValue;
-        foreach (EnemyAI mob in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))
+        foreach (EnemyAI mob in All)
         {
             if (mob == this || mob.mobRole != role || mob.isDead) continue;
             float dist = Vector3.Distance(transform.position, mob.transform.position);
@@ -500,7 +526,7 @@ public class EnemyAI : NetworkBehaviour
     {
         EnemyAI best = null;
         float bestFraction = hpFractionThreshold;
-        foreach (EnemyAI mob in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))
+        foreach (EnemyAI mob in All)
         {
             if (mob.mobRole == MobRole.None || mob.isDead || mob.stats.MaxHealth.Value <= 0f) continue;
             float fraction = mob.stats.CurrentHealth.Value / mob.stats.MaxHealth.Value;
@@ -519,7 +545,7 @@ public class EnemyAI : NetworkBehaviour
     private int CountAliveEscort()
     {
         int count = 0;
-        foreach (EnemyAI mob in FindObjectsByType<EnemyAI>(FindObjectsSortMode.None))
+        foreach (EnemyAI mob in All)
         {
             if (mob != this && mob.mobRole != MobRole.None && mob.mobRole != MobRole.SkeletonTactician && !mob.isDead) count++;
         }
@@ -776,7 +802,10 @@ public class EnemyAI : NetworkBehaviour
         toTarget.y = 0f;
         float distance = toTarget.magnitude;
 
-        if (!tacticianEngaged && distance <= tacticianMeleeEngageRange) tacticianEngaged = true;
+        // BOSS_DESIGN.md: forced into melee once a player "directly engages
+        // it, or gets within 15 yards of it" - either one latches it for
+        // the rest of the fight.
+        if (!tacticianEngaged && (distance <= tacticianMeleeEngageRange || HasBeenAttacked())) tacticianEngaged = true;
         bool useMelee = tacticianEngaged || CountAliveEscort() < 3;
 
         WeaponData weapon = useMelee ? tacticianMeleeWeapon : tacticianRangedWeapon;
@@ -804,6 +833,7 @@ public class EnemyAI : NetworkBehaviour
 
         MoveWithGravity(Vector3.zero);
         if (animator != null) animator.SetFloat("speed", 0f);
+        FaceTowards(toTarget);
 
         if (Time.time >= nextAttackTime && weapon != null)
         {
@@ -814,10 +844,30 @@ public class EnemyAI : NetworkBehaviour
                 Damage = weapon.Damage,
                 AttackerClientId = CharacterStats.NoAttacker,
                 Attacker = stats,
-                Source = useMelee ? HitSource.Melee : HitSource.Ability,
+                Source = weapon.BasicAttackSource,
                 Effect = weapon.Effect,
             });
         }
+    }
+
+    // Whether any player has actually attacked this mob yet. A ThreatTable
+    // entry is the precise signal (damage and taunts both create one -
+    // healing threat can't, it only ever adds to an existing entry); a mob
+    // with no ThreatTable falls back to "has lost any health".
+    private bool HasBeenAttacked()
+    {
+        if (threatTable == null) return stats.CurrentHealth.Value < stats.MaxHealth.Value;
+
+        foreach (KeyValuePair<ulong, float> entry in threatTable.ThreatByClientId)
+        {
+            if (entry.Value > 0f) return true;
+        }
+        return false;
+    }
+
+    private void FaceTowards(Vector3 flatDirection)
+    {
+        if (flatDirection.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(flatDirection.normalized);
     }
 
     private void MoveWithGravity(Vector3 horizontalVelocity)

@@ -1,6 +1,6 @@
 using System;
 
-// "This gear makes you immune to that status effect" - optionally only
+// "This equipment makes you immune to that status effect" - optionally only
 // when it would come from a ground patch (ice cleats: immune to being
 // slowed by ice on the ground, but a bolt to the face still slows you).
 [Serializable]

@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b307c8249b139174180ff27d8228a6f3, type: 3}
   m_Name: GearTheEverflow
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   Id: the_everflow
   ItemName: The Everflow
   Slot: 10
@@ -26,3 +26,8 @@ MonoBehaviour:
   BroadcastsLocation: 0
   Weapon: {fileID: 0}
   TwoHanded: 0
+  GrantsAirHover: 0
+  IsShield: 0
+  Icon: {fileID: 21300000, guid: 53e025cbd3859b34d8ee403ba47b5c3b, type: 3}
+  SingleTargetBonuses: []
+  SingleTargetWindowSeconds: 12
