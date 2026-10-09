@@ -95,9 +95,19 @@ public class PlayerCamera : NetworkBehaviour
         }
         else if (turning)
         {
-            // Right-drag turning rotates the body itself to match the
-            // camera, so the camera re-centers behind it.
-            freeLookYaw = 0f;
+            // Right-drag turning rotates the body to match wherever the
+            // camera was already looking (any free-look yaw built up via
+            // left-drag), rather than snapping the camera back to match
+            // the body's current facing - so starting to turn-and-run
+            // continues in the direction you were already viewing. Only
+            // fires once per turn-session: freeLookYaw is already 0 on
+            // every subsequent frame while turning (freeLooking can't be
+            // true at the same time, so nothing re-accumulates it).
+            if (freeLookYaw != 0f)
+            {
+                transform.Rotate(Vector3.up, freeLookYaw);
+                freeLookYaw = 0f;
+            }
         }
         // Otherwise (free look just released, nothing held): hold the
         // camera where it was left rather than snapping back.

@@ -20,3 +20,4 @@ MonoBehaviour:
   TickHeal: 10
   TickInterval: 5
   Modifiers: []
+  Icon: {fileID: 21300000, guid: d2cbfa10a16394a429936e3b1ff0c84d, type: 3}

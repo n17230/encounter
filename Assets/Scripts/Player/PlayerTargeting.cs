@@ -33,6 +33,8 @@ public class PlayerTargeting : NetworkBehaviour
     private Targetable self;
     private Vector3 rightDownPosition;
     private float rightDownTime;
+    private Vector3 leftDownPosition;
+    private float leftDownTime;
 
     private void Awake()
     {
@@ -84,6 +86,21 @@ public class PlayerTargeting : NetworkBehaviour
                 CurrentTarget = clicked;
                 AttackRequested?.Invoke(clicked);
             }
+        }
+
+        // A left-click that doesn't move the mouse is a click (target
+        // only, no auto-attack - that's right-click's own job); anything
+        // more is the free-look drag PlayerCamera already reads this same
+        // button for.
+        if (Input.GetMouseButtonDown(0))
+        {
+            leftDownPosition = Input.mousePosition;
+            leftDownTime = Time.time;
+        }
+        else if (Input.GetMouseButtonUp(0) && IsClick(leftDownPosition, leftDownTime))
+        {
+            Targetable clicked = RaycastTarget();
+            if (clicked != null && clicked != self) CurrentTarget = clicked;
         }
     }
 

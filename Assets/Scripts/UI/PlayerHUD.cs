@@ -88,8 +88,8 @@ public class PlayerHUD : NetworkBehaviour
         PartyFrames.Draw(minimapBlips, OwnerClientId);
         DrawBar(10, UIScale.Height - 50, 200, 20, stats.CurrentHealth.Value, stats.SyncedMaxHealth.Value, Color.red);
         DrawBar(10, UIScale.Height - 25, 200, 20, stats.CurrentMana.Value, stats.SyncedMaxMana.Value, Color.blue);
-        DrawShieldLabel(stats, 10, UIScale.Height - 92);
-        GUI.Label(new Rect(10, UIScale.Height - 72, 400, 20), DescribeEffects(stats));
+        DrawShieldLabel(stats, 10, UIScale.Height - 104);
+        DrawEffects(stats, 10, UIScale.Height - 84);
 
         DrawTargetFrame();
     }
@@ -105,13 +105,13 @@ public class PlayerHUD : NetworkBehaviour
         {
             DrawBar(10, 32, 200, 16, target.Stats.CurrentHealth.Value, target.Stats.SyncedMaxHealth.Value, Color.red);
             DrawShieldLabel(target.Stats, 10, 50);
-            GUI.Label(new Rect(10, 68, 400, 20), DescribeEffects(target.Stats));
+            DrawEffects(target.Stats, 10, 68);
         }
 
         if (autoAttack != null && autoAttack.IsArmed)
         {
             WeaponData weapon = autoAttack.LocalWeapon;
-            GUI.Label(new Rect(10, 86, 300, 20), $"Auto-attacking ({(weapon != null ? weapon.WeaponName : "unarmed")})");
+            GUI.Label(new Rect(10, 98, 300, 20), $"Auto-attacking ({(weapon != null ? weapon.WeaponName : "unarmed")})");
         }
     }
 
@@ -122,21 +122,39 @@ public class PlayerHUD : NetworkBehaviour
         GUI.Label(new Rect(x, y, 200, 18), $"Shield: {subject.ShieldAmount.Value:0}", shieldStyle);
     }
 
-    private string DescribeEffects(CharacterStats subject)
+    // Effects with their own Icon set (currently just the two aura-pulsed
+    // effects, EffectRejuvenation/EffectManaAura) render as a small icon
+    // instead of "Name Xs" text - a live countdown is meaningless noise
+    // for something that's continuously re-refreshed by the aura. Icons
+    // draw first, left to right, then the remaining text-based effects
+    // share one label starting after them.
+    private void DrawEffects(CharacterStats subject, float x, float y)
     {
-        if (subject.ActiveEffects.Count == 0) return "";
+        if (subject.ActiveEffects.Count == 0) return;
 
+        const float auraIconSize = 28f; // 25% of the 56px ability bar slot's AREA (0.5 linear, since area scales with the square)
         double now = NetworkManager.ServerTime.Time;
+        float iconX = x;
         StringBuilder sb = new StringBuilder();
+
         foreach (ActiveEffectNet entry in subject.ActiveEffects)
         {
             StatusEffectData effect = GameDatabase.GetEffect(entry.EffectId.ToString());
+
+            if (effect != null && effect.Icon != null)
+            {
+                GUI.DrawTexture(new Rect(iconX, y, auraIconSize, auraIconSize), effect.Icon.texture);
+                iconX += auraIconSize + 2f;
+                continue;
+            }
+
             string name = effect != null ? effect.DisplayName : entry.EffectId.ToString();
             double remaining = System.Math.Max(0.0, entry.ExpireServerTime - now);
             if (sb.Length > 0) sb.Append("   ");
             sb.Append($"{name} {remaining:0.0}s");
         }
-        return sb.ToString();
+
+        if (sb.Length > 0) GUI.Label(new Rect(iconX, y, 400f, 20f), sb.ToString());
     }
 
     private void DrawBar(float x, float y, float width, float height, float current, float max, Color fillColor)

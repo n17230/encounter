@@ -21,3 +21,4 @@ MonoBehaviour:
   - Stat: 3
     ModifierType: 0
     Value: 1.2
+  Icon: {fileID: 21300000, guid: 2a959e97821ba534b91f0dec850e8c11, type: 3}

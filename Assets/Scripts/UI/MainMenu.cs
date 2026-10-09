@@ -323,9 +323,12 @@ public class MainMenu : MonoBehaviour
     private static int CategorizeAbility(AbilityData ability)
     {
         if (ability.IsAuraSpell) return 0;
-        if (ability.HealAmount > 0f || ability.ShieldAmount > 0f) return 1;
-        if (ability.RequiresMeleeWeapon) return 2;
-        if (ability.Damage > 0f) return 3;
+        // A heal-over-time/damage-over-time ability has 0 in its own
+        // HealAmount/Damage (the real number lives on the applied Effect's
+        // TickHeal/TickDamage instead) - e.g. Everliving Touch, Soul Siphon.
+        if (ability.HealAmount > 0f || ability.ShieldAmount > 0f || (ability.Effect != null && ability.Effect.TickHeal > 0f)) return 1;
+        if (ability.RequiresMeleeWeapon || ability.RequiresShield) return 2;
+        if (ability.Damage > 0f || (ability.Effect != null && ability.Effect.TickDamage > 0f)) return 3;
         return 4;
     }
 

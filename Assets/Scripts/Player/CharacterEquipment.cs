@@ -82,7 +82,7 @@ public class CharacterEquipment : NetworkBehaviour
     public readonly NetworkVariable<bool> CastAuraRevealsMobs =
         new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    // Whether specifically Aura of Replenishment/Regeneration are slotted -
+    // Whether specifically Aura: Replenish/Regeneration are slotted -
     // synced to everyone (unlike activeAuraAbilities, server-only) so
     // AuraGroundVisual can show the right VFX under a player on every
     // client, not just their own. Same pattern as CastAuraRevealsMobs,

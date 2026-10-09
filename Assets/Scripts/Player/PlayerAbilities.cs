@@ -384,34 +384,48 @@ public class PlayerAbilities : NetworkBehaviour
         }
     }
 
-    // Bottom-centre row of the 8 loadout slots: key, name, and a cooldown
-    // sweep driven by the predicted cooldowns (so it starts on key press).
+    // Bottom-centre row of hotkey-castable loadout slots: key, name, and a
+    // cooldown sweep driven by the predicted cooldowns (so it starts on key
+    // press). Aura spells have no hotkey or cooldown at all (see
+    // PlayerAbilities' own key-press loop, which already skips them), so
+    // they get no bar slot either - only slots holding a real castable
+    // ability are shown, compacted left to right with no gaps for empty or
+    // aura slots.
     private void DrawAbilityBar(float bottomY)
     {
         const float slotSize = 56f;
         const float gap = 4f;
-        int slotCount = PlayerProfile.AbilitySlots;
+        PlayerProfile profile = ProfileStore.Current;
+
+        List<int> castableSlots = new List<int>();
+        for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
+        {
+            AbilityData slotAbility = profile.GetSlotAbility(i);
+            if (slotAbility != null && !slotAbility.IsAuraSpell) castableSlots.Add(i);
+        }
+
+        int slotCount = castableSlots.Count;
+        if (slotCount == 0) return;
         float totalWidth = slotCount * slotSize + (slotCount - 1) * gap;
         float x0 = (UIScale.Width - totalWidth) * 0.5f;
         float y0 = bottomY - slotSize;
 
         GUIStyle small = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10, wordWrap = true };
+        small.normal.textColor = Color.black;
         GUIStyle timer = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 14, fontStyle = FontStyle.Bold };
-        PlayerProfile profile = ProfileStore.Current;
 
-        for (int i = 0; i < slotCount; i++)
+        for (int slotIndex = 0; slotIndex < slotCount; slotIndex++)
         {
-            Rect rect = new Rect(x0 + i * (slotSize + gap), y0, slotSize, slotSize);
+            int i = castableSlots[slotIndex];
+            Rect rect = new Rect(x0 + slotIndex * (slotSize + gap), y0, slotSize, slotSize);
             GUI.Box(rect, GUIContent.none);
 
             AbilityData ability = profile.GetSlotAbility(i);
-            if (ability == null) continue;
+            if (ability.Icon != null) GUI.DrawTexture(rect, ability.Icon.texture);
 
-            GUI.Label(new Rect(rect.x, rect.y + 4f, rect.width, 28f), ability.AbilityName, small);
-            string keyText = ability.IsAuraSpell ? "Passive" : (profile.GetSlotKey(i)?.DisplayName ?? "-");
-            GUI.Label(new Rect(rect.x, rect.yMax - 16f, rect.width, 14f), keyText, small);
-
-            if (ability.IsAuraSpell) continue; // no cooldown to show - always active
+            string keyText = profile.GetSlotKey(i)?.DisplayName ?? "-";
+            GUI.Label(new Rect(rect.x, rect.y - 16f, rect.width, 14f), keyText, small);
+            GUI.Label(new Rect(rect.x, rect.yMax + 2f, rect.width, 28f), ability.AbilityName, small);
 
             float remaining = PredictedCooldownRemaining(ability);
             if (remaining <= 0f) continue;

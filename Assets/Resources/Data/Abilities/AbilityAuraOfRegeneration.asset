@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: AbilityAuraOfRegeneration
   m_EditorClassIdentifier: 
   Id: aura_of_regeneration
-  AbilityName: Aura of Regeneration
+  AbilityName: 'Aura: Regeneration'
   RequiresTarget: 0
   Range: 0
   Cooldown: 0

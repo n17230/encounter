@@ -325,6 +325,15 @@ public class CharacterStats : NetworkBehaviour
         CurrentMana.Value = Mathf.Min(MaxMana.Value, CurrentMana.Value + amount);
     }
 
+    // Flat percentage-of-max-health restore (e.g. a health orb pickup) - no
+    // HealingMultiplier, this isn't healing. Same dead-character guard as
+    // Heal: only RestoreFull brings a character back. Server-only.
+    public void RestoreHealthPercent(float fraction)
+    {
+        if (!IsServer || isDead) return;
+        CurrentHealth.Value = Mathf.Min(MaxHealth.Value, CurrentHealth.Value + MaxHealth.Value * fraction);
+    }
+
     // Flat mana loss (e.g. Mana Leech), floored at 0. Server-only.
     public void DrainMana(float amount)
     {

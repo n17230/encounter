@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-// Ground-level VFX at a player's feet for as long as they have Aura of
-// Replenishment (Aura_Arcane) or Aura of Regeneration (Aura_Light)
+// Ground-level VFX at a player's feet for as long as they have Aura:
+// Replenish (Aura_Arcane) or Aura: Regeneration (Aura_Light)
 // slotted - both can be active on the same player at once. Reacts to
 // CharacterEquipment's HasReplenishmentAura/HasRegenerationAura
 // NetworkVariables (already synced to everyone), so every client sees

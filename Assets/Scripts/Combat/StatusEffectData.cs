@@ -97,4 +97,10 @@ public class StatusEffectData : ScriptableObject
     // gameplay-stat component - see the owner-local fog toggle wherever
     // this is read. 0 (the default) means no vision reduction.
     public float VisionRange = 0f;
+
+    // If set, the HUD effect list (PlayerHUD.DrawEffects) shows this icon
+    // instead of "Name Xs" text for this effect - for continuously
+    // refreshed effects (auras) where a live countdown is meaningless
+    // noise. Null (the default) keeps the normal text display.
+    public Sprite Icon;
 }

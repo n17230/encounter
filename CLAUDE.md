@@ -498,7 +498,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     carried via `NetworkVariable<bool> CastAuraRevealsMobs` (true if
     *any* active aura ability reveals mobs), read by `PlayerHUD`
     alongside `ItemData.Reveals`. Echolocation is the reveal-only case
-    (`AuraReveals`, no `Effect`); Aura of Replenishment/Regeneration
+    (`AuraReveals`, no `Effect`); Aura: Replenish/Regeneration
     each pulse an `Effect` instead. The ability-slot key-press loop and
     `ResolveAbility` both explicitly skip `IsAuraSpell` abilities, since
     they're never cast through that path at all.
@@ -1133,8 +1133,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   (`SelfTarget`) self-targets — both rebindable, same as party targeting
   above — Escape (the one permanently fixed, never-rebindable key)
   clears the target first and opens the menu only when nothing is
-  targeted. Left-click is movement/camera input only — it doesn't select
-  or clear a target. Up/Down arrow (`ZoomIn`/`ZoomOut`, rebindable, held)
+  targeted. **Left-click**: a click (not a drag) on a creature/player
+  targets them, same click-vs-drag distinction right-click already uses
+  (`PlayerTargeting.IsClick`, shared thresholds) — holding and dragging is
+  still free-look (`PlayerCamera`), unaffected. Unlike right-click, a
+  left-click only targets — it doesn't arm auto-attack, and clicking empty
+  space does nothing (doesn't clear the target either, same as
+  right-click). Up/Down arrow (`ZoomIn`/`ZoomOut`, rebindable, held)
   zooms the camera in/out along its own local Z offset from
   `CameraPivot`, clamped between `CameraZoomScale.Min`/`Max` — saved to
   the profile (same set-in-memory-then-an-existing-Save()-trigger-
@@ -1205,17 +1210,19 @@ renamed, or retuned.
    machine, taunt/threat reset on combat end.
 4. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
-5. **Mob pathfinding via NavMesh — code side done, Editor setup still
-   needed.** `EnemyAI.ComputeChaseDirection` (see Enemy targeting below)
-   now follows a NavMesh path when chasing; it still just fizzles back to
-   the old straight-line behavior until a NavMesh actually exists. The
-   user still needs to: add `com.unity.ai.navigation` via the Package
-   Manager (Window → Package Manager → Unity Registry → "AI Navigation" —
-   not added to `manifest.json` directly, since a wrong version pin from
-   outside the Editor would break resolution), add a `NavMeshSurface`
-   component (the scene's existing default agent radius/height, 0.5/2,
-   already matches every mob's `CharacterController`, no tuning needed),
-   and bake (rebake after terrain/prop changes).
+5. **Mob pathfinding via NavMesh — Editor setup done, partially working.**
+   `EnemyAI.ComputeChaseDirection` (see Enemy targeting below) follows a
+   NavMesh path when chasing. `com.unity.ai.navigation` is installed, a
+   `NavMeshSurface` is on the Terrain (`CollectObjects: All`) and baked,
+   and the scene has been saved with it. Confirmed working: mobs path
+   around trees correctly. **Still an open issue**: mobs have a hard
+   time pathing around the TriForge ruins props and "other objects" —
+   symptom not yet fully diagnosed (last checked: need to confirm whether
+   the baked NavMesh actually has a hole around a ruin at all, and
+   whether the mob walks straight through it vs. gets stuck vs. takes an
+   odd detour, to tell a bake/geometry-collection gap apart from a
+   pathing/connectivity issue like a too-narrow gap). Rebake after any
+   terrain/prop layout changes.
 6. **Earthen Bastion's wall prefab** — the gameplay logic is built
    (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
    ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
@@ -1243,18 +1250,14 @@ renamed, or retuned.
    the fixed patches, it has no `NetworkTransform` of its own — if you
    want *clients* to see a visible dome track the target (rather than
    only the server-side trigger following it), add one.
-8. **Mana orb pickup prefab** — the drop-chance roll and pickup logic
-   are built (`EnemyAI.HandleDeath`, `ManaOrb.cs`), but nothing exists
-   yet at `Resources/Prefabs/ManaOrb`, so `ManaOrb.TrySpawn` currently
-   just logs a warning and skips the drop. Editor steps: (1) create a
-   GameObject (whatever visual you want for the orb, or a placeholder
-   primitive), (2) add a `NetworkObject` component, (3) add `ManaOrb`
-   (`Scripts/Enemy/ManaOrb.cs` — its `RequireComponent(SphereCollider)`
-   adds the collider automatically; set it to `isTrigger`), (4) save it
-   as a prefab at exactly `Assets/Resources/Prefabs/ManaOrb.prefab`
-   (the path `Resources.Load` looks up — no field to wire it to), (5)
-   register it in `DefaultNetworkPrefabs.asset` like every other spawned
-   prefab.
+8. **Mana orb pickup prefab — built, just needs network registration.**
+   `Assets/Resources/Prefabs/ManaOrb.prefab` exists now, but it's not yet
+   registered in `DefaultNetworkPrefabs.asset` like every other spawned
+   prefab — without that, `ManaOrb.TrySpawn`'s `NetworkObject.Spawn()`
+   call likely won't replicate correctly to other clients. Also:
+   `Assets/Resources/Prefabs/HealthOrb.prefab` exists but nothing in the
+   scripts references "HealthOrb" at all — no drop logic spawns it, it's
+   currently an orphaned prefab.
 9. **Skeleton Tactician escort — visuals and network-prefab registration**
    (see `BOSS_DESIGN.md`). The five `MobSkeleton*.prefab` files exist
    with all their stats/weapon/effect references already wired, but

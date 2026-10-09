@@ -7,7 +7,7 @@ using UnityEngine;
 public static class Minimap
 {
     public const float WorldRadius = 150f;
-    public const float ScreenRadius = 70f;
+    public const float ScreenRadius = 58f;
     public const float Margin = 12f;
 
     // Concentric reference circles drawn inside the disc so distance is

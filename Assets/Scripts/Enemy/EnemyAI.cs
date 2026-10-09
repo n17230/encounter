@@ -27,7 +27,10 @@ public class EnemyAI : NetworkBehaviour
     [SerializeField] private float gravity = -20f;
     [SerializeField] private float deathDespawnDelay = 2f;
 
-    private const float ManaOrbDropChance = 0.05f;
+    // A single roll decides mana vs. health vs. nothing, so at most one
+    // orb ever drops: 4% mana, 6% health, 10% combined.
+    private const float ManaOrbDropChance = 0.04f;
+    private const float HealthOrbDropChance = 0.06f;
 
     // Not specified by the user - a reasonable default, flagged in
     // review_with_fable.md for later tuning. Reused NavMeshPath instance -
@@ -225,7 +228,11 @@ public class EnemyAI : NetworkBehaviour
     {
         isDead = true;
         if (animator != null) animator.SetTrigger("death");
-        if (Random.value < ManaOrbDropChance) ManaOrb.TrySpawn(transform.position);
+        switch (OrbDropSelector.Select(Random.value, ManaOrbDropChance, HealthOrbDropChance))
+        {
+            case OrbDropResult.Mana: ManaOrb.TrySpawn(transform.position); break;
+            case OrbDropResult.Health: HealthOrb.TrySpawn(transform.position); break;
+        }
         NotifyEnemyDeathForTracking();
         StartCoroutine(DespawnAfterDelay());
     }

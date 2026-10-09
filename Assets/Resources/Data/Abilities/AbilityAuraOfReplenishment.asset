@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: AbilityAuraOfReplenishment
   m_EditorClassIdentifier: 
   Id: aura_of_replenishment
-  AbilityName: Aura of Replenishment
+  AbilityName: 'Aura: Replenish'
   RequiresTarget: 0
   Range: 0
   Cooldown: 0
