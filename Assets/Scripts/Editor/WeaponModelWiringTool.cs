@@ -31,7 +31,7 @@ public static class WeaponModelWiringTool
     private static readonly Entry[] Entries =
     {
         new Entry(ItemRoot + "GearBroadSword.asset", BlinkRoot + "Stylized/Swords/_PrefabsSwords/Sword1_1_1.prefab", ProfileRoot + "AttachProfileSword.asset"),
-        new Entry(ItemRoot + "GearStaff.asset", BlinkRoot + "Stylized/Staves/_PrefabsStaves/Staff2_1_2.prefab", ProfileRoot + "AttachProfileStaff.asset"),
+        new Entry(ItemRoot + "GearStaff.asset", "Assets/External/Synty/PolygonGoblinWarCamp/Prefabs/Weapons/SM_Wep_Staff_02.prefab", ProfileRoot + "AttachProfileStaff.asset"),
         new Entry(ItemRoot + "GearTwoHandedAxe.asset", BlinkRoot + "Stylized/Axes/PrefabsAxes/AxeEvolving2_3_1.prefab", ProfileRoot + "AttachProfileAxe2H.asset"),
         new Entry(ItemRoot + "GearHuntersBow.asset", BlinkRoot + "Stylized/Bows/_PrefabsBows/Bow2_3_1.prefab", ProfileRoot + "AttachProfileBow.asset"),
         new Entry(ItemRoot + "GearArmorbreaker.asset", BlinkRoot + "Stylized/Maces/_PrefabsMaces/Mace3_1_1.prefab", ProfileRoot + "AttachProfileMace.asset"),
