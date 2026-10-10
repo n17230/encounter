@@ -98,6 +98,15 @@ public class CharacterStats : NetworkBehaviour
 
     public event Action OnDeath;
 
+    // Server-only. Fired from ReceiveHit when a direct hit actually lowered
+    // THIS character's own health, with the amount it dropped by - after
+    // block, armor, DamageTakenMultiplier, shield absorption and any
+    // redirect have had their say. Never fires for a DoT tick (TickEffect
+    // bypasses ReceiveHit), a blocked or fully-absorbed hit, or for health
+    // lost via a redirect bond / reflect (those land through ApplyRawDamage,
+    // not a hit). Drives cast pushback - see PlayerAbilities.
+    public event Action<float> DamageTaken;
+
     // Every currently-active character (players and mobs) - see Registry.
     public static IReadOnlyList<CharacterStats> All => Registry<CharacterStats>.All;
 
@@ -196,7 +205,17 @@ public class CharacterStats : NetworkBehaviour
 
         bool blocked = hit.Damage > 0f && hit.Source == HitSource.Melee && RollBlock();
         bool dealtDamage = hit.Damage > 0f && !blocked;
-        if (dealtDamage) DealDamage(hit.Damage, hit.AttackerClientId, hit.Attacker);
+        if (dealtDamage)
+        {
+            DealDamage(hit.Damage, hit.AttackerClientId, out float healthLost, hit.Attacker);
+            // A lethal hit on a player reports no loss at all: OnDeath fires
+            // inside ApplyRawDamage and PlayerRespawn.HandleDeath's
+            // RestoreFull has already refilled health by the time healthLost
+            // is computed. And even when it does fire, it's only after
+            // DealDamage returned, so ResetCooldowns (also run from
+            // HandleDeath) has already cleared any cast state first.
+            if (healthLost > 0f) DamageTaken?.Invoke(healthLost);
+        }
         if (hit.Heal > 0f) Heal(hit.Heal, hit.AttackerClientId);
         if (hit.ShieldAmount > 0f) GrantShield(hit.ShieldAmount);
         if (hit.ExtraThreat > 0f) AddThreat(hit.ExtraThreat, hit.AttackerClientId);
@@ -469,8 +488,10 @@ public class CharacterStats : NetworkBehaviour
     // Returns the actual (post-mitigation) damage dealt - callers that
     // need to know how much actually landed (e.g. TickEffect's lifesteal)
     // use it; everyone else just ignores it, same as before this returned
-    // anything.
-    private float DealDamage(float rawDamage, ulong attackerClientId, CharacterStats directAttacker = null)
+    // anything. healthLost is narrower: how much THIS character's own
+    // health actually dropped (post-shield, post-redirect, and nothing if
+    // already at 0) - what ReceiveHit's DamageTaken event reports.
+    private float DealDamage(float rawDamage, ulong attackerClientId, out float healthLost, CharacterStats directAttacker = null)
     {
         CharacterStats attacker = directAttacker != null ? directAttacker : AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
@@ -518,7 +539,9 @@ public class CharacterStats : NetworkBehaviour
             }
         }
 
+        float healthBefore = CurrentHealth.Value;
         ApplyRawDamage(selfDamage);
+        healthLost = healthBefore - CurrentHealth.Value;
 
         // 1 threat per 1 point of damage actually dealt (post-mitigation).
         AddThreat(mitigated, attackerClientId);
@@ -579,7 +602,9 @@ public class CharacterStats : NetworkBehaviour
     {
         if (effect.Data.TickDamage > 0f)
         {
-            float dealt = DealDamage(effect.Data.TickDamage, effect.AttackerClientId);
+            // DoT ticks deliberately don't report health loss (out _): they
+            // are not "hits" for cast pushback - see DamageTaken.
+            float dealt = DealDamage(effect.Data.TickDamage, effect.AttackerClientId, out _);
 
             // Lifesteal heals whoever applied the effect (the caster), not
             // the effect's holder (the target) - a separate character, so

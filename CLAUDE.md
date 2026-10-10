@@ -219,7 +219,33 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     cast's timer runs out, and it resolves from the respawn point. The
     coroutine only clears `pendingCast` if `castSerial` still matches its
     own, since a new cast can be accepted in the same frame an old one
-    finishes waiting.
+    finishes waiting. The in-flight cast's server state is one per-cast
+    `PlayerAbilities.ServerCast` object (`activeServerCast`; the
+    `serverCastEndTime` lock is a derived read of its `EndTime`, and
+    `PlayerAutoAttack.ServerCastLockUntil` is a mirror re-set wherever
+    `EndTime` changes), and the resolve coroutine polls that object's
+    `EndTime` rather than waiting a fixed time.
+  - **Cast pushback**: a direct hit that actually lowers the caster's own
+    health while a cast-time cast is in flight delays that cast by a share
+    of its `CastTime` — 40% for the 1st hit of the cast, 20% for the 2nd,
+    10% for the 3rd, nothing from the 4th on; the counter is per cast (a
+    fresh `CastPushbackTracker`, `Scripts/Combat/CastPushbackTracker.cs`,
+    pure + tested, is built for every `ServerCast`, and its table is the
+    one place the fractions live). What counts is exactly
+    `CharacterStats.DamageTaken` — raised from `ReceiveHit` with the health
+    `DealDamage` actually removed (`out healthLost`) — so DoT ticks
+    (`TickEffect` bypasses `ReceiveHit`), blocked hits, hits fully absorbed
+    by a shield, and health lost through a redirect bond or reflect (both
+    land via `ApplyRawDamage`, never a hit) never push back. The server
+    extends the cast's `EndTime` and sends the owner the *remaining* time
+    (`NotifyCastPushedBackClientRpc`), which re-arms the owner's cast bar
+    from the server's clock (the bar starts at key press, ~latency ahead,
+    and `OnGUI` clears it when it runs out — adding a delta would be a
+    no-op once that's happened). The ability's own cooldown, the global
+    cooldown and mana are unaffected. Two accepted cosmetic edges: the
+    cast VFX (`PlayCastVfxClientRpc`) still ends at the original
+    `CastTime`, and a hit inside the 0.15s animation-lead window lands
+    after the cast gesture already played.
   - **Mana is spent on successful cast, not cast start**:
     `HasEnoughMana` (read-only) gates whether a cast can start;
     `TrySpendMana` only fires in `ResolveAbility`/`ResolveGroundAbility`,

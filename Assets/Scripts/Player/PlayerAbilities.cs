@@ -80,12 +80,29 @@ public class PlayerAbilities : NetworkBehaviour
     // global (mirrors exclusiveTargets above).
     private readonly Dictionary<AbilityData, NetworkObject> activeStructures = new Dictionary<AbilityData, NetworkObject>();
 
+    // Server-authoritative state of the one cast currently in flight (null
+    // when nothing is). Each cast gets its OWN object: the resolve coroutine
+    // reads only this, so a new cast accepted in the same frame an old one
+    // finishes (see ResolveAfterCastTime) can't retime the old one - and
+    // cast pushback (HandleServerDamageTaken) extends EndTime on exactly the
+    // cast being hit. A fresh Pushback tracker per cast is what makes the
+    // pushback counter reset every cast.
+    private sealed class ServerCast
+    {
+        public int Serial;
+        public AbilityData Ability;
+        public float EndTime;
+        public CastPushbackTracker Pushback;
+    }
+    private ServerCast activeServerCast;
     // Server-authoritative cast lock - while Time.time is before this, no
     // new cast (instant or otherwise) can start, regardless of which
     // ability/slot. Client-side isCasting only gates the local UI/input;
     // this is what actually enforces the rule against a desynced or
-    // malicious client.
-    private float serverCastEndTime;
+    // malicious client. Derived from activeServerCast so there's one source
+    // of truth; autoAttack.ServerCastLockUntil (another component) is a
+    // mirror, re-set wherever EndTime changes.
+    private float serverCastEndTime => activeServerCast?.EndTime ?? 0f;
     // The cast-time cast currently waiting to resolve, if any - kept so
     // dying mid-cast can cancel it (see ResetCooldowns) instead of letting
     // it resolve from the respawn point.
@@ -107,6 +124,11 @@ public class PlayerAbilities : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        // Server subscription first: on a dedicated server IsOwner is false
+        // for every player, so anything after the owner early-return below
+        // would never run there.
+        if (IsServer) stats.DamageTaken += HandleServerDamageTaken;
+
         if (!IsOwner) return;
 
         SyncLoadoutToServer();
@@ -115,6 +137,8 @@ public class PlayerAbilities : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        if (IsServer) stats.DamageTaken -= HandleServerDamageTaken;
+
         if (!IsOwner) return;
         MainMenu.Closed -= SyncLoadoutToServer;
         reticle?.Destroy();
@@ -469,9 +493,46 @@ public class PlayerAbilities : NetworkBehaviour
         serverGlobalCooldownReadyTime = 0f;
         if (pendingCast != null) StopCoroutine(pendingCast);
         pendingCast = null;
-        serverCastEndTime = 0f;
+        activeServerCast = null;
         autoAttack.ServerCastLockUntil = 0f;
         ResetCooldownsClientRpc();
+    }
+
+    // Server-only, from CharacterStats.DamageTaken: a direct hit just
+    // lowered this caster's health. If a cast-time cast is in flight, push
+    // its end out by this hit's share (see CastPushbackTracker) and tell the
+    // owner how long is now left so the cast bar stretches to match.
+    // Instant casts (CastTime 0, including the animation-only 0.15s lock)
+    // can't be pushed back.
+    private void HandleServerDamageTaken(float healthLost)
+    {
+        ServerCast cast = activeServerCast;
+        if (cast == null || cast.Ability.CastTime <= 0f || Time.time >= cast.EndTime) return;
+
+        float delay = cast.Pushback.RegisterHit();
+        if (delay <= 0f) return;
+
+        cast.EndTime += delay;
+        autoAttack.ServerCastLockUntil = cast.EndTime;
+        NotifyCastPushedBackClientRpc(cast.Ability.Id, cast.EndTime - Time.time);
+    }
+
+    // The owner's cast bar runs off its own clock (started at key press, so
+    // ~one-way latency ahead of the server's), and OnGUI clears isCasting
+    // the moment it runs out. So rather than adding the delay to the local
+    // duration, take the server's remaining time and re-arm the bar from
+    // it - which also re-opens a bar that had already run out early. Same
+    // ability-name match NotifyCastRejectedClientRpc uses, so a pushback
+    // can't re-arm a bar for a different cast than the one it's about.
+    [ClientRpc]
+    private void NotifyCastPushedBackClientRpc(string abilityId, float remaining)
+    {
+        if (!IsOwner) return;
+        AbilityData ability = GameDatabase.GetAbility(abilityId);
+        if (ability == null || ability.AbilityName != castingAbilityName) return;
+
+        isCasting = true;
+        castDuration = (Time.time - castStartTime) + remaining;
     }
 
     [ClientRpc]
@@ -599,10 +660,17 @@ public class PlayerAbilities : NetworkBehaviour
             ? Mathf.Max(ability.CastTime, CastAnimationLeadTime)
             : ability.CastTime;
 
-        serverCastEndTime = Time.time + totalWait;
-        autoAttack.ServerCastLockUntil = serverCastEndTime;
+        ServerCast cast = new ServerCast
+        {
+            Serial = ++castSerial,
+            Ability = ability,
+            EndTime = Time.time + totalWait,
+            Pushback = new CastPushbackTracker(ability.CastTime),
+        };
+        activeServerCast = cast;
+        autoAttack.ServerCastLockUntil = cast.EndTime;
         if (ability.CastTime > 0f) PlayCastVfxClientRpc(ability.Id, ability.CastTime);
-        pendingCast = StartCoroutine(ResolveAfterCastTime(ability, totalWait, ++castSerial, resolve));
+        pendingCast = StartCoroutine(ResolveAfterCastTime(cast, resolve));
     }
 
     // Everyone sees the caster's hand-glow VFX, not just the owner - it's
@@ -627,33 +695,36 @@ public class PlayerAbilities : NetworkBehaviour
         Destroy(vfxInstance, duration);
     }
 
-    // serial identifies WHICH cast this coroutine belongs to: a new cast can
-    // be accepted (network messages are processed early in the frame) in
-    // the same frame this one finishes waiting (coroutines resume later in
-    // it), by which point pendingCast already points at the NEW cast - so
-    // only clear the handle if it's still this cast's own, or a death
-    // during that second cast would find nothing to cancel.
+    // cast.Serial identifies WHICH cast this coroutine belongs to: a new cast
+    // can be accepted (network messages are processed early in the frame)
+    // in the same frame this one finishes waiting (coroutines resume later
+    // in it), by which point pendingCast/activeServerCast already point at
+    // the NEW cast - so only clear them if they're still this cast's own,
+    // or a death during that second cast would find nothing to cancel.
     //
-    // totalWait is the actual total delay before resolve() (computed by the
-    // caller - see StartServerCast): for a PlaysAnyCastAnimation ability
-    // this is at least CastAnimationLeadTime even if CastTime is 0, so the
-    // animation trigger always fires CastAnimationLeadTime before resolve()
-    // rather than in the same instant.
-    private IEnumerator ResolveAfterCastTime(AbilityData ability, float totalWait, int serial, Action resolve)
+    // Waits are polled against cast.EndTime rather than a fixed
+    // WaitForSeconds, because cast pushback (HandleServerDamageTaken) can
+    // move EndTime out while this is waiting. For a PlaysAnyCastAnimation
+    // ability EndTime is at least CastAnimationLeadTime away even if
+    // CastTime is 0, so the animation trigger always fires
+    // CastAnimationLeadTime before resolve() rather than in the same
+    // instant. A hit landing inside that lead window pushes resolve() out
+    // again after the gesture has already played - accepted cosmetic edge.
+    private IEnumerator ResolveAfterCastTime(ServerCast cast, Action resolve)
     {
-        if (ability.PlaysAnyCastAnimation)
-        {
-            yield return new WaitForSeconds(totalWait - CastAnimationLeadTime);
-            if (ability.PlaysCastAttackAnimation) PlayCastAttackAnimationClientRpc();
-            if (ability.PlaysCastHealAnimation) PlayCastHealAnimationClientRpc();
-            yield return new WaitForSeconds(CastAnimationLeadTime);
-        }
-        else
-        {
-            yield return new WaitForSeconds(totalWait);
-        }
+        AbilityData ability = cast.Ability;
+        float lead = ability.PlaysAnyCastAnimation ? CastAnimationLeadTime : 0f;
 
-        if (serial == castSerial) pendingCast = null;
+        while (Time.time < cast.EndTime - lead) yield return null;
+        if (ability.PlaysCastAttackAnimation) PlayCastAttackAnimationClientRpc();
+        if (ability.PlaysCastHealAnimation) PlayCastHealAnimationClientRpc();
+        while (Time.time < cast.EndTime) yield return null;
+
+        if (cast.Serial == castSerial)
+        {
+            pendingCast = null;
+            activeServerCast = null;
+        }
         resolve();
     }
 
