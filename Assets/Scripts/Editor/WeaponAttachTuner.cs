@@ -133,7 +133,13 @@ public class WeaponAttachTuner : EditorWindow
             ClearPreview();
             return;
         }
-        previewCharacter.Root.hideFlags = HideFlags.DontSave;
+        // DontSave doesn't inherit - mark every child too, or saving the
+        // scene with a preview up serializes the built character's
+        // skeleton/renderers as orphans.
+        foreach (Transform child in previewCharacter.Root.GetComponentsInChildren<Transform>(true))
+        {
+            child.gameObject.hideFlags = HideFlags.DontSave;
+        }
 
         bool slotIsRightHand = item.Slot != EquipmentSlot.OffHand;
         bool rightHand = CharacterWeaponVisual.ResolveRightHand(item.AttachProfile, slotIsRightHand);

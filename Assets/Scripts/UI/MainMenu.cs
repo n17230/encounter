@@ -345,7 +345,10 @@ public class MainMenu : MonoBehaviour
         // HealAmount/Damage (the real number lives on the applied Effect's
         // TickHeal/TickDamage instead) - e.g. Everliving Touch, Soul Siphon.
         if (ability.HealAmount > 0f || ability.ShieldAmount > 0f || (ability.Effect != null && ability.Effect.TickHeal > 0f)) return 1;
-        if (ability.RequiresMeleeWeapon || ability.RequiresShield) return 2;
+        // A forward charge (Trample) is a melee gap-closer even though it
+        // doesn't require a melee weapon to cast - listed under Melee
+        // without gating it behind one.
+        if (ability.RequiresMeleeWeapon || ability.RequiresShield || ability.ChargeForwardDistance > 0f) return 2;
         if (ability.Damage > 0f || (ability.Effect != null && ability.Effect.TickDamage > 0f)) return 3;
         return 4;
     }

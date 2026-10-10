@@ -802,7 +802,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (the generic chase block and the Tactician's own closing-in branch) —
     deliberately **not** applied to `ServerBeginPull`/`IsPulling` (forced
     straight-line pulls — Vacuum-style abilities, Archer's
-    `TriggerReposition` — by design) or kiting.
+    `TriggerReposition` — by design) or kiting. **Agent type per mob**:
+    `EnemyAI.ResolveNavAgentType` picks, once in `Awake`, the smallest baked
+    NavMesh agent type (`NavMesh.GetSettingsByIndex`) whose radius and
+    height contain the mob's *scaled* capsule (`NavAgentTypeSelector`,
+    pure + tested) — so the 2×-scaled Ogre/Ogre Brute/Tactician use the
+    big-agent surface while goblins/skeletons stay on Humanoid — and
+    queries with a `NavMeshQueryFilter` carrying that id, starting from the
+    capsule's feet (`FeetPosition`), not `transform.position`, which for a
+    2× mob is 2 m above the mesh. No per-prefab setting: a new big mob
+    just needs a surface baked for an agent type at least its size.
   - **Mob animation**: every mob visual gets its own dedicated
     `Assets/Animation/*Controller.controller`, never shared across mob
     variants (even ones that are otherwise identical, e.g. Goblin/
@@ -1264,7 +1273,13 @@ renamed, or retuned.
    whether the mob walks straight through it vs. gets stuck vs. takes an
    odd detour, to tell a bake/geometry-collection gap apart from a
    pathing/connectivity issue like a too-narrow gap). Rebake after any
-   terrain/prop layout changes.
+   terrain/prop layout changes. **Leading suspect, now addressed but not
+   yet confirmed in play**: the 2×-scaled mobs were pathing on the
+   Humanoid-sized (r 0.5 / h 2) mesh while physically being r 1 / h 4,
+   and querying from a point 2 m above it — a second NavMeshSurface for a
+   larger agent type was baked and `EnemyAI` now picks it per mob (see
+   Mob pathfinding above). Retest ogres around the ruins before closing
+   this out.
 6. **Earthen Bastion's wall prefab** — the gameplay logic is built
    (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
    ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,

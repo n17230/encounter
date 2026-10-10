@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 401eac0152611aacab34c85109b950cf, type: 3}
   m_Name: AttachProfileMace
   m_EditorClassIdentifier: 
-  Position: {x: -0.3, y: 0, z: 0}
-  Rotation: {x: -0, y: 0, z: 90}
+  Position: {x: -0.048, y: -0.223, z: -0.001}
+  Rotation: {x: -0, y: 0, z: 180}
   Scale: 1
   Hand: 0

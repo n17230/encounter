@@ -67,13 +67,6 @@
     justify-content: center;
 }
 
-/* A layout placeholder (e.g. either side of the helmet) - same footprint
-   as a real slot so columns stay aligned, but invisible. */
-.equipment-slot--blank {
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 0;
-}
-
 .inventory-scroll {
     max-height: 320px;
 }

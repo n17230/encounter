@@ -80,15 +80,15 @@ public class EquipmentPanelController : MonoBehaviour
     // The paper-doll's rows, shaped like a character: helmet centered on
     // its own row, then torso/arms, then the two rings either side of legs
     // and boots, then the necklace, then main/off hand centered at the
-    // bottom. null = an empty placeholder cell (keeps the 3-column
-    // alignment without a real slot there).
-    private static readonly EquipmentSlot?[][] PaperDollLayout =
+    // bottom. A row shorter than 3 is centered (see Rebuild) rather than
+    // padded with placeholder cells.
+    private static readonly EquipmentSlot[][] PaperDollLayout =
     {
-        new EquipmentSlot?[] { EquipmentSlot.Helmet },
-        new EquipmentSlot?[] { EquipmentSlot.Gloves, EquipmentSlot.Chest, EquipmentSlot.Cape },
-        new EquipmentSlot?[] { EquipmentSlot.Ring1, EquipmentSlot.Legs, EquipmentSlot.Trinket },
-        new EquipmentSlot?[] { EquipmentSlot.Ring2, EquipmentSlot.Boots, EquipmentSlot.Necklace },
-        new EquipmentSlot?[] { EquipmentSlot.MainHand, EquipmentSlot.OffHand },
+        new[] { EquipmentSlot.Helmet },
+        new[] { EquipmentSlot.Gloves, EquipmentSlot.Chest, EquipmentSlot.Cape },
+        new[] { EquipmentSlot.Ring1, EquipmentSlot.Legs, EquipmentSlot.Trinket },
+        new[] { EquipmentSlot.Ring2, EquipmentSlot.Boots, EquipmentSlot.Necklace },
+        new[] { EquipmentSlot.MainHand, EquipmentSlot.OffHand },
     };
 
     private void EnsureInitialized()
@@ -168,24 +168,15 @@ public class EquipmentPanelController : MonoBehaviour
         EnsureInitialized();
 
         equipGrid.Clear();
-        foreach (EquipmentSlot?[] row in PaperDollLayout)
+        foreach (EquipmentSlot[] row in PaperDollLayout)
         {
             VisualElement rowElement = new VisualElement();
             rowElement.AddToClassList("equip-grid-row");
             if (row.Length < 3) rowElement.AddToClassList("equip-grid-row--centered");
 
-            foreach (EquipmentSlot? slotValue in row)
+            foreach (EquipmentSlot slot in row)
             {
-                if (slotValue == null)
-                {
-                    VisualElement blank = new VisualElement();
-                    blank.AddToClassList("equipment-slot");
-                    blank.AddToClassList("equipment-slot--blank");
-                    rowElement.Add(blank);
-                    continue;
-                }
-
-                EquipmentSlot capturedSlot = slotValue.Value;
+                EquipmentSlot capturedSlot = slot;
                 EquipmentSlotDisplay display = FindSlotDisplay(slots, capturedSlot);
                 string tooltip = display.Equipped != null
                     ? TooltipText.BuildItemTooltip(display.Equipped) + "\n(click to change)"
@@ -221,6 +212,7 @@ public class EquipmentPanelController : MonoBehaviour
 
         element.RegisterCallback<PointerDownEvent>(evt =>
         {
+            if (evt.button != 0) return;
             element.CapturePointer(evt.pointerId);
             RotateDirectionChanged?.Invoke(direction);
         });

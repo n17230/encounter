@@ -29,6 +29,7 @@ public class CharacterPreview : MonoBehaviour
 
     private BuiltSidekickCharacter built;
     private SidekickSelection builtSelection;
+    private bool warnedUnwired;
     // Not reset on a rebuild so rotating to a preferred viewing angle
     // survives changing a preset.
     private float rotationY;
@@ -48,6 +49,14 @@ public class CharacterPreview : MonoBehaviour
         SidekickSelection selection = SidekickSelection.FromProfile(profile);
         if (built == null || !selection.Equals(builtSelection))
         {
+            if (stageRoot == null)
+            {
+                // Once, not every frame this panel is drawn.
+                if (!warnedUnwired) Debug.LogWarning("[CharacterPreview] Stage Root isn't assigned - wire it on CharacterPreviewStage in the scene; the preview stays empty until then.");
+                warnedUnwired = true;
+                return;
+            }
+
             SidekickCharacterBuilder builder = SidekickCharacterBuilder.Shared;
             if (!builder.IsReady) return;
 

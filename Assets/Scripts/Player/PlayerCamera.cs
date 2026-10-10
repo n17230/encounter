@@ -22,13 +22,17 @@ public class PlayerCamera : NetworkBehaviour
     // flagged in review_with_fable.md.
     [SerializeField] private float zoomSpeed = 8f;
 
-    // Small gap kept between the camera and whatever it collided with, so
-    // the near clip plane doesn't poke through the surface it's pressed
-    // against. Not specified by the user - a small reasonable default,
-    // flagged for later tuning like zoomSpeed above.
-    [SerializeField] private float cameraCollisionPadding = 0.2f;
+    // Extra gap kept between the camera and whatever it collided with, on
+    // top of the near-plane-sized sphere the collision cast already
+    // sweeps (see ApplyCollisionAwarePosition). Not specified by the user -
+    // a small reasonable default, flagged for later tuning like zoomSpeed
+    // above.
+    [SerializeField] private float cameraCollisionPadding = 0.05f;
 
-    private static readonly RaycastHit[] cameraCollisionHits = new RaycastHit[8];
+    // Unordered and truncated by Physics.*NonAlloc, and creatures in the
+    // line consume slots before being skipped - sized generously so the
+    // nearest wall can't be dropped in dense ruins/foliage.
+    private static readonly RaycastHit[] cameraCollisionHits = new RaycastHit[32];
 
     private float pitch;
     private float freeLookYaw;
@@ -159,30 +163,52 @@ public class PlayerCamera : NetworkBehaviour
     // zoomDistance itself (the player's chosen zoom level) is never
     // mutated here - only this frame's actual camera placement is, so
     // backing away from the obstruction smoothly restores full zoom.
+    // A SphereCast the size of the camera's near-plane corner, not a ray:
+    // a thin ray stopped a fixed padding short of an oblique wall still
+    // leaves the near plane's side corners inside it. And when shortened,
+    // the camera is placed ON the swept line (origin + direction * d),
+    // not re-composed from local (x, y, -d) - the prefab's +Y camera
+    // offset makes those two different points once d < zoomDistance, and
+    // the latter sits in space the cast never checked (e.g. inside a
+    // lintel the line passed under).
     private void ApplyCollisionAwarePosition()
     {
         Vector3 origin = cameraPivot.position;
-        Vector3 desiredWorld = cameraPivot.TransformPoint(new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance));
+        Vector3 desiredLocal = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance);
+        Vector3 desiredWorld = cameraPivot.TransformPoint(desiredLocal);
         Vector3 delta = desiredWorld - origin;
         float desiredDistance = delta.magnitude;
-        float distance = zoomDistance;
 
-        if (desiredDistance > 0.001f)
+        if (desiredDistance <= 0.001f)
         {
-            Vector3 direction = delta / desiredDistance;
-            int count = Physics.RaycastNonAlloc(origin, direction, cameraCollisionHits, desiredDistance,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-            float closest = desiredDistance;
-            for (int i = 0; i < count; i++)
-            {
-                if (cameraCollisionHits[i].collider.GetComponentInParent<Targetable>() != null) continue;
-                if (cameraCollisionHits[i].distance < closest) closest = cameraCollisionHits[i].distance;
-            }
-
-            if (closest < desiredDistance) distance = Mathf.Max(0f, closest - cameraCollisionPadding);
+            playerCamera.transform.localPosition = desiredLocal;
+            return;
         }
 
-        playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -distance);
+        Vector3 direction = delta / desiredDistance;
+        float radius = NearPlaneCornerRadius();
+        int count = Physics.SphereCastNonAlloc(origin, radius, direction, cameraCollisionHits, desiredDistance,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        float closest = desiredDistance;
+        for (int i = 0; i < count; i++)
+        {
+            if (cameraCollisionHits[i].collider.GetComponentInParent<Targetable>() != null) continue;
+            if (cameraCollisionHits[i].distance < closest) closest = cameraCollisionHits[i].distance;
+        }
+
+        float distance = closest < desiredDistance ? Mathf.Max(0f, closest - cameraCollisionPadding) : desiredDistance;
+        playerCamera.transform.position = origin + direction * distance;
+    }
+
+    // Distance from the camera's position to a corner of its near clip
+    // plane - the smallest sphere that fully contains the near plane, so a
+    // cast of that radius stopping clear of a surface guarantees no corner
+    // of the near plane is inside it.
+    private float NearPlaneCornerRadius()
+    {
+        float halfHeight = playerCamera.nearClipPlane * Mathf.Tan(playerCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        float halfWidth = halfHeight * playerCamera.aspect;
+        return Mathf.Sqrt(halfHeight * halfHeight + halfWidth * halfWidth + playerCamera.nearClipPlane * playerCamera.nearClipPlane);
     }
 
     // The smallest VisionRange among this player's own currently active

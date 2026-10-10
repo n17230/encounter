@@ -158,6 +158,11 @@ public class CharacterAppearance : NetworkBehaviour
 
         SidekickSelection selection = SidekickSelection.Parse(Selection.Value.ToString());
         if (built != null && selection.Equals(builtSelection)) return;
+        if (characterRoot == null)
+        {
+            Debug.LogWarning("[CharacterAppearance] Character Root isn't assigned on Player.prefab - no character can be built.", this);
+            return;
+        }
 
         SidekickCharacterBuilder builder = SidekickCharacterBuilder.Shared;
         if (!builder.IsReady) return;

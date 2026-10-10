@@ -170,13 +170,23 @@ public class EnemyAI : NetworkBehaviour
     private float pullEndTime;
     private bool IsPulling => Time.time < pullEndTime;
 
+    // Which baked NavMesh agent type this mob paths on - picked once from
+    // its own scaled capsule (see ResolveNavAgentType), so a 2x Ogre uses a
+    // surface baked for its real footprint instead of the Humanoid one.
+    private int navAgentTypeId;
+
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
         stats = GetComponent<CharacterStats>();
         threatTable = GetComponent<ThreatTable>();
         cachedPath = new NavMeshPath();
-        nextPathRecalcTime = Random.Range(0f, PathRecalcInterval);
+        navAgentTypeId = ResolveNavAgentType();
+        // Relative to now, not an absolute [0, 0.25s] timestamp - that was
+        // always already in the past for any mob spawned after the first
+        // quarter-second, so every mob of a wave recalculated on the same
+        // tick anyway.
+        nextPathRecalcTime = Time.time + Random.Range(0f, PathRecalcInterval);
         Animator visualAnimator = GetComponentInChildren<Animator>();
         // Optional - only an Animator that actually has a controller is
         // worth driving; a mob whose visual has none (or no visual at all,
@@ -946,9 +956,41 @@ public class EnemyAI : NetworkBehaviour
         if (Time.time >= nextPathRecalcTime)
         {
             nextPathRecalcTime = Time.time + PathRecalcInterval;
-            NavMesh.CalculatePath(transform.position, destination, NavMesh.AllAreas, cachedPath);
+            NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = navAgentTypeId, areaMask = NavMesh.AllAreas };
+            NavMesh.CalculatePath(FeetPosition(), destination, filter, cachedPath);
             cornerBufferCount = cachedPath.GetCornersNonAlloc(cornerBuffer);
         }
         return MobPathing.DirectionTowardPath(transform.position, destination, cornerBuffer, cornerBufferCount);
+    }
+
+    // The bottom of this mob's capsule - what a NavMesh query should start
+    // from. transform.position is the capsule's centre (2 m above the
+    // ground for a 2x-scaled Ogre), which is far enough from the mesh for
+    // the source to fail to snap, and the query then silently degrades to
+    // the straight-line fallback.
+    private Vector3 FeetPosition()
+    {
+        float halfHeight = controller.height * 0.5f * Mathf.Abs(transform.lossyScale.y);
+        return transform.position + transform.TransformVector(controller.center) - Vector3.up * halfHeight;
+    }
+
+    // Smallest baked agent type that still contains this mob's capsule
+    // (NavAgentTypeSelector). Falls back to agent type 0 (Humanoid) if no
+    // settings are available.
+    private int ResolveNavAgentType()
+    {
+        Vector3 scale = transform.lossyScale;
+        float radius = controller.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        float height = Mathf.Max(controller.height, controller.radius * 2f) * Mathf.Abs(scale.y);
+
+        int count = NavMesh.GetSettingsCount();
+        List<NavAgentTypeSize> types = new List<NavAgentTypeSize>(count);
+        for (int i = 0; i < count; i++)
+        {
+            NavMeshBuildSettings settings = NavMesh.GetSettingsByIndex(i);
+            types.Add(new NavAgentTypeSize { Id = settings.agentTypeID, Radius = settings.agentRadius, Height = settings.agentHeight });
+        }
+
+        return NavAgentTypeSelector.Select(radius, height, types, 0);
     }
 }

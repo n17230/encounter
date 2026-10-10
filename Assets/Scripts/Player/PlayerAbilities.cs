@@ -346,9 +346,13 @@ public class PlayerAbilities : NetworkBehaviour
         const float barWidth = 300f;
         const float barHeight = 24f;
         float x = (UIScale.Width - barWidth) * 0.5f;
-        float y = UIScale.Height - 80f;
+        // Bottom-centre stack, bottom to top: ability names, icons, hotkey
+        // labels, then the cast bar (and its notice above it) - derived from
+        // the ability bar's own constants so the cast bar can't drift back
+        // onto the icons.
+        float y = UIScale.Height - AbilityBarBottomOffset - AbilitySlotSize - HotkeyLabelOffset - 4f - CastBarGap - barHeight;
 
-        DrawAbilityBar(UIScale.Height - 56f);
+        DrawAbilityBar(UIScale.Height - AbilityBarBottomOffset);
 
         if (isCasting)
         {
@@ -391,9 +395,14 @@ public class PlayerAbilities : NetworkBehaviour
     // they get no bar slot either - only slots holding a real castable
     // ability are shown, compacted left to right with no gaps for empty or
     // aura slots.
+    private const float AbilityBarBottomOffset = 56f; // icon row's bottom edge, from the screen bottom
+    private const float AbilitySlotSize = 56f;
+    private const float HotkeyLabelOffset = 16f;      // hotkey label sits this far above an icon's top
+    private const float CastBarGap = 6f;
+
     private void DrawAbilityBar(float bottomY)
     {
-        const float slotSize = 56f;
+        const float slotSize = AbilitySlotSize;
         const float gap = 4f;
         PlayerProfile profile = ProfileStore.Current;
 
@@ -424,7 +433,7 @@ public class PlayerAbilities : NetworkBehaviour
             if (ability.Icon != null) GUI.DrawTexture(rect, ability.Icon.texture);
 
             string keyText = profile.GetSlotKey(i)?.DisplayName ?? "-";
-            GUI.Label(new Rect(rect.x, rect.y - 16f, rect.width, 14f), keyText, small);
+            GUI.Label(new Rect(rect.x, rect.y - HotkeyLabelOffset, rect.width, 14f), keyText, small);
             GUI.Label(new Rect(rect.x, rect.yMax + 2f, rect.width, 28f), ability.AbilityName, small);
 
             float remaining = PredictedCooldownRemaining(ability);

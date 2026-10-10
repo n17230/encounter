@@ -18,19 +18,19 @@ public class BuiltSidekickCharacter
     public Animator Animator;
     public Material Material;
     public Texture2D[] Textures;
+    // Only the Mesh copies Sidekick made for this build (a built renderer's
+    // sharedMesh that is NOT one of the source part assets it was built
+    // from) - never an imported part mesh, which is shared by every other
+    // character and would either throw "Destroying assets is not permitted"
+    // or, forced, corrupt the project asset. Decided by comparing against
+    // the actual inputs rather than trusting Combiner to always copy.
+    public Mesh[] Meshes;
 
     public void Destroy(bool immediate)
     {
-        // Sidekick copies every part's Mesh per build (Combiner ->
-        // MeshUtils.CopyMesh); destroying the GameObject doesn't free a
-        // renderer's sharedMesh, so each rebuild would otherwise leak them
-        // for the whole session.
-        if (Root != null)
+        if (Meshes != null)
         {
-            foreach (SkinnedMeshRenderer renderer in Root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-            {
-                DestroyObject(renderer.sharedMesh, immediate);
-            }
+            foreach (Mesh mesh in Meshes) DestroyObject(mesh, immediate);
         }
         DestroyObject(Root, immediate);
         DestroyObject(Material, immediate);
@@ -42,6 +42,7 @@ public class BuiltSidekickCharacter
         Animator = null;
         Material = null;
         Textures = null;
+        Meshes = null;
     }
 
     private static void DestroyObject(UnityEngine.Object obj, bool immediate)
@@ -121,6 +122,14 @@ public class SidekickCharacterBuilder
             return null;
         }
 
+        // DatabaseManager's connection is a process-wide static, not scoped
+        // to this instance - anything else that opens a DatabaseManager and
+        // later calls CloseConnection() on IT (e.g. Synty's own Sidekick
+        // tool window) nulls the connection out from under this one too.
+        // Reopening (no schema re-check - the DB is already known-good) is
+        // enough; without this, every query after that point throws NRE.
+        if (db.GetCurrentDbConnection() == null) db.GetDbConnection();
+
         SidekickSelection resolved = Catalog.Resolve(selection);
 
         List<SkinnedMeshRenderer> parts = new List<SkinnedMeshRenderer>();
@@ -166,7 +175,22 @@ public class SidekickCharacterBuilder
         Animator animator = root.GetComponent<Animator>();
         if (animator != null && controller != null) animator.runtimeAnimatorController = controller;
 
-        return new BuiltSidekickCharacter { Root = root, Animator = animator, Material = material, Textures = textures.ToArray() };
+        HashSet<Mesh> sourceMeshes = new HashSet<Mesh>();
+        foreach (SkinnedMeshRenderer part in parts)
+        {
+            if (part.sharedMesh != null) sourceMeshes.Add(part.sharedMesh);
+        }
+        List<Mesh> copiedMeshes = new List<Mesh>();
+        foreach (SkinnedMeshRenderer renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            Mesh mesh = renderer.sharedMesh;
+            if (mesh != null && !sourceMeshes.Contains(mesh) && !copiedMeshes.Contains(mesh)) copiedMeshes.Add(mesh);
+        }
+
+        return new BuiltSidekickCharacter
+        {
+            Root = root, Animator = animator, Material = material, Textures = textures.ToArray(), Meshes = copiedMeshes.ToArray(),
+        };
     }
 
     private void CollectParts(PartGroup group, string presetName, List<SkinnedMeshRenderer> parts)
