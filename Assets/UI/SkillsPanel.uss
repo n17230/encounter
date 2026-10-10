@@ -4,8 +4,33 @@
     /* No min-height - a forced 540px minimum left tons of empty panel
        space below any tab with only a couple of abilities in it. Let the
        panel size to whatever its actual content (header + kit toolbar +
-       tabs + however many cards) needs. */
+       tabs + however many cards) needs. 720 was the single-column width;
+       the picks column (240 + 24 gap) now sits to its left. */
+    width: 984px;
+}
+
+/* Picks column on the left, the original single column on the right -
+   see PicksSection.cs for what fills the picks column. */
+.skills-columns {
+    flex-direction: row;
+}
+
+.skills-column {
+    flex-direction: column;
+}
+
+.skills-column--picks {
+    width: 240px;
+    margin-right: 24px;
+}
+
+.skills-column--main {
     width: 720px;
+}
+
+.skills-picks-scroll {
+    max-height: 480px;
+    margin-top: 4px;
 }
 
 /* Theme.uss's .panel__title is shared by every panel and defaults to

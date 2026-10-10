@@ -43,7 +43,10 @@ public class PlayerAbilities : NetworkBehaviour
     public bool IsAimingGroundTarget { get; private set; }
     private int aimingSlot = -1;
     private AbilityData aimingAbility;
+    // Exactly one of these exists while aiming: the circle for ordinary
+    // ground abilities, the wall rectangle for a persistent structure.
     private GroundTargetReticle reticle;
+    private WallPlacementPreview wallPreview;
     private Vector3? aimedGroundPoint;
 
     private bool isCasting;
@@ -75,10 +78,11 @@ public class PlayerAbilities : NetworkBehaviour
     private readonly Dictionary<AbilityData, Targetable> exclusiveTargets = new Dictionary<AbilityData, Targetable>();
 
     // Server-authoritative: for an AbilityData.IsPersistentStructure
-    // ability, the structure THIS caster's last cast of it placed, if
-    // still standing - see ResolvePersistentStructure. Per-caster, not
-    // global (mirrors exclusiveTargets above).
-    private readonly Dictionary<AbilityData, NetworkObject> activeStructures = new Dictionary<AbilityData, NetworkObject>();
+    // ability, the structures THIS caster's recent casts of it placed, oldest
+    // first, up to AbilityData.MaxActiveStructures - see
+    // ResolvePersistentStructure. Per-caster, not global (mirrors
+    // exclusiveTargets above).
+    private readonly Dictionary<AbilityData, List<NetworkObject>> activeStructures = new Dictionary<AbilityData, List<NetworkObject>>();
 
     // Server-authoritative state of the one cast currently in flight (null
     // when nothing is). Each cast gets its OWN object: the resolve coroutine
@@ -104,8 +108,8 @@ public class PlayerAbilities : NetworkBehaviour
     // mirror, re-set wherever EndTime changes.
     private float serverCastEndTime => activeServerCast?.EndTime ?? 0f;
     // The cast-time cast currently waiting to resolve, if any - kept so
-    // dying mid-cast can cancel it (see ResetCooldowns) instead of letting
-    // it resolve from the respawn point.
+    // dying mid-cast can cancel it (see CancelCast) instead of letting
+    // it resolve once the caster is back.
     private Coroutine pendingCast;
     private int castSerial;
     // Server-authoritative global cooldown - see globalCooldownDuration.
@@ -137,11 +141,33 @@ public class PlayerAbilities : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (IsServer) stats.DamageTaken -= HandleServerDamageTaken;
+        if (IsServer)
+        {
+            stats.DamageTaken -= HandleServerDamageTaken;
+            // Frees this player's spells for others, the way
+            // CharacterEquipment already frees its items.
+            ReleaseAllClaims(OwnerClientId);
+        }
+
+        // A caster's walls go with them when they disconnect. Skipped on
+        // host shutdown, where every object is being torn down anyway and
+        // despawning one by one would only fight that.
+        if (IsServer && NetworkManager != null && !NetworkManager.ShutdownInProgress)
+        {
+            foreach (List<NetworkObject> structures in activeStructures.Values)
+            {
+                foreach (NetworkObject structure in structures)
+                {
+                    if (structure != null && structure.IsSpawned) structure.Despawn();
+                }
+            }
+            activeStructures.Clear();
+        }
 
         if (!IsOwner) return;
         MainMenu.Closed -= SyncLoadoutToServer;
         reticle?.Destroy();
+        wallPreview?.Destroy();
     }
 
     private void SyncLoadoutToServer()
@@ -149,14 +175,68 @@ public class PlayerAbilities : NetworkBehaviour
         SetLoadoutServerRpc(string.Join(";", ProfileStore.Current.SlotAbilityIds));
     }
 
+    // Server-wide spell uniqueness: at most one connected player may have a
+    // given ability Id slotted at a time - the exact mirror of
+    // CharacterEquipment.globalItemOwners, one map for spells. Claimed both
+    // by the lobby's spells confirm (LobbyState) and by SetLoadoutServerRpc
+    // through ValidateAndClaimLoadout below, keyed by the same clientId, so
+    // the spawn-time sync at Start re-claims what the lobby granted as a
+    // no-op. An Id someone else holds is silently dropped from the loadout.
+    private static readonly OwnershipMap globalAbilityOwners = new OwnershipMap();
+    private static readonly List<string> keptIdScratch = new List<string>();
+
+    // Called when a server session ends / the process starts - see NetworkBootstrap.
+    public static void ResetServerSessionState()
+    {
+        globalAbilityOwners.Clear();
+    }
+
+    public static void ReleaseAllClaims(ulong clientId)
+    {
+        globalAbilityOwners.ReleaseAll(clientId);
+    }
+
+    // The shared validation core (see CharacterEquipment.ValidateAndClaim
+    // for the same shape on the gear side): Ids must resolve, the same Id
+    // can't fill two of the client's own slots, and each kept Id is claimed
+    // for the client; everything the client held that isn't kept is
+    // released. Null = empty or dropped slot.
+    public static AbilityData[] ValidateAndClaimLoadout(string joinedAbilityIds, ulong clientId)
+    {
+        string[] ids = (joinedAbilityIds ?? "").Split(';');
+        AbilityData[] result = new AbilityData[PlayerProfile.AbilitySlots];
+        for (int i = 0; i < result.Length; i++)
+        {
+            AbilityData ability = i < ids.Length ? GameDatabase.GetAbility(ids[i]) : null;
+            if (ability == null) continue;
+            if (Array.IndexOf(result, ability, 0, i) >= 0) continue;
+            if (!globalAbilityOwners.TryClaim(ability.Id, clientId)) continue;
+            result[i] = ability;
+        }
+
+        keptIdScratch.Clear();
+        foreach (AbilityData kept in result)
+        {
+            if (kept != null) keptIdScratch.Add(kept.Id);
+        }
+        globalAbilityOwners.ReleaseAllExcept(clientId, keptIdScratch);
+        return result;
+    }
+
+    // The ';'-joined form of a validated result - what LobbyState stores in
+    // the entry and sends back to the client (empty segment = empty slot).
+    public static string JoinIds(AbilityData[] abilities)
+    {
+        string[] ids = new string[abilities.Length];
+        for (int i = 0; i < abilities.Length; i++) ids[i] = abilities[i] != null ? abilities[i].Id : "";
+        return string.Join(";", ids);
+    }
+
     [ServerRpc]
     private void SetLoadoutServerRpc(string joinedAbilityIds)
     {
-        string[] ids = (joinedAbilityIds ?? "").Split(';');
-        for (int i = 0; i < serverSlotAbilities.Length; i++)
-        {
-            serverSlotAbilities[i] = i < ids.Length ? GameDatabase.GetAbility(ids[i]) : null;
-        }
+        AbilityData[] validated = ValidateAndClaimLoadout(joinedAbilityIds, OwnerClientId);
+        Array.Copy(validated, serverSlotAbilities, serverSlotAbilities.Length);
 
         // Aura spells need no cast/keybind - having one slotted is enough to
         // keep it continuously active, so the set just tracks the loadout.
@@ -171,6 +251,14 @@ public class PlayerAbilities : NetworkBehaviour
         {
             // Opening the menu (whatever triggered it) abandons any in-progress
             // aim rather than leaving a stuck reticle up behind it.
+            if (IsAimingGroundTarget) CancelGroundTargeting();
+            return;
+        }
+
+        // Dead: no casting (the server rejects it too - "You are dead"),
+        // and dying mid-aim abandons the reticle the same way the menu does.
+        if (!stats.IsAlive)
+        {
             if (IsAimingGroundTarget) CancelGroundTargeting();
             return;
         }
@@ -257,7 +345,18 @@ public class PlayerAbilities : NetworkBehaviour
         aimedGroundPoint = null;
 
         reticle?.Destroy();
-        reticle = new GroundTargetReticle(ability.GroundEffectRadius, groundReticleColor);
+        reticle = null;
+        wallPreview?.Destroy();
+        wallPreview = null;
+
+        if (ability.IsPersistentStructure)
+        {
+            wallPreview = new WallPlacementPreview(ability.StructureWidth, ability.StructureThickness, groundReticleColor);
+        }
+        else
+        {
+            reticle = new GroundTargetReticle(ability.GroundEffectRadius, groundReticleColor);
+        }
     }
 
     private void CancelGroundTargeting()
@@ -268,6 +367,17 @@ public class PlayerAbilities : NetworkBehaviour
         aimedGroundPoint = null;
         reticle?.Destroy();
         reticle = null;
+        wallPreview?.Destroy();
+        wallPreview = null;
+    }
+
+    // The owner's facing on the ground plane. Sent with a ground cast and
+    // used for the wall preview, so both go through the same
+    // WallSegmentLayout.FacingRotation.
+    private Vector2 FlatFacing()
+    {
+        Vector3 forward = transform.forward;
+        return new Vector2(forward.x, forward.z);
     }
 
     // Raycasts the mouse against the world (ignoring characters, so you can
@@ -286,13 +396,22 @@ public class PlayerAbilities : NetworkBehaviour
         if (Physics.Raycast(ray, out RaycastHit hit, 200f, ignoreCharacters, QueryTriggerInteraction.Ignore))
         {
             aimedGroundPoint = hit.point;
-            reticle.SetPosition(hit.point);
-            reticle.SetVisible(true);
+            if (wallPreview != null)
+            {
+                wallPreview.Update(hit.point, WallSegmentLayout.FacingRotation(FlatFacing(), transform.forward));
+                wallPreview.SetVisible(true);
+            }
+            else
+            {
+                reticle.SetPosition(hit.point);
+                reticle.SetVisible(true);
+            }
         }
         else
         {
             aimedGroundPoint = null;
-            reticle.SetVisible(false);
+            wallPreview?.SetVisible(false);
+            reticle?.SetVisible(false);
         }
     }
 
@@ -311,7 +430,7 @@ public class PlayerAbilities : NetworkBehaviour
         int slot = aimingSlot;
         CancelGroundTargeting();
 
-        CastGroundTargetedAbilityServerRpc(slot, point);
+        CastGroundTargetedAbilityServerRpc(slot, point, FlatFacing());
         BeginPredictedCast(ability);
     }
 
@@ -346,6 +465,13 @@ public class PlayerAbilities : NetworkBehaviour
         if (target == null) return "No target";
         targetNetworkObject = target.GetComponent<NetworkObject>();
         if (targetNetworkObject == null) return "Invalid target";
+        // CurrentHealth/IsMob are known on every client, so the dead/alive
+        // rule (see TargetStateRule) is predictable here like range is.
+        if (target.Stats != null)
+        {
+            string stateRejection = TargetStateRule.Check(ability.ResurrectTarget, target.Stats.IsAlive, !target.Stats.IsMob);
+            if (stateRejection != null) return stateRejection;
+        }
         if (Vector3.Distance(transform.position, target.transform.position) > ability.Range) return "Out of range";
         if (!IsWithinFacingCone(targetNetworkObject)) return "Target not in front of you";
         return null;
@@ -480,22 +606,44 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     // Server-only. Called on death (see PlayerRespawn.HandleDeath) -
-    // clears every ability's cooldown and the global cooldown, and cancels
-    // any cast still in progress, both server-side and (via RPC) the
-    // owner's own predicted copy - so a fresh respawn doesn't still show
-    // abilities on cooldown from the fight that killed them, isn't stuck
-    // "Already casting" until the dead cast's timer runs out, and doesn't
-    // have that cast resolve from the respawn point.
-    public void ResetCooldowns()
+    // cancels only the cast still in progress, both server-side and (via
+    // RPC) the owner's cast bar, and nothing else: ability cooldowns and
+    // the global cooldown deliberately keep running through death, so a
+    // resurrected player picks up exactly where their cooldowns were.
+    // Without this the dead player would be "Already casting" until the
+    // cancelled cast's timer ran out, and it would resolve once they're
+    // back.
+    public void CancelCast()
     {
         if (!IsServer) return;
-        cooldownReadyTime.Clear();
-        serverGlobalCooldownReadyTime = 0f;
         if (pendingCast != null) StopCoroutine(pendingCast);
         pendingCast = null;
         activeServerCast = null;
         autoAttack.ServerCastLockUntil = 0f;
+        CancelCastClientRpc();
+    }
+
+    // Server-only. The full reset, for a respawn (see
+    // PlayerRespawn.ServerRespawn) - CancelCast plus every ability's
+    // cooldown and the global cooldown, server-side and (via RPC) the
+    // owner's own predicted copies, so the respawned player doesn't still
+    // show abilities on cooldown from the fight that killed them.
+    public void ResetCooldowns()
+    {
+        if (!IsServer) return;
+        CancelCast();
+        cooldownReadyTime.Clear();
+        serverGlobalCooldownReadyTime = 0f;
         ResetCooldownsClientRpc();
+    }
+
+    // Only the cast bar - the owner's predicted cooldowns are left alone,
+    // matching the server's untouched ones (see CancelCast).
+    [ClientRpc]
+    private void CancelCastClientRpc()
+    {
+        if (!IsOwner) return;
+        isCasting = false;
     }
 
     // Server-only, from CharacterStats.DamageTaken: a direct hit just
@@ -568,6 +716,7 @@ public class PlayerAbilities : NetworkBehaviour
         AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null) return;
 
+        if (RejectIfDead(ability)) return;
         if (RejectIfNotReady(ability)) return;
 
         if (ability.RequiresTarget)
@@ -575,6 +724,14 @@ public class PlayerAbilities : NetworkBehaviour
             if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject startTargetObject))
             {
                 NotifyCastRejectedClientRpc(ability.Id, "Target lost");
+                return;
+            }
+            // Same dead/alive rule the owner already predicted (see
+            // ClientPrecheck) and ResolveAbility re-checks at resolve time.
+            string stateRejection = TargetStateRejection(ability, startTargetObject.GetComponent<Targetable>());
+            if (stateRejection != null)
+            {
+                NotifyCastRejectedClientRpc(ability.Id, stateRejection);
                 return;
             }
             if (!IsWithinFacingCone(startTargetObject))
@@ -614,6 +771,25 @@ public class PlayerAbilities : NetworkBehaviour
         // ResolveAbility - not here at cast start. The check above just
         // stops an unaffordable cast from starting in the first place.
         StartServerCast(ability, () => ResolveAbility(ability, targetNetworkObjectId));
+    }
+
+    // A dead caster casts nothing - checked before anything else, both for
+    // unit-targeted and ground-targeted casts. The owner's own Update
+    // already stops sending while dead; this is the authoritative half.
+    private bool RejectIfDead(AbilityData ability)
+    {
+        if (stats.IsAlive) return false;
+        NotifyCastRejectedClientRpc(ability.Id, "You are dead");
+        return true;
+    }
+
+    // TargetStateRule applied to a resolved target - null if it may be
+    // cast on (or if it has no CharacterStats at all, which the later
+    // "Invalid target" checks already cover).
+    private static string TargetStateRejection(AbilityData ability, Targetable target)
+    {
+        if (target == null || target.Stats == null) return null;
+        return TargetStateRule.Check(ability.ResurrectTarget, target.Stats.IsAlive, !target.Stats.IsMob);
     }
 
     // The start-of-cast gate every cast shares, whatever it targets: one
@@ -791,6 +967,16 @@ public class PlayerAbilities : NetworkBehaviour
             NotifyCastFizzledClientRpc("Invalid target");
             return;
         }
+        // Re-checked at resolve, not just at cast start: the target can die
+        // during a cast time (any ability), or take the Escape menu's
+        // Respawn mid-Resurrect ("Target is not dead") - and a fizzle here,
+        // before TrySpendOrFizzle, costs nothing.
+        string stateRejection = TargetStateRejection(ability, target);
+        if (stateRejection != null)
+        {
+            NotifyCastFizzledClientRpc(stateRejection);
+            return;
+        }
 
         float distance = Vector3.Distance(transform.position, targetObject.transform.position);
         if (distance > ability.Range)
@@ -837,7 +1023,15 @@ public class PlayerAbilities : NetworkBehaviour
             return;
         }
 
-        if (ability.RecallTarget)
+        if (ability.ResurrectTarget)
+        {
+            // The target is a dead player by now (TargetStateRejection
+            // above); they stand back up where they fell. Same target-side
+            // VFX path a direct heal uses, if the asset has one wired.
+            target.Stats.Resurrect(ability.ResurrectHealthPercent, ability.ResurrectManaPercent);
+            if (ability.TargetVfxPrefab != null) PlayTargetVfxClientRpc(ability.Id, targetNetworkObjectId);
+        }
+        else if (ability.RecallTarget)
         {
             Vector3 recallPosition = transform.position;
             if (targetObject.TryGetComponent(out PlayerMovement targetMovement))
@@ -1119,13 +1313,14 @@ public class PlayerAbilities : NetworkBehaviour
     }
 
     [ServerRpc]
-    private void CastGroundTargetedAbilityServerRpc(int slotIndex, Vector3 groundPosition)
+    private void CastGroundTargetedAbilityServerRpc(int slotIndex, Vector3 groundPosition, Vector2 facing)
     {
         if (slotIndex < 0 || slotIndex >= serverSlotAbilities.Length) return;
 
         AbilityData ability = serverSlotAbilities[slotIndex];
         if (ability == null || !ability.IsGroundTargeted) return;
 
+        if (RejectIfDead(ability)) return;
         if (RejectIfNotReady(ability)) return;
         if (Vector3.Distance(transform.position, groundPosition) > ability.Range)
         {
@@ -1139,7 +1334,7 @@ public class PlayerAbilities : NetworkBehaviour
         }
 
         // Mana is spent at resolve, not here - see ResolveGroundAbility.
-        StartServerCast(ability, () => ResolveGroundAbility(ability, groundPosition));
+        StartServerCast(ability, () => ResolveGroundAbility(ability, groundPosition, facing));
     }
 
     // No range/facing/LoS re-check at resolve time (unlike unit-targeted
@@ -1148,11 +1343,11 @@ public class PlayerAbilities : NetworkBehaviour
     // spent here rather than at cast start, for consistency with
     // ResolveAbility (and so a class of failure this method might grow
     // later - e.g. a re-check - doesn't cost mana on fizzle).
-    private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition)
+    private void ResolveGroundAbility(AbilityData ability, Vector3 groundPosition, Vector2 facing)
     {
         if (ability.IsPersistentStructure)
         {
-            ResolvePersistentStructure(ability, groundPosition);
+            ResolvePersistentStructure(ability, groundPosition, facing);
             return;
         }
 
@@ -1205,35 +1400,56 @@ public class PlayerAbilities : NetworkBehaviour
         }
     }
 
-    // Ground-targeted, no combat effect: spawns/replaces this caster's one
-    // active StructurePrefab instance for this ability - e.g. Earthen
-    // Bastion's wall. Oriented so its width axis is perpendicular to the
-    // caster's current facing (i.e. "across" whatever's directly ahead),
-    // since a ground-targeted cast only ever gives a point, not a facing.
-    private void ResolvePersistentStructure(AbilityData ability, Vector3 groundPosition)
+    // Ground-targeted, no combat effect: spawns a StructurePrefab instance
+    // for this ability - e.g. Summon Wall - evicting this caster's oldest one
+    // once they already have AbilityData.MaxActiveStructures standing.
+    // The prefab carries a SegmentedWall, oriented so its width axis is
+    // perpendicular to the owner's facing at click time (sent with the cast,
+    // since a ground-targeted cast only ever gives a point). It's placed on
+    // the terrain height at the aimed X/Z, not the raycast hit's Y (which
+    // can be a roof or prop), with the server deciding which segments a
+    // cliff removes before spawn. Anything that fizzles does so before any
+    // wall is removed.
+    private void ResolvePersistentStructure(AbilityData ability, Vector3 groundPosition, Vector2 facing)
     {
-        if (ability.StructurePrefab == null)
+        if (ability.StructurePrefab == null || !ability.StructurePrefab.TryGetComponent(out SegmentedWall _))
         {
             NotifyCastFizzledClientRpc("Structure not configured yet");
             return;
         }
+        // A NaN/Infinity point would poison every terrain sample and the
+        // spawn position; refuse it before mana is spent.
+        if (!float.IsFinite(groundPosition.x) || !float.IsFinite(groundPosition.y) || !float.IsFinite(groundPosition.z))
+        {
+            NotifyCastFizzledClientRpc("Invalid target");
+            return;
+        }
         if (!TrySpendOrFizzle(ability)) return;
 
-        if (activeStructures.TryGetValue(ability, out NetworkObject previous) && previous != null)
+        Quaternion rotation = WallSegmentLayout.FacingRotation(facing, transform.forward);
+
+        SegmentedWall.WallSpec spec = SegmentedWall.BuildSpec(
+            groundPosition, rotation * Vector3.right, ability.StructureWidth, ability.StructureHeight, ability.StructureThickness, out float anchorY);
+
+        GameObject instance = Instantiate(ability.StructurePrefab, new Vector3(groundPosition.x, anchorY, groundPosition.z), rotation);
+        instance.GetComponent<SegmentedWall>().Configure(spec);
+        NetworkObject instanceObject = instance.GetComponent<NetworkObject>();
+
+        if (!activeStructures.TryGetValue(ability, out List<NetworkObject> structures))
         {
-            if (previous.TryGetComponent(out PlacedStructure previousStructure)) previousStructure.ServerDespawn();
+            structures = new List<NetworkObject>();
+            activeStructures[ability] = structures;
         }
 
-        Vector3 flatForward = transform.forward;
-        flatForward.y = 0f;
-        flatForward = flatForward.sqrMagnitude > 0.0001f ? flatForward.normalized : Vector3.forward;
-        Quaternion rotation = Quaternion.LookRotation(flatForward, Vector3.up);
+        // Dead entries (already despawned) are dropped first so they can't
+        // push a live wall out; then the oldest live ones make room.
+        foreach (NetworkObject evicted in StructureEviction.MakeRoom(structures, ability.MaxActiveStructures, s => s == null || !s.IsSpawned))
+        {
+            if (evicted != null && evicted.IsSpawned) evicted.Despawn();
+        }
 
-        GameObject instance = Instantiate(ability.StructurePrefab, groundPosition, rotation);
-        instance.GetComponent<NetworkObject>().Spawn();
-        instance.GetComponent<PlacedStructure>().Initialize(ability.StructureWidth, ability.StructureHeight, ability.StructureThickness);
-
-        activeStructures[ability] = instance.GetComponent<NetworkObject>();
+        instanceObject.Spawn();
+        structures.Add(instanceObject);
     }
 
     private bool IsWithinFacingCone(NetworkObject targetObject)

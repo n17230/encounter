@@ -46,6 +46,10 @@ public class PlayerProfile
     public float CameraZoomDistance = 0f;
     // Last server address joined as a client; empty = NetworkBootstrap's default.
     public string ServerAddress = "";
+    // The last character name sent with Ready in the lobby - only a pre-fill
+    // for the Lobby panel's name field; the server validates it fresh every
+    // session (see NameRules/LobbyState).
+    public string CharacterName = "";
 
     // Cosmetic appearance - see CharacterAppearance. Entirely separate from
     // EquipmentIds (no stat effect); AppearanceHeadwearId/AppearanceFacialHairId
@@ -126,6 +130,39 @@ public class PlayerProfile
 
     public bool IsEquipped(ItemData item) => item != null && Array.IndexOf(EquipmentIds, item.Id) >= 0;
 
+    // Overwrites the ability slots with what the server actually accepted at
+    // a lobby confirm (see LobbyState's PicksValidated reply) - an Id the
+    // server dropped (someone else claimed it first) leaves its slot empty,
+    // and an empty slot loses its key binding too, same as RemoveSkillSlot,
+    // so a dead binding can't linger on a slot with nothing in it. Only
+    // stores the Ids: no GameDatabase lookup, so it's pure. In-memory only -
+    // disk changes at the next normal save point.
+    public void ApplyValidatedLoadout(string[] validatedIds)
+    {
+        for (int slot = 0; slot < AbilitySlots; slot++)
+        {
+            string id = validatedIds != null && slot < validatedIds.Length ? validatedIds[slot] : null;
+            if (string.IsNullOrEmpty(id) || Array.IndexOf(SlotAbilityIds, id, 0, slot) >= 0)
+            {
+                SlotAbilityIds[slot] = null;
+                SetSlotKey(slot, null);
+                continue;
+            }
+            SlotAbilityIds[slot] = id;
+        }
+    }
+
+    // Gear counterpart of ApplyValidatedLoadout - per physical slot, the Id
+    // the server kept or empty.
+    public void ApplyValidatedEquipment(string[] validatedIds)
+    {
+        for (int slot = 0; slot < EquipmentSlotCount; slot++)
+        {
+            string id = validatedIds != null && slot < validatedIds.Length ? validatedIds[slot] : null;
+            EquipmentIds[slot] = string.IsNullOrEmpty(id) ? null : id;
+        }
+    }
+
     public AppearanceGender Gender => AppearanceIsFemale ? AppearanceGender.Female : AppearanceGender.Male;
 
     public AppearancePieceData GetAppearanceTop() => GameDatabase.GetAppearancePiece(AppearanceTopId);
@@ -178,6 +215,10 @@ public class PlayerProfile
         UiScale = Mathf.Clamp(UiScale <= 0f ? 1f : UiScale, UIScale.Min, UIScale.Max);
         LookSensitivity = Mathf.Clamp(LookSensitivity <= 0f ? 1f : LookSensitivity, LookSensitivityScale.Min, LookSensitivityScale.Max);
         if (CameraZoomDistance > 0f) CameraZoomDistance = Mathf.Clamp(CameraZoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
+        // A profile saved before the lobby existed has no name field at all -
+        // JsonUtility leaves it null, which the Lobby panel's TextField can't
+        // take as a value.
+        if (CharacterName == null) CharacterName = "";
 
         // A slot Id that no longer resolves, or no longer matches the
         // current gender (e.g. the gender was just switched), is cleared the

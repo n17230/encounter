@@ -50,21 +50,16 @@
     margin-left: 24px;
 }
 
-.equip-grid {
-    flex-direction: column;
-    /* 3 columns * (72px box + 6px gap) - matches EquipmentPanelController's
-       explicit PaperDollLayout rows (body-shaped, not a plain wrap). */
+/* Every player's equipped items, between the preview and the inventory -
+   3 x (72px box + 6px gap) wide, so one row of icons wraps the way the old
+   paper-doll grid was laid out. See PicksSection.cs. */
+.equipment-column--picks {
     width: 234px;
 }
 
-.equip-grid-row {
-    flex-direction: row;
-}
-
-/* The main/off-hand row has only 2 slots, not 3 - centered under the rest
-   of the body-shaped layout instead of sitting flush left. */
-.equip-grid-row--centered {
-    justify-content: center;
+.equipment-picks-scroll {
+    max-height: 420px;
+    margin-top: 4px;
 }
 
 .inventory-scroll {
@@ -108,14 +103,6 @@
     height: 100%;
     background-color: var(--color-surface-alt);
     border-radius: 4px;
-}
-
-.equipment-slot__label {
-    position: absolute;
-    left: 3px;
-    top: 2px;
-    color: var(--color-text-secondary);
-    font-size: 9px;
 }
 
 .equipment-slot__none-label {

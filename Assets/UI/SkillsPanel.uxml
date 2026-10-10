@@ -9,18 +9,27 @@
                 <ui:VisualElement class="panel__header-spacer" />
             </ui:VisualElement>
 
-            <ui:Label text="YOUR KIT" class="section-label" />
-            <ui:VisualElement name="kit-toolbar" class="kit-toolbar" />
+            <ui:VisualElement class="skills-columns">
+                <ui:VisualElement class="skills-column skills-column--picks">
+                    <ui:Label text="TEAM PICKS" class="section-label" />
+                    <ui:ScrollView name="picks-scroll" class="skills-picks-scroll" />
+                </ui:VisualElement>
 
-            <ui:VisualElement name="kit-subrow" class="kit-subrow">
-                <ui:Label name="kit-subrow-label" class="kit-subrow__label" />
-                <ui:Button name="key-binding-button" text="Set Key Binding" class="button" />
-                <ui:Button name="remove-button" text="Remove" class="button button--ghost" />
+                <ui:VisualElement class="skills-column skills-column--main">
+                    <ui:Label text="YOUR KIT" class="section-label" />
+                    <ui:VisualElement name="kit-toolbar" class="kit-toolbar" />
+
+                    <ui:VisualElement name="kit-subrow" class="kit-subrow">
+                        <ui:Label name="kit-subrow-label" class="kit-subrow__label" />
+                        <ui:Button name="key-binding-button" text="Set Key Binding" class="button" />
+                        <ui:Button name="remove-button" text="Remove" class="button button--ghost" />
+                    </ui:VisualElement>
+
+                    <ui:Label text="AVAILABLE ABILITIES" class="section-label" />
+                    <ui:VisualElement name="category-tabs" class="category-tabs" />
+                    <ui:ScrollView name="available-scroll" />
+                </ui:VisualElement>
             </ui:VisualElement>
-
-            <ui:Label text="AVAILABLE ABILITIES" class="section-label" />
-            <ui:VisualElement name="category-tabs" class="category-tabs" />
-            <ui:ScrollView name="available-scroll" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

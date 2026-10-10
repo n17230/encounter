@@ -53,3 +53,4 @@ MonoBehaviour:
   AuraRange: 40
   AuraReveals: 0
   RemovesNegativeEffect: 1
+  Icon: {fileID: 21300000, guid: d4ac7b1f1abd9514f8e1b7cd8ad24f62, type: 3}

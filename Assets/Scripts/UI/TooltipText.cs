@@ -28,6 +28,7 @@ public static class TooltipText
             // mechanic (ItemData.Reveals) - a periodic ping, not a live
             // tracker, so "reveals" alone would overstate it.
             if ((ability.AuraReveals & MinimapReveal.Mobs) != 0) sb.AppendLine("Pulses monsters onto the minimap every 5s.");
+            if (ability.AuraShowsPerceptionOrbs) sb.AppendLine("Shows an orb above every mob, indicating its targeting style.");
             return sb.ToString().TrimEnd();
         }
 
@@ -48,7 +49,16 @@ public static class TooltipText
 
         if (ability.IsGroundTargeted)
         {
-            sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area.");
+            // A structure's footprint is its wall width, not a circle -
+            // GroundEffectRadius is only the (unused) leftover there.
+            if (ability.IsPersistentStructure)
+            {
+                sb.AppendLine($"Raises a {WallSegmentLayout.EffectiveWidth(ability.StructureWidth, SegmentedWall.SegmentWidth)}-wide wall.");
+            }
+            else
+            {
+                sb.AppendLine($"Ground-targeted: {ability.GroundEffectRadius * 2f} diameter area.");
+            }
             if (ability.ForceSpeed > 0f)
             {
                 string direction = ability.PushAway ? "outward, away from" : "inward, toward";
@@ -57,6 +67,7 @@ public static class TooltipText
         }
         if (ability.AreaAroundCaster) sb.AppendLine($"Centered on you: {ability.GroundEffectRadius} radius, affects all players.");
         if (ability.RecallTarget) sb.AppendLine("Teleports the target to your location.");
+        if (ability.ResurrectTarget) sb.AppendLine($"Resurrects a dead player with {ability.ResurrectHealthPercent * 100f:0}% health and {ability.ResurrectManaPercent * 100f:0}% mana.");
 
         if (ability.Effect != null)
         {

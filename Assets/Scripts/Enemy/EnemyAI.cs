@@ -59,6 +59,10 @@ public class EnemyAI : NetworkBehaviour
     // rather than throwing.
     private readonly Vector3[] cornerBuffer = new Vector3[32];
     private int cornerBufferCount;
+    // Whether cachedPath stopped short of the destination (PathPartial) -
+    // set alongside cornerBufferCount in the recalc branch, same lifetime,
+    // since status only describes the path just computed.
+    private bool cachedPathIsPartial;
     // Randomized per-instance so every mob spawned in the same wave
     // doesn't recalculate on the exact same physics tick forever after -
     // that would be a periodic synchronized CPU spike with many
@@ -212,6 +216,11 @@ public class EnemyAI : NetworkBehaviour
     // Every currently-active mob - see Registry.
     public static IReadOnlyList<EnemyAI> All => Registry<EnemyAI>.All;
 
+    // The prefab-configured mode only - never the Tactical Instruction
+    // override FindTarget may be applying right now - so a Perception orb
+    // reads as a stable "what kind of mob is this", not a flickering state.
+    public TargetingMode BaseTargetingMode => targetingMode;
+
     private void OnEnable() => Registry<EnemyAI>.Add(this);
     private void OnDisable() => Registry<EnemyAI>.Remove(this);
 
@@ -353,9 +362,22 @@ public class EnemyAI : NetworkBehaviour
         if (distance > range)
         {
             Vector3 moveDirection = ComputeChaseDirection(target.transform.position);
-            transform.rotation = Quaternion.LookRotation(moveDirection);
-            MoveWithGravity(moveDirection * stats.RunSpeed.Value);
-            if (animator != null) animator.SetFloat("speed", 1f);
+            if (moveDirection == Vector3.zero)
+            {
+                // At the end of a partial path (the nearest reachable point
+                // - e.g. this side of a carved Summon Wall): hold here
+                // facing the target rather than press into what blocks the
+                // way. Never hand a zero vector to LookRotation.
+                MoveWithGravity(Vector3.zero);
+                if (animator != null) animator.SetFloat("speed", 0f);
+                FaceTowards(toTarget);
+            }
+            else
+            {
+                transform.rotation = Quaternion.LookRotation(moveDirection);
+                MoveWithGravity(moveDirection * stats.RunSpeed.Value);
+                if (animator != null) animator.SetFloat("speed", 1f);
+            }
         }
         else
         {
@@ -453,12 +475,15 @@ public class EnemyAI : NetworkBehaviour
 
             float threat = 0f;
             threatTable?.ThreatByClientId.TryGetValue(client.ClientId, out threat);
+            float healing = 0f;
+            threatTable?.HealingByClientId.TryGetValue(client.ClientId, out healing);
 
             candidates.Add(new TargetCandidate<CharacterStats>
             {
                 Subject = candidateStats,
                 Threat = threat,
                 Distance = Vector3.Distance(transform.position, candidateStats.transform.position),
+                Healing = healing,
             });
         }
 
@@ -890,7 +915,10 @@ public class EnemyAI : NetworkBehaviour
         if (animator != null) animator.SetFloat("speed", 0f);
         FaceTowards(toTarget);
 
-        if (Time.time >= nextAttackTime && weapon != null)
+        // Range-gated: a zero move direction also means "stuck at the end of
+        // a partial path" (blocked by a carved Summon Wall), not only "in
+        // range", so standing still must not be enough to swing.
+        if (Time.time >= nextAttackTime && weapon != null && distance <= range)
         {
             nextAttackTime = Time.time + cadence;
             if (animator != null) animator.SetTrigger("attack");
@@ -941,8 +969,13 @@ public class EnemyAI : NetworkBehaviour
     // NavMesh path's corners when one can be found, recalculated at most
     // every PathRecalcInterval (not every tick), falling back to a
     // straight line whenever no path is available (no NavMesh baked yet,
-    // this mob is off-mesh - e.g. airborne mid-knockback - or the
-    // destination is genuinely unreachable). No per-corner-index tracking
+    // or this mob is off-mesh - e.g. airborne mid-knockback). An
+    // unreachable destination (e.g. behind a carved Summon Wall) gives a
+    // partial path to the nearest reachable point; once there this
+    // returns zero and the caller holds position - both chase sites treat
+    // zero as "stand and face", never as a LookRotation input, and
+    // MobPathing's arrival tolerance is this tick's step so the mob
+    // doesn't oscillate across the end. No per-corner-index tracking
     // across ticks: between recalcs this keeps aiming at the same
     // second corner even after passing near it, which can cause a brief
     // wobble right at a corner until the next recalc - bounded by
@@ -959,8 +992,10 @@ public class EnemyAI : NetworkBehaviour
             NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = navAgentTypeId, areaMask = NavMesh.AllAreas };
             NavMesh.CalculatePath(FeetPosition(), destination, filter, cachedPath);
             cornerBufferCount = cachedPath.GetCornersNonAlloc(cornerBuffer);
+            cachedPathIsPartial = cachedPath.status == NavMeshPathStatus.PathPartial;
         }
-        return MobPathing.DirectionTowardPath(transform.position, destination, cornerBuffer, cornerBufferCount);
+        return MobPathing.DirectionTowardPath(transform.position, destination, cornerBuffer, cornerBufferCount,
+            cachedPathIsPartial, stats.RunSpeed.Value * Time.fixedDeltaTime);
     }
 
     // The bottom of this mob's capsule - what a NavMesh query should start
@@ -972,6 +1007,16 @@ public class EnemyAI : NetworkBehaviour
     {
         float halfHeight = controller.height * 0.5f * Mathf.Abs(transform.lossyScale.y);
         return transform.position + transform.TransformVector(controller.center) - Vector3.up * halfHeight;
+    }
+
+    // The top of this mob's capsule - FeetPosition's mirror - so an
+    // overhead marker (PerceptionOrbs) sits above a 2x-scaled Ogre's head,
+    // not above its waist. Capsule top rather than a head bone: every mob
+    // has a CharacterController, not every mob has a rigged head.
+    public Vector3 HeadPosition()
+    {
+        float halfHeight = controller.height * 0.5f * Mathf.Abs(transform.lossyScale.y);
+        return transform.position + transform.TransformVector(controller.center) + Vector3.up * halfHeight;
     }
 
     // Smallest baked agent type that still contains this mob's capsule

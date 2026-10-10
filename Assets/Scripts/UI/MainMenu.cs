@@ -3,12 +3,13 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
-// Pregame menu (skills / equipment / options / enter) and, once in the testing
-// area, the Escape menu that reuses the same panels. All choices are read
+// The pre-game lobby (Lobby / Choice screens plus the Skills / Equipment /
+// Appearance panels, driven by LobbyState's phase) and, once the game has
+// started, the Escape menu that reuses the same panels. All choices are read
 // from and written to ProfileStore.Current, which persists across restarts.
 public class MainMenu : MonoBehaviour
 {
-    private enum Panel { None, Skills, Equipment, Appearance, Options, Summon }
+    private enum Panel { None, Skills, Equipment, Appearance, Options, Summon, Lobby, Choice }
 
     // Live character preview shown on the Appearance panel - see
     // CharacterPreview. Both are optional (null until the Editor-side
@@ -27,6 +28,8 @@ public class MainMenu : MonoBehaviour
     [SerializeField] private SummonPanelController summonPanelUI;
     [SerializeField] private SkillsPanelController skillsPanelUI;
     [SerializeField] private EquipmentPanelController equipmentPanelUI;
+    [SerializeField] private LobbyPanelController lobbyPanelUI;
+    [SerializeField] private ChoicePanelController choicePanelUI;
 
     private static readonly KeyCode[] AllKeyCodes = (KeyCode[])System.Enum.GetValues(typeof(KeyCode));
     private static readonly string[] MovementActionNames = System.Enum.GetNames(typeof(MovementAction));
@@ -51,7 +54,28 @@ public class MainMenu : MonoBehaviour
     private int summonCount = 1;
     private PlayerSummon summonListBuiltFor;
 
+    // Lobby bookkeeping - see SyncWithLobby. Which panel the lobby's phase
+    // (plus our own admitted status) last drove us to; re-applied only when
+    // that resolution changes, so the user's own navigation inside a phase
+    // (Design Character from the Lobby panel, the Escape menu after Start)
+    // isn't fought every frame.
+    private Panel appliedLobbyPanel = Panel.None;
+    private LobbyState observedLobby;
+    private bool lobbyNameFieldPrimed;
+    // Set by LobbyState.Entries' change callback; the open picks section is
+    // rebuilt on the next Update rather than inside the callback.
+    private bool picksDirty;
+    private readonly List<LobbyPlayerDisplay> lobbyPlayerRows = new List<LobbyPlayerDisplay>();
+
     private static PlayerProfile Profile => ProfileStore.Current;
+
+    // True from connecting until the lobby's Start lands for this client
+    // (a waiter left behind at Start stays here until they reconnect).
+    private bool InLobby => observedLobby != null && !TestingAreaGate.Entered;
+
+    private static ulong LocalClientId => NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : ulong.MaxValue;
+
+    private bool IsLocalNavigator => observedLobby != null && observedLobby.Navigator.Value == LocalClientId;
 
     private void Awake()
     {
@@ -75,8 +99,7 @@ public class MainMenu : MonoBehaviour
             menuShellUI.AppearanceClicked += () => OpenPanel(Panel.Appearance);
             menuShellUI.SummonClicked += () => OpenPanel(Panel.Summon);
             menuShellUI.OptionsClicked += () => OpenPanel(Panel.Options);
-            menuShellUI.RespawnClicked += () => LocalPlayer<CharacterStats>()?.RequestRespawn();
-            menuShellUI.EnterTestingAreaClicked += EnterTestingArea;
+            menuShellUI.RespawnClicked += () => LocalPlayer<PlayerRespawn>()?.RequestRespawn();
             menuShellUI.ResumeClicked += CloseInGameMenu;
             menuShellUI.ExitClicked += QuitGame;
         }
@@ -101,7 +124,7 @@ public class MainMenu : MonoBehaviour
 
         if (skillsPanelUI != null)
         {
-            skillsPanelUI.BackRequested += LeavePanel;
+            skillsPanelUI.BackRequested += LeavePickingPanel;
             skillsPanelUI.AvailableAbilityClicked += AssignAbilityToFirstEmptySlot;
             skillsPanelUI.SlotClicked += ToggleSelectedSkillSlot;
             skillsPanelUI.RemoveClicked += RemoveSkillSlot;
@@ -115,7 +138,7 @@ public class MainMenu : MonoBehaviour
 
         if (equipmentPanelUI != null)
         {
-            equipmentPanelUI.BackRequested += LeavePanel;
+            equipmentPanelUI.BackRequested += LeavePickingPanel;
             equipmentPanelUI.EquipSlotClicked += OnEquipSlotClicked;
             equipmentPanelUI.InventoryItemClicked += EquipInventoryItem;
             equipmentPanelUI.UnequipClicked += OnUnequipClicked;
@@ -126,6 +149,40 @@ public class MainMenu : MonoBehaviour
         {
             Debug.LogWarning("MainMenu: Equipment Panel Ui isn't assigned - the Equipment panel won't open.");
         }
+
+        if (lobbyPanelUI != null)
+        {
+            lobbyPanelUI.DesignCharacterClicked += () => OpenPanel(Panel.Appearance);
+            lobbyPanelUI.ReadyClicked += OnReadyClicked;
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Lobby Panel Ui isn't assigned - the Lobby panel won't open.");
+        }
+
+        if (choicePanelUI != null)
+        {
+            choicePanelUI.SpellsClicked += () => observedLobby?.NavigateRpc(LobbyPhase.Spells);
+            choicePanelUI.EquipmentClicked += () => observedLobby?.NavigateRpc(LobbyPhase.Equipment);
+            choicePanelUI.BackToMainMenuClicked += () => observedLobby?.NavigateRpc(LobbyPhase.MainMenu);
+            choicePanelUI.StartClicked += () => observedLobby?.StartGameRpc();
+        }
+        else
+        {
+            Debug.LogWarning("MainMenu: Choice Panel Ui isn't assigned - the Choice panel won't open.");
+        }
+
+        // Static (not per-instance) events: no LobbyState exists yet when this
+        // runs, and the replies are addressed to this client alone anyway.
+        LobbyState.NameRejected += OnNameRejected;
+        LobbyState.PicksValidated += OnPicksValidated;
+    }
+
+    private void OnDestroy()
+    {
+        LobbyState.NameRejected -= OnNameRejected;
+        LobbyState.PicksValidated -= OnPicksValidated;
+        WatchLobby(null);
     }
 
     private void Start()
@@ -140,6 +197,8 @@ public class MainMenu : MonoBehaviour
 
     private void Update()
     {
+        SyncWithLobby();
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             HandleEscape();
@@ -183,9 +242,34 @@ public class MainMenu : MonoBehaviour
             summonPanelUI.Refresh(summon != null && summon.SummonableMobs.Count > 0, summonMobIndex, summonCount);
         }
 
+        if (lobbyPanelUI != null && activePanel == Panel.Lobby)
+        {
+            lobbyPanelUI.Refresh(BuildLobbyPanelData());
+        }
+
+        if (choicePanelUI != null && activePanel == Panel.Choice)
+        {
+            choicePanelUI.Refresh(IsLocalNavigator, NavigatorName(), BuildLobbyPlayerRows());
+        }
+
+        // Another player's confirmed picks landed - redraw the open picks
+        // section (a full rebuild, same path a local change takes).
+        if (picksDirty)
+        {
+            picksDirty = false;
+            if (activePanel == Panel.Skills) RebuildSkillsLists();
+            if (activePanel == Panel.Equipment) RebuildEquipmentLists();
+        }
+
         if (skillsPanelUI != null && activePanel == Panel.Skills)
         {
             skillsPanelUI.RefreshSelection(selectedSlot, awaitingKeyForSlot);
+            skillsPanelUI.SetBackVisible(CanLeavePickingPanel);
+        }
+
+        if (equipmentPanelUI != null && activePanel == Panel.Equipment)
+        {
+            equipmentPanelUI.SetBackVisible(CanLeavePickingPanel);
         }
 
         if (characterPreview != null)
@@ -218,12 +302,241 @@ public class MainMenu : MonoBehaviour
         awaitingKeyForMovement = -1;
     }
 
-    private void EnterTestingArea()
+    // ---- Lobby ----------------------------------------------------------
+
+    // Reads LobbyState every frame (gated on it being spawned, and on this
+    // process being a client - a dedicated server has no screens) rather
+    // than subscribing to its value-changed events, so nothing depends on
+    // the order the scene object, its NetworkVariables and this component
+    // come up in.
+    private void SyncWithLobby()
     {
-        ProfileStore.Save();
-        TestingAreaGate.Entered = true;
-        RefreshPanelVisibility();
+        LobbyState lobby = LobbyState.Instance;
+        bool present = lobby != null && lobby.IsSpawned
+            && NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient;
+
+        if (!present)
+        {
+            if (observedLobby == null) return;
+            // The session ended under us (disconnect, host stopped) -
+            // NetworkBootstrap already reset TestingAreaGate.Entered; drop
+            // whatever lobby or in-game panel was up and go back to the
+            // connect panel.
+            WatchLobby(null);
+            appliedLobbyPanel = Panel.None;
+            lobbyNameFieldPrimed = false;
+            IsOpen = false;
+            SetActivePanel(Panel.None);
+            RefreshPanelVisibility();
+            return;
+        }
+
+        if (observedLobby != lobby) WatchLobby(lobby);
+
+        Panel desired = ResolveLobbyPanel(lobby);
+        if (desired == appliedLobbyPanel) return;
+        appliedLobbyPanel = desired;
+        ApplyLobbyPanel(desired);
     }
+
+    private void WatchLobby(LobbyState lobby)
+    {
+        if (observedLobby != null) observedLobby.Entries.OnListChanged -= OnLobbyEntriesChanged;
+        observedLobby = lobby;
+        if (observedLobby != null) observedLobby.Entries.OnListChanged += OnLobbyEntriesChanged;
+    }
+
+    private void OnLobbyEntriesChanged(NetworkListEvent<LobbyEntry> _)
+    {
+        picksDirty = true;
+    }
+
+    // Which screen the phase puts THIS client on. A waiter (not admitted -
+    // joined while the team was already picking) stays on the Lobby panel
+    // whatever the phase, including after Start; a client whose own entry
+    // hasn't arrived yet (just connected) is treated as waiting, except after
+    // Start where the approval callback already spawned it straight in.
+    private Panel ResolveLobbyPanel(LobbyState lobby)
+    {
+        bool hasEntry = lobby.TryGetEntry(LocalClientId, out LobbyEntry entry);
+        bool admitted = hasEntry && entry.Admitted;
+        switch (lobby.Phase.Value)
+        {
+            case LobbyPhase.Started: return admitted || !hasEntry ? Panel.None : Panel.Lobby;
+            case LobbyPhase.Choice: return admitted ? Panel.Choice : Panel.Lobby;
+            case LobbyPhase.Spells: return admitted ? Panel.Skills : Panel.Lobby;
+            case LobbyPhase.Equipment: return admitted ? Panel.Equipment : Panel.Lobby;
+            default: return Panel.Lobby;
+        }
+    }
+
+    private void ApplyLobbyPanel(Panel desired)
+    {
+        switch (desired)
+        {
+            case Panel.None:
+                EnterGame();
+                break;
+            case Panel.Lobby:
+                // Don't yank someone out of Design Character - its Back
+                // returns to the Lobby panel on its own (see LeavePanel).
+                if (activePanel != Panel.Appearance)
+                {
+                    SetActivePanel(Panel.Lobby);
+                    RefreshPanelVisibility();
+                }
+                if (!lobbyNameFieldPrimed)
+                {
+                    lobbyNameFieldPrimed = true;
+                    lobbyPanelUI?.SetName(Profile.CharacterName);
+                }
+                break;
+            case Panel.Choice:
+                SetActivePanel(Panel.Choice);
+                RefreshPanelVisibility();
+                break;
+            case Panel.Skills:
+            case Panel.Equipment:
+                OpenPanel(desired);
+                break;
+        }
+    }
+
+    // The lobby's Start landed: the game is live for this client (its player
+    // is spawning), the lobby UI closes. Saves the profile here the way the
+    // old "Enter Testing Area" did - the next normal save point after any
+    // picks the server trimmed at a confirm.
+    private void EnterGame()
+    {
+        TestingAreaGate.Entered = true;
+        IsOpen = false;
+        SetActivePanel(Panel.None);
+        selectedSlot = -1;
+        awaitingKeyForSlot = -1;
+        awaitingKeyForMovement = -1;
+        RefreshPanelVisibility();
+        ProfileStore.Save();
+    }
+
+    // "Confirm" = leaving a picking screen, whatever caused it (own Back,
+    // the navigator moving everyone, Start) - called from SetActivePanel, the
+    // single panel-change path. Sends the Profile's current contents for
+    // that category; the server's validated result comes back through
+    // OnPicksValidated. Only meaningful during the lobby: in-game changes
+    // sync through MainMenu.Closed as before.
+    private void ConfirmPicks(LobbyPicksKind kind)
+    {
+        if (!InLobby) return;
+        string joined = kind == LobbyPicksKind.Spells
+            ? string.Join(";", Profile.SlotAbilityIds)
+            : string.Join(";", Profile.EquipmentIds);
+        observedLobby.SetPicksRpc(kind, joined);
+    }
+
+    // The in-memory Profile takes what the server kept (an Id someone else
+    // claimed first is dropped); disk follows at the next normal save point.
+    private void OnPicksValidated(LobbyPicksKind kind, string joinedIds)
+    {
+        string[] ids = (joinedIds ?? "").Split(';');
+        if (kind == LobbyPicksKind.Spells)
+        {
+            Profile.ApplyValidatedLoadout(ids);
+            if (activePanel == Panel.Skills) RebuildSkillsLists();
+        }
+        else
+        {
+            Profile.ApplyValidatedEquipment(ids);
+            if (activePanel == Panel.Equipment) RebuildEquipmentLists();
+        }
+    }
+
+    private void OnNameRejected(string reason)
+    {
+        lobbyPanelUI?.ShowNameError(reason);
+    }
+
+    // Ready and Unready share one button; which one this is comes from the
+    // synced entry, not a local flag, so a rejected name (Ready never set
+    // server-side) leaves the button reading "Ready" on its own.
+    private void OnReadyClicked(string name)
+    {
+        if (observedLobby == null) return;
+        bool currentlyReady = observedLobby.TryGetEntry(LocalClientId, out LobbyEntry entry) && entry.Ready;
+        if (currentlyReady)
+        {
+            observedLobby.SubmitReadyRpc(name, false);
+            return;
+        }
+        Profile.CharacterName = (name ?? "").Trim();
+        lobbyPanelUI?.ShowNameError(null);
+        observedLobby.SubmitReadyRpc(name, true);
+    }
+
+    // Skills/Equipment Back: in-game it just leaves the panel; during the
+    // lobby only the navigator has it, and it takes everyone back to the
+    // Choice screen (the phase change is what closes the panel here too).
+    private bool CanLeavePickingPanel => !InLobby || IsLocalNavigator;
+
+    private void LeavePickingPanel()
+    {
+        if (InLobby)
+        {
+            if (IsLocalNavigator) observedLobby.NavigateRpc(LobbyPhase.Choice);
+            return;
+        }
+        LeavePanel();
+    }
+
+    private static string DisplayNameFor(in LobbyEntry entry)
+    {
+        return entry.Name.Length > 0 ? entry.Name.ToString() : "(no name)";
+    }
+
+    private string NavigatorName()
+    {
+        if (observedLobby == null || !observedLobby.TryGetEntry(observedLobby.Navigator.Value, out LobbyEntry navigator)) return "(no one)";
+        return DisplayNameFor(navigator);
+    }
+
+    // Everyone connected (waiters included), ascending clientId - the same
+    // canonical order the picks sections and party frames use.
+    private List<LobbyPlayerDisplay> BuildLobbyPlayerRows()
+    {
+        lobbyPlayerRows.Clear();
+        if (observedLobby == null) return lobbyPlayerRows;
+
+        ulong localId = LocalClientId;
+        for (int i = 0; i < observedLobby.Entries.Count; i++)
+        {
+            LobbyEntry entry = observedLobby.Entries[i];
+            lobbyPlayerRows.Add(new LobbyPlayerDisplay
+            {
+                ClientId = entry.ClientId,
+                Name = DisplayNameFor(entry),
+                Ready = entry.Ready,
+                Admitted = entry.Admitted,
+                IsLocal = entry.ClientId == localId,
+            });
+        }
+        PicksLayout.SortByClientId(lobbyPlayerRows, row => row.ClientId);
+        return lobbyPlayerRows;
+    }
+
+    private LobbyPanelData BuildLobbyPanelData()
+    {
+        LobbyEntry entry = default;
+        bool hasEntry = observedLobby != null && observedLobby.TryGetEntry(LocalClientId, out entry);
+        return new LobbyPanelData
+        {
+            PlayerCount = observedLobby != null ? observedLobby.Entries.Count : 0,
+            IsReady = hasEntry && entry.Ready,
+            IsAdmitted = hasEntry && entry.Admitted,
+            IsStarted = observedLobby != null && observedLobby.Phase.Value == LobbyPhase.Started,
+            Players = BuildLobbyPlayerRows(),
+        };
+    }
+
+    // ---------------------------------------------------------------------
 
     // Application.Quit() is a no-op in the Editor (Play Mode just keeps
     // running) - stopping Play Mode is the Editor's own equivalent of
@@ -344,7 +657,10 @@ public class MainMenu : MonoBehaviour
         // A heal-over-time/damage-over-time ability has 0 in its own
         // HealAmount/Damage (the real number lives on the applied Effect's
         // TickHeal/TickDamage instead) - e.g. Everliving Touch, Soul Siphon.
-        if (ability.HealAmount > 0f || ability.ShieldAmount > 0f || (ability.Effect != null && ability.Effect.TickHeal > 0f)) return 1;
+        // Resurrect has no HealAmount either (it sets health, see
+        // CharacterStats.Resurrect) but is a heal in every sense that matters.
+        if (ability.HealAmount > 0f || ability.ShieldAmount > 0f || ability.ResurrectTarget
+            || (ability.Effect != null && ability.Effect.TickHeal > 0f)) return 1;
         // A forward charge (Trample) is a melee gap-closer even though it
         // doesn't require a melee weapon to cast - listed under Melee
         // without gating it behind one.
@@ -391,30 +707,88 @@ public class MainMenu : MonoBehaviour
         }
 
         skillsPanelUI.RebuildLists(categories, slots);
+        skillsPanelUI.RebuildPicks(BuildSkillsPicksRows());
+    }
+
+    // The picks column: one row per lobby entry, ascending clientId. The
+    // local row reads the Profile live (what you're picking right now);
+    // everyone else's reads the entry's confirmed, server-validated Spells.
+    // With no lobby (not wired yet) it's just the local row.
+    private List<SkillsPicksRow> BuildSkillsPicksRows()
+    {
+        List<(ulong clientId, SkillsPicksRow row)> rows = new List<(ulong, SkillsPicksRow)>();
+        ulong localId = LocalClientId;
+        bool localIncluded = false;
+
+        if (observedLobby != null)
+        {
+            for (int i = 0; i < observedLobby.Entries.Count; i++)
+            {
+                LobbyEntry entry = observedLobby.Entries[i];
+                bool isLocal = entry.ClientId == localId;
+                localIncluded |= isLocal;
+                List<AbilityData> abilities = new List<AbilityData>();
+                if (isLocal)
+                {
+                    for (int slot = 0; slot < PlayerProfile.AbilitySlots; slot++)
+                    {
+                        AbilityData ability = Profile.GetSlotAbility(slot);
+                        if (ability != null) abilities.Add(ability);
+                    }
+                }
+                else
+                {
+                    foreach (string id in PicksLayout.ResolveIds(entry.Spells.ToString(), id => GameDatabase.GetAbility(id) != null))
+                    {
+                        abilities.Add(GameDatabase.GetAbility(id));
+                    }
+                }
+                rows.Add((entry.ClientId, new SkillsPicksRow { Name = DisplayNameFor(entry), IsLocal = isLocal, Abilities = abilities }));
+            }
+        }
+
+        if (!localIncluded)
+        {
+            List<AbilityData> abilities = new List<AbilityData>();
+            for (int slot = 0; slot < PlayerProfile.AbilitySlots; slot++)
+            {
+                AbilityData ability = Profile.GetSlotAbility(slot);
+                if (ability != null) abilities.Add(ability);
+            }
+            rows.Add((localId, new SkillsPicksRow { Name = LocalFallbackName(), IsLocal = true, Abilities = abilities }));
+        }
+
+        PicksLayout.SortByClientId(rows, row => row.clientId);
+        List<SkillsPicksRow> result = new List<SkillsPicksRow>(rows.Count);
+        foreach ((ulong _, SkillsPicksRow row) in rows) result.Add(row);
+        return result;
+    }
+
+    // The local row's name when there's no lobby entry to read it from.
+    private static string LocalFallbackName()
+    {
+        return string.IsNullOrEmpty(Profile.CharacterName) ? "You" : Profile.CharacterName;
     }
 
     // Centralizes which UI Toolkit panel (if any) is visible for the
-    // current activePanel/IsOpen/TestingAreaGate.Entered combination -
-    // called from every panel-state transition instead of each transition
-    // method managing its own Show()/Hide() calls, so a future panel only
-    // needs one more line here rather than touching every transition method.
+    // current activePanel/IsOpen combination - called from every panel-state
+    // transition instead of each transition method managing its own
+    // Show()/Hide() calls, so a future panel only needs one more line here
+    // rather than touching every transition method. The shell is the
+    // in-game Escape menu only; before Start the lobby panels (driven by
+    // SyncWithLobby) are what activePanel points at, and before a session
+    // exists nothing here shows at all (NetworkBootstrap's connect panel does).
     private void RefreshPanelVisibility()
     {
-        bool showShell = activePanel == Panel.None && (!TestingAreaGate.Entered || IsOpen);
-        if (showShell)
-        {
-            menuShellUI?.SetMode(TestingAreaGate.Entered);
-            menuShellUI?.Show();
-        }
-        else
-        {
-            menuShellUI?.Hide();
-        }
+        bool showShell = activePanel == Panel.None && IsOpen;
+        if (showShell) menuShellUI?.Show(); else menuShellUI?.Hide();
 
         if (activePanel == Panel.Options) optionsPanelUI?.Show(); else optionsPanelUI?.Hide();
         if (activePanel == Panel.Summon) summonPanelUI?.Show(); else summonPanelUI?.Hide();
         if (activePanel == Panel.Skills) skillsPanelUI?.Show(); else skillsPanelUI?.Hide();
         if (activePanel == Panel.Equipment) equipmentPanelUI?.Show(); else equipmentPanelUI?.Hide();
+        if (activePanel == Panel.Lobby) lobbyPanelUI?.Show(); else lobbyPanelUI?.Hide();
+        if (activePanel == Panel.Choice) choicePanelUI?.Show(); else choicePanelUI?.Hide();
     }
 
     private void HandleEscape()
@@ -476,9 +850,12 @@ public class MainMenu : MonoBehaviour
         Closed?.Invoke();
     }
 
+    // Back from a sub-panel: to the Lobby panel during the lobby (Design
+    // Character is the only sub-panel reachable from it), to the shell/
+    // nothing otherwise.
     private void LeavePanel()
     {
-        SetActivePanel(Panel.None);
+        SetActivePanel(InLobby ? Panel.Lobby : Panel.None);
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
@@ -490,13 +867,20 @@ public class MainMenu : MonoBehaviour
     // preview weapon instances synchronously, at the moment of the switch -
     // not on next frame's Update(), which could run before an IMGUI panel
     // switch (handled in OnGUI(), later the same frame) takes effect and
-    // let a weapon leak into another panel's preview for one frame.
+    // let a weapon leak into another panel's preview for one frame. Also
+    // the one place a lobby confirm is sent from: leaving Skills or
+    // Equipment, whatever caused the switch (see ConfirmPicks).
     private void SetActivePanel(Panel panel)
     {
         if (activePanel == Panel.Equipment && panel != Panel.Equipment)
         {
             characterPreview?.RefreshWeapons(null);
             equipmentPreviewRotateDirection = 0f;
+        }
+        if (panel != activePanel)
+        {
+            if (activePanel == Panel.Skills) ConfirmPicks(LobbyPicksKind.Spells);
+            else if (activePanel == Panel.Equipment) ConfirmPicks(LobbyPicksKind.Gear);
         }
         activePanel = panel;
     }
@@ -578,7 +962,7 @@ public class MainMenu : MonoBehaviour
         {
             case Panel.None:
                 // Rendered by MenuShellController (UI Toolkit), not IMGUI -
-                // see RefreshPanelVisibility() for its Show()/Hide()/SetMode wiring.
+                // see RefreshPanelVisibility() for its Show()/Hide() wiring.
                 break;
             case Panel.Skills:
                 // Rendered by SkillsPanelController (UI Toolkit), not IMGUI -
@@ -634,11 +1018,9 @@ public class MainMenu : MonoBehaviour
     // SkillsPanelController/EquipmentPanelController (UI Toolkit) - see
     // RefreshPanelVisibility().
 
-    // Indexed by EquipmentSlot - moved into EquipmentPanelController along
-    // with the rest of the equipment grid's presentation (slot-category
-    // outline colors, the grid layout itself); this array stays here since
-    // RebuildEquipmentLists is what actually builds each
-    // EquipmentSlotDisplay.Label.
+    // Indexed by EquipmentSlot's underlying value - the tag drawn on each
+    // picks icon (see RebuildEquipmentLists / EquipmentPickDisplay.SlotLabel),
+    // so Ring 1 vs Ring 2 reads at a glance.
     private static readonly string[] SlotShortNames =
     {
         "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots",
@@ -665,18 +1047,6 @@ public class MainMenu : MonoBehaviour
     {
         if (equipmentPanelUI == null) return;
 
-        EquipmentSlot[] slotValues = (EquipmentSlot[])System.Enum.GetValues(typeof(EquipmentSlot));
-        List<EquipmentSlotDisplay> slots = new List<EquipmentSlotDisplay>();
-        for (int i = 0; i < slotValues.Length; i++)
-        {
-            slots.Add(new EquipmentSlotDisplay
-            {
-                Slot = slotValues[i],
-                Label = SlotShortNames[i],
-                Equipped = Profile.GetEquipment(slotValues[i]),
-            });
-        }
-
         List<InventoryCategoryDisplay> inventory = new List<InventoryCategoryDisplay>();
         for (int i = 0; i < InventoryCategorySlots.Length; i++)
         {
@@ -689,7 +1059,58 @@ public class MainMenu : MonoBehaviour
             if (categoryIndex >= 0) inventory[categoryIndex].Items.Add(item);
         }
 
-        equipmentPanelUI.Rebuild(slots, inventory);
+        equipmentPanelUI.Rebuild(BuildEquipmentPicksRows(), inventory);
+    }
+
+    // The picks section: one row per lobby entry, ascending clientId. The
+    // local row reads the Profile live; everyone else's reads the entry's
+    // confirmed Gear, which is positional (one Id per physical slot, empty
+    // for none - the same joined form the equipment sync sends), so the slot
+    // label comes from the position. With no lobby it's just the local row.
+    private List<EquipmentPicksRow> BuildEquipmentPicksRows()
+    {
+        List<(ulong clientId, EquipmentPicksRow row)> rows = new List<(ulong, EquipmentPicksRow)>();
+        ulong localId = LocalClientId;
+        bool localIncluded = false;
+
+        if (observedLobby != null)
+        {
+            for (int i = 0; i < observedLobby.Entries.Count; i++)
+            {
+                LobbyEntry entry = observedLobby.Entries[i];
+                bool isLocal = entry.ClientId == localId;
+                localIncluded |= isLocal;
+                string[] ids = isLocal ? Profile.EquipmentIds : entry.Gear.ToString().Split(';');
+                rows.Add((entry.ClientId, new EquipmentPicksRow { Name = DisplayNameFor(entry), IsLocal = isLocal, Items = PicksFromSlotIds(ids) }));
+            }
+        }
+
+        if (!localIncluded)
+        {
+            rows.Add((localId, new EquipmentPicksRow { Name = LocalFallbackName(), IsLocal = true, Items = PicksFromSlotIds(Profile.EquipmentIds) }));
+        }
+
+        PicksLayout.SortByClientId(rows, row => row.clientId);
+        List<EquipmentPicksRow> result = new List<EquipmentPicksRow>(rows.Count);
+        foreach ((ulong _, EquipmentPicksRow row) in rows) result.Add(row);
+        return result;
+    }
+
+    private static List<EquipmentPickDisplay> PicksFromSlotIds(string[] slotIds)
+    {
+        List<EquipmentPickDisplay> picks = new List<EquipmentPickDisplay>();
+        for (int slot = 0; slot < slotIds.Length && slot < PlayerProfile.EquipmentSlotCount; slot++)
+        {
+            ItemData item = GameDatabase.GetItem(slotIds[slot]);
+            if (item == null) continue;
+            picks.Add(new EquipmentPickDisplay
+            {
+                Slot = (EquipmentSlot)slot,
+                SlotLabel = slot < SlotShortNames.Length ? SlotShortNames[slot] : "",
+                Item = item,
+            });
+        }
+        return picks;
     }
 
     // Which exact physical slot an equip/unequip click in the inventory
@@ -704,10 +1125,10 @@ public class MainMenu : MonoBehaviour
     // Appearance panel's GUI.RepeatButton rotate buttons.
     private float equipmentPreviewRotateDirection;
 
-    // Paper-doll click: browse that slot's category instead of unequipping
-    // directly. SelectCategory is the silent path (doesn't raise
-    // CategoryTabClicked), so this pin isn't immediately cleared by its own
-    // programmatic tab switch.
+    // Click on one of your own picks icons: browse that slot's category
+    // instead of unequipping directly. SelectCategory is the silent path
+    // (doesn't raise CategoryTabClicked), so this pin isn't immediately
+    // cleared by its own programmatic tab switch.
     private void OnEquipSlotClicked(EquipmentSlot slot)
     {
         pinnedEquipmentSlot = slot;
@@ -752,8 +1173,8 @@ public class MainMenu : MonoBehaviour
 
     // Resolves which physical EquipmentSlot an inventory-grid click (a real
     // item, or "None") in the currently-selected category should affect. A
-    // paper-doll click pins the exact slot; otherwise falls back to
-    // auto-resolve (first empty ring, else Ring1 - same rule the old
+    // click on your own picks icon pins the exact slot; otherwise falls back
+    // to auto-resolve (first empty ring, else Ring1 - same rule the old
     // per-item TargetSlotFor used) for whichever category is showing.
     private EquipmentSlot ResolveTargetSlot()
     {

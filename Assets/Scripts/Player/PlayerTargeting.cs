@@ -91,7 +91,10 @@ public class PlayerTargeting : NetworkBehaviour
         // A left-click that doesn't move the mouse is a click (target
         // only, no auto-attack - that's right-click's own job); anything
         // more is the free-look drag PlayerCamera already reads this same
-        // button for.
+        // button for. The party frames are hit-tested before the world:
+        // a click on a player's row targets them whether they're alive or
+        // dead - the dependable way to pick out a corpse, whose collider
+        // stays upright while the body lies down.
         if (Input.GetMouseButtonDown(0))
         {
             leftDownPosition = Input.mousePosition;
@@ -99,9 +102,22 @@ public class PlayerTargeting : NetworkBehaviour
         }
         else if (Input.GetMouseButtonUp(0) && IsClick(leftDownPosition, leftDownTime))
         {
-            Targetable clicked = RaycastTarget();
+            Targetable clicked = PartyRowTarget(Input.mousePosition);
+            if (clicked == null) clicked = RaycastTarget();
             if (clicked != null && clicked != self) CurrentTarget = clicked;
         }
+    }
+
+    // Whoever is drawn in the party-frame row under the mouse, if any -
+    // the same viewer-relative order TargetPartySlot reads, hit-tested in
+    // the GUI space PartyFrames.Draw lays out in (see
+    // PartyFrames.ScreenToGui/RowIndexAt).
+    private Targetable PartyRowTarget(Vector2 mousePosition)
+    {
+        IReadOnlyList<PartyFrames.Slot> party = PartyFrames.GetDisplayOrder(Targetable.All, OwnerClientId);
+        Vector2 guiPoint = PartyFrames.ScreenToGui(mousePosition, Screen.height, UIScale.Value);
+        int row = PartyFrames.RowIndexAt(guiPoint, UIScale.Width, party.Count);
+        return row >= 0 ? party[row].Member : null;
     }
 
     private bool IsClick(Vector3 downPosition, float downTime)

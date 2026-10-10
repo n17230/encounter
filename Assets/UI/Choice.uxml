@@ -1,0 +1,22 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="Choice.uss" />
+    <ui:VisualElement name="choice-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="choice-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Label text="Choose" class="panel__title" />
+            </ui:VisualElement>
+
+            <ui:Label name="navigator-label" text="" class="choice-navigator" />
+
+            <ui:Button name="spells-button" text="Spells" class="button choice-button" />
+            <ui:Button name="equipment-button" text="Equipment" class="button choice-button" />
+            <ui:VisualElement class="choice-spacer" />
+            <ui:Button name="start-button" text="Start" class="button choice-button choice-button--start" />
+            <ui:Button name="back-button" text="Back to main menu" class="button button--ghost choice-button" />
+
+            <ui:Label text="PLAYERS" class="section-label" />
+            <ui:ScrollView name="player-list" class="choice-player-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

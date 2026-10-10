@@ -56,13 +56,15 @@ public static class IconWiringTool
         new Entry("Assets/Resources/Data/Abilities/AbilitySoulSiphon.asset", IconRoot + "SkillsIcons/Bonus/Skill1_Standart/Y_fellCloak.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityRadiantEmbrace.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_HolyMagic_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityEverlivingTouch.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_HealingTouch_nb.png"),
-        new Entry("Assets/Resources/Data/Abilities/AbilityBlessingOfVitality.asset", IconRoot + "SkillsIcons/Skillicons2/Skill_nobg/skill_209_noBG.png"),
+        new Entry("Assets/Resources/Data/Abilities/AbilityBlessingOfVitality.asset", IconRoot + "SkillsIcons/Skillicons2/Skill_nobg/skill_168_noBG.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilitySeraphsGrace.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_HealingChain_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityAegisOfArcane.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_ShieldUp_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityRecall.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_QuickSand_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityEcholocation.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_Mark_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityAuraOfRegeneration.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_MagicSlowdown_nb.png"),
         new Entry("Assets/Resources/Data/Abilities/AbilityAuraOfReplenishment.asset", IconRoot + "SkillsIcons/SkillIcons3/SkillVol3_nb/Skill_ClearWater_nb.png"),
+        new Entry("Assets/Resources/Data/Abilities/AbilityCleanse.asset", IconRoot + "SkillsIcons/Skillicons1/Skill_standart/Paladinskill_15_dispell.png"),
+        new Entry("Assets/Resources/Data/Abilities/AbilityResurrect.asset", IconRoot + "SkillsIcons/Skillicons2/Skill_standart/skill_156.png"),
     };
 
     [MenuItem("Encounter/Wire Icons")]

@@ -35,6 +35,7 @@ retuned — it's a snapshot, not auto-generated.
 | Aegis of Arcane | 88 | 18s | Instant | 30 | Shields target for 440 |
 | Seraph's Grace | 175 | 0s | 3s | self (50-unit radius) | Heals everyone within 50 units of you, yourself included, for 438 |
 | Cleanse | 50 | 6s | Instant | 30 | Removes one active negative effect from the target |
+| Resurrect | 350 | 0s | 7.5s | 40 | Brings a dead player back to life where they fell, with 25% health and 25% mana. Only works on a dead player (not a mob, not someone still alive) |
 
 ## Buffs
 
@@ -55,7 +56,7 @@ retuned — it's a snapshot, not auto-generated.
 | Recall | 100 | 30s | Instant | 40 | Teleports the target instantly to your position |
 | Force Compression | 120 | 25s | Instant | 30 | Pulls everyone within a 15-unit radius of the target point toward its center |
 | Force Expansion | 120 | 25s | Instant | 30 | Blasts everyone within a 15-unit radius of the target point outward |
-| Earthen Bastion | 175 | 10s | Instant | 30 | Raises a 25-unit-wide impassable wall at the target point. No damage. Lasts until you cast it again. **Not yet playable, see review_with_fable.md** |
+| Summon Wall | 175 | 10s | Instant | 30 | Raises a 30-unit-wide impassable wall at the target point. No damage. Lasts until you recast it; you can have 2 at once, and the third cast removes the first. |
 | Arctic Winds | 150 | 30s | Instant | 30 | Creates a 25-unit-wide dome that follows the target for 8s, slowing everyone inside by 10% (not you, the caster). **Not yet playable, see review_with_fable.md** |
 
 ## Auras (no cast, no keybind - always active for as long as it's in your kit; you can slot more than one at once)
@@ -65,3 +66,4 @@ retuned — it's a snapshot, not auto-generated.
 | Aura: Replenish | You and allies within 40 units gain +6 mana per 5s |
 | Aura: Regeneration | You and allies within 40 units gain a heal-over-time (+10 hp per 5s) |
 | Echolocation | Reveals every mob on your minimap |
+| Perception | Shows an orb above every mob, indicating its targeting style |

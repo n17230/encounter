@@ -1,0 +1,39 @@
+/* Panel-specific layout for the lobby's Choice screen. Shared look lives in Theme.uss. */
+
+#choice-panel {
+    width: 360px;
+}
+
+/* "<navigator> is choosing" - only shown to the players who are watching. */
+.choice-navigator {
+    display: none;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    margin-bottom: 8px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.choice-button {
+    height: 44px;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.choice-button:disabled {
+    opacity: 0.45;
+}
+
+.choice-button--start {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
+.choice-spacer {
+    height: 6px;
+}
+
+.choice-player-list {
+    max-height: 220px;
+    margin-top: 4px;
+}

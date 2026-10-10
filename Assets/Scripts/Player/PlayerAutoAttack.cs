@@ -93,6 +93,17 @@ public class PlayerAutoAttack : NetworkBehaviour
     {
         if (!IsOwner) return;
 
+        // Dead: nothing stays armed on this side either (the server
+        // disarms itself in FixedUpdate) - otherwise the HUD would keep
+        // saying "Auto-attacking" and the toggle would be out of step with
+        // the server after a resurrect. The toggle key is dead input too,
+        // like the rest of the owner's controls (see PlayerMovement).
+        if (!stats.IsAlive)
+        {
+            if (IsArmed) Disarm();
+            return;
+        }
+
         if (!MainMenu.IsOpen && MovementInput.WasPressed(MovementAction.AutoAttack))
         {
             if (IsArmed) Disarm();
@@ -159,7 +170,9 @@ public class PlayerAutoAttack : NetworkBehaviour
         }
 
         Targetable target = targetObject.GetComponent<Targetable>();
-        if (target == null || target.Stats == null || target.Stats.CurrentHealth.Value <= 0f)
+        // Disarms on the attacker's own death the same way as on the
+        // target's - a corpse doesn't keep swinging.
+        if (target == null || target.Stats == null || target.Stats.CurrentHealth.Value <= 0f || !stats.IsAlive)
         {
             serverArmed = false;
             windupPlayed = false;

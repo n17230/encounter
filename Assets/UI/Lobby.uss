@@ -1,0 +1,49 @@
+/* Panel-specific layout for the pre-game Lobby screen. Shared look lives in Theme.uss. */
+
+#lobby-panel {
+    width: 420px;
+}
+
+.lobby-count {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+/* Why the server refused the name, under the field - empty (and collapsed)
+   until a rejection arrives. */
+.lobby-error {
+    display: none;
+    color: var(--color-danger);
+    font-size: 12px;
+    margin-top: 4px;
+    white-space: normal;
+}
+
+.lobby-actions {
+    flex-direction: row;
+    margin-top: 12px;
+}
+
+.lobby-action {
+    flex-grow: 1;
+    height: 40px;
+}
+
+.lobby-action:first-child {
+    margin-right: 8px;
+}
+
+.lobby-note {
+    display: none;
+    color: var(--color-accent);
+    font-size: 13px;
+    margin-top: 10px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.lobby-player-list {
+    max-height: 220px;
+    margin-top: 4px;
+}

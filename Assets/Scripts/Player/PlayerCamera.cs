@@ -105,7 +105,7 @@ public class PlayerCamera : NetworkBehaviour
         {
             freeLookYaw += Input.GetAxis("Mouse X") * freeLookYawSensitivity * LookSensitivityScale.Value;
         }
-        else if (turning)
+        else if (turning && stats.IsAlive)
         {
             // Right-drag turning rotates the body to match wherever the
             // camera was already looking (any free-look yaw built up via
@@ -115,6 +115,8 @@ public class PlayerCamera : NetworkBehaviour
             // fires once per turn-session: freeLookYaw is already 0 on
             // every subsequent frame while turning (freeLooking can't be
             // true at the same time, so nothing re-accumulates it).
+            // A corpse doesn't turn (PlayerMovement drops the right-drag
+            // yaw too while dead) - pitch, free look and zoom still work.
             if (freeLookYaw != 0f)
             {
                 transform.Rotate(Vector3.up, freeLookYaw);

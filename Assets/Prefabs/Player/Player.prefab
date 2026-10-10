@@ -254,6 +254,7 @@ GameObject:
   - component: {fileID: 8550085969106812046}
   - component: {fileID: 4512126427681701384}
   - component: {fileID: 8333786749308459092}
+  - component: {fileID: 143506505668559902}
   m_Layer: 8
   m_Name: Player
   m_TagString: Untagged
@@ -766,6 +767,10 @@ MonoBehaviour:
       NameHash: -1086519156
       Synchronize: 1
       ParameterType: 9
+    - name: dead
+      NameHash: -316323548
+      Synchronize: 1
+      ParameterType: 4
   AnimatorParametersExpanded: 0
 --- !u!114 &8333786749308459092
 MonoBehaviour:
@@ -779,4 +784,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f2aaca9e01c84b0cf8e086cb62619180, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Encounter::CharacterWeaponVisual
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &143506505668559902
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8297905753372389552}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b6b517429580aa606ff44a5b90dd325e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Encounter::PlayerIdentity
   ShowTopMostFoldoutHeaderGroup: 1

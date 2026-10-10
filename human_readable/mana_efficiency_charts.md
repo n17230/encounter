@@ -37,7 +37,7 @@ damage (W). With a 100-damage weapon, multiply by 100.
 | Everliving Touch | 6.00 (750 / 125) | 41.7 (750 / 18s) | - | TRUE | Heal over time only: 125 per 3s x 6 over 18s, no instant heal. Recasting on the same target only extends it. |
 | Radiant Embrace | 4.75 (356.25 / 75) | 237.5 (356.25 / 1.5s) | - | FALSE | |
 | Aegis of Arcane (absorb shield, not a heal) | 5.00 (440 / 88) | - | 18s | FALSE | |
-| Blessing of Vitality | 4.38 (438 / 100) | 219 (438 / 2s) | 8s | TRUE | +10 Armor for 16s (10% less damage taken). |
+| Blessing of Vitality | 4.38 (438 / 100) | 219 (438 / 2s) | 8s | TRUE | +10 Armor for 16s. |
 | Seraph's Grace | 2.50 per target (438 / 175) | 146 per target (438 / 3s) | - | TRUE | Heals everyone within 50 of the caster, including mobs and the caster. |
 | Holy Scepter (weapon attack) | - | 16.7 (25 / 1.5s) | - | TRUE | Basic attack heals 25 per swing at range 40. The item also gives +10% healing done. |
 
@@ -64,8 +64,10 @@ off-hand slot).
 - **Auras:** they cost 0 mana, so there is no per-mana figure. Aura:
   Regeneration heals 10 per 5s tick, and Aura: Replenish adds mana regen.
 - **No damage or healing of their own:** Cleanse, One For All, Team Up,
-  Recall, Force Compression/Expansion, Earthen Bastion, Arctic Winds, Aegis
-  of the Ancient and Echolocation.
+  Recall, Force Compression/Expansion, Summon Wall, Arctic Winds, Aegis
+  of the Ancient, Echolocation and Perception. Resurrect sets a dead player to 25%
+  health and 25% mana rather than healing an amount, so it has no
+  per-mana figure either.
 - **Patch and bleed damage:** Firebolt's burn patches are not counted in
   its number. Burn deals 10/s and a patch lasts 6s.
 - **Mob weapons:** Goblin Claws, Ogre Club, the skeleton weapons and the

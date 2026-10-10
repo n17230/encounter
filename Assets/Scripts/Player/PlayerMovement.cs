@@ -122,6 +122,21 @@ public class PlayerMovement : NetworkBehaviour
             return;
         }
 
+        // Dead (see CharacterStats.IsAlive): no movement input at all - no
+        // WASD, jump, hover or body turning - until a Resurrect or respawn.
+        // FixedUpdate is untouched, so gravity and any forced pull still
+        // in progress keep running: a mid-air death still lands.
+        if (!stats.IsAlive)
+        {
+            autoRun = false;
+            forwardInput = 0f;
+            strafeInput = 0f;
+            pendingJump = false;
+            pendingHoverActivation = false;
+            isHovering = false;
+            return;
+        }
+
         if (MovementInput.WasPressed(MovementAction.AutoRun))
         {
             autoRun = !autoRun;
@@ -264,6 +279,13 @@ public class PlayerMovement : NetworkBehaviour
         int weaponPose = ResolveWeaponPoseParameter();
         appearance?.ActiveAnimator?.SetInteger("weaponPose", weaponPose);
         appearance?.ActiveAnimator?.SetBool("showCombatIdle", ResolveShowCombatIdle(weaponPose));
+        // Written every tick like the parameters above, not just on the
+        // death/resurrect edge: an appearance rebuild swaps in a fresh
+        // Animator (see CharacterAppearance), and a one-shot write would be
+        // lost with the old one. Gated on SyncedMaxHealth because health
+        // defaults to 0 until the server's first sync lands - which isn't
+        // death, just a spawn still in flight.
+        if (stats.SyncedMaxHealth.Value > 0f) appearance?.ActiveAnimator?.SetBool("dead", !stats.IsAlive);
 
         if (grounded && verticalVelocity < 0f)
         {

@@ -22,8 +22,12 @@ public class CharacterEquipment : NetworkBehaviour
     // Server-wide item uniqueness: at most one connected player may have a
     // given item Id equipped at a time. Static (one server process, not
     // per-instance) and server-only - clients have no visibility into who
-    // else holds what.
-    private static readonly Dictionary<string, ulong> globalItemOwners = new Dictionary<string, ulong>();
+    // else holds what. The one map for items: the lobby's gear confirm
+    // (LobbyState) and this component's spawn-time/menu-close sync both
+    // claim through ValidateAndClaim below, keyed by the same clientId, so
+    // the sync at Start simply re-claims what the lobby already granted.
+    private static readonly OwnershipMap globalItemOwners = new OwnershipMap();
+    private static readonly List<string> keptIdScratch = new List<string>();
 
     // Called when a server session ends / the process starts - see NetworkBootstrap.
     public static void ResetServerSessionState()
@@ -31,19 +35,70 @@ public class CharacterEquipment : NetworkBehaviour
         globalItemOwners.Clear();
     }
 
-    private static bool TryClaimItem(ItemData item, ulong clientId)
+    // Frees every item the client holds - its player despawning, or (before
+    // any player exists) the lobby seeing it disconnect.
+    public static void ReleaseAllClaims(ulong clientId)
     {
-        if (globalItemOwners.TryGetValue(item.Id, out ulong owner) && owner != clientId) return false;
-        globalItemOwners[item.Id] = clientId;
-        return true;
+        globalItemOwners.ReleaseAll(clientId);
     }
 
-    private static void ReleaseItem(ItemData item, ulong clientId)
+    // The shared validation core: turns a ';'-joined per-slot Id string into
+    // what the server will actually let this client wear, claiming each kept
+    // item for the client and releasing anything the client held that isn't
+    // in the result. Static so LobbyState can run it for a client that has
+    // no CharacterEquipment yet; SetEquipmentServerRpc applies the result to
+    // the instance. A null entry is an empty slot or a dropped item - wrong
+    // slot, off hand under a two-hander, or someone else already wearing it.
+    public static ItemData[] ValidateAndClaim(string joinedItemIds, ulong clientId)
     {
-        if (item != null && globalItemOwners.TryGetValue(item.Id, out ulong owner) && owner == clientId)
+        string[] ids = (joinedItemIds ?? "").Split(';');
+        ItemData[] result = new ItemData[SlotCount];
+        for (int slot = 0; slot < SlotCount; slot++)
         {
-            globalItemOwners.Remove(item.Id);
+            ItemData item = slot < ids.Length ? GameDatabase.GetItem(ids[slot]) : null;
+            EquipmentSlot physicalSlot = (EquipmentSlot)slot;
+
+            // A ring item's own Slot is just "Ring1" as a category; it's
+            // valid in either physical ring slot. Everything else needs an
+            // exact match.
+            bool validPlacement = item != null && (item.Slot.IsRing() ? physicalSlot.IsRing() : item.Slot == physicalSlot);
+            if (!validPlacement) item = null;
+
+            // A two-handed main-hand weapon occupies the off hand too - since
+            // MainHand (slot 11) is always processed before OffHand (slot 12)
+            // in this loop, result[MainHand] already reflects this sync by
+            // the time OffHand is reached.
+            if (physicalSlot == EquipmentSlot.OffHand
+                && result[(int)EquipmentSlot.MainHand] != null
+                && result[(int)EquipmentSlot.MainHand].TwoHanded)
+            {
+                item = null;
+            }
+
+            // Server-wide: someone else already wearing this item Id blocks
+            // equipping it here. Claiming your own already-held item is a
+            // harmless no-op.
+            if (item != null && !globalItemOwners.TryClaim(item.Id, clientId)) item = null;
+
+            result[slot] = item;
         }
+
+        keptIdScratch.Clear();
+        foreach (ItemData kept in result)
+        {
+            if (kept != null) keptIdScratch.Add(kept.Id);
+        }
+        globalItemOwners.ReleaseAllExcept(clientId, keptIdScratch);
+        return result;
+    }
+
+    // The ';'-joined form of a validated result - what LobbyState stores in
+    // the entry and sends back to the client (empty segment = empty slot).
+    public static string JoinIds(ItemData[] items)
+    {
+        string[] ids = new string[items.Length];
+        for (int i = 0; i < items.Length; i++) ids[i] = items[i] != null ? items[i].Id : "";
+        return string.Join(";", ids);
     }
 
     // Which side (above/below) of each equipped item's HP-threshold
@@ -132,10 +187,7 @@ public class CharacterEquipment : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        if (IsServer)
-        {
-            foreach (ItemData item in equippedItems) ReleaseItem(item, OwnerClientId);
-        }
+        if (IsServer) ReleaseAllClaims(OwnerClientId);
         if (!IsOwner) return;
         MainMenu.Closed -= SyncEquipmentToServer;
     }
@@ -148,35 +200,13 @@ public class CharacterEquipment : NetworkBehaviour
     [ServerRpc]
     private void SetEquipmentServerRpc(string joinedItemIds)
     {
-        string[] ids = (joinedItemIds ?? "").Split(';');
+        // Validation, placement rules and the uniqueness claims all live in
+        // the shared core (also what the lobby confirm runs); only applying
+        // the result to this character's stats is instance work.
+        ItemData[] validated = ValidateAndClaim(joinedItemIds, OwnerClientId);
         for (int slot = 0; slot < SlotCount; slot++)
         {
-            ItemData item = slot < ids.Length ? GameDatabase.GetItem(ids[slot]) : null;
-            EquipmentSlot physicalSlot = (EquipmentSlot)slot;
-
-            // A ring item's own Slot is just "Ring1" as a category; it's
-            // valid in either physical ring slot. Everything else needs an
-            // exact match.
-            bool validPlacement = item != null && (item.Slot.IsRing() ? physicalSlot.IsRing() : item.Slot == physicalSlot);
-            if (!validPlacement) item = null;
-
-            // A two-handed main-hand weapon occupies the off hand too - since
-            // MainHand (slot 11) is always processed before OffHand (slot 12)
-            // in this loop, equippedItems[MainHand] already reflects this
-            // sync's result by the time OffHand is reached.
-            if (physicalSlot == EquipmentSlot.OffHand
-                && equippedItems[(int)EquipmentSlot.MainHand] != null
-                && equippedItems[(int)EquipmentSlot.MainHand].TwoHanded)
-            {
-                item = null;
-            }
-
-            // Server-wide: someone else already wearing this item Id blocks
-            // equipping it here. Claiming your own already-held item is a
-            // harmless no-op.
-            if (item != null && !TryClaimItem(item, OwnerClientId)) item = null;
-
-            Equip(physicalSlot, item);
+            Equip((EquipmentSlot)slot, validated[slot]);
         }
 
         bool broadcasts = false;
@@ -204,16 +234,22 @@ public class CharacterEquipment : NetworkBehaviour
         if (!IsServer || Time.time < nextAuraPulse) return;
         nextAuraPulse = Time.time + AuraPulseInterval;
 
-        foreach (ItemData item in equippedItems)
+        // A corpse projects nothing (item and spell auras alike) - allies'
+        // aura effects simply lapse within AuraPulseDuration of the death.
+        // The threshold/single-target updates below keep running regardless.
+        if (stats.IsAlive)
         {
-            if (item == null || item.Auras.Count == 0) continue;
-            foreach (ItemAura aura in item.Auras) PulseAura(aura);
-        }
+            foreach (ItemData item in equippedItems)
+            {
+                if (item == null || item.Auras.Count == 0) continue;
+                foreach (ItemAura aura in item.Auras) PulseAura(aura);
+            }
 
-        foreach (AbilityData auraAbility in activeAuraAbilities)
-        {
-            if (auraAbility.Effect == null) continue;
-            PulseAura(new ItemAura { Effect = auraAbility.Effect, Range = auraAbility.AuraRange });
+            foreach (AbilityData auraAbility in activeAuraAbilities)
+            {
+                if (auraAbility.Effect == null) continue;
+                PulseAura(new ItemAura { Effect = auraAbility.Effect, Range = auraAbility.AuraRange });
+            }
         }
 
         UpdateHpThresholds();
@@ -318,10 +354,11 @@ public class CharacterEquipment : NetworkBehaviour
         ItemData previous = equippedItems[index];
         if (previous == item) return;
 
+        // No ownership release here: ValidateAndClaim already released every
+        // Id that isn't in the new set before this is reached (a ring moving
+        // from Ring1 to Ring2 stays claimed throughout).
         if (previous != null)
         {
-            ReleaseItem(previous, OwnerClientId);
-
             foreach (StatType type in Enum.GetValues(typeof(StatType)))
             {
                 stats.GetStat(type)?.RemoveAllModifiersFromSource(previous);

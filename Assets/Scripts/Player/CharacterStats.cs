@@ -96,6 +96,13 @@ public class CharacterStats : NetworkBehaviour
     // whom without a separate "is this a player" check.
     public bool IsMob { get; private set; }
 
+    // The one definition of "alive" (every CurrentHealth <= 0 check in the
+    // codebase means the same thing). Readable everywhere, since
+    // CurrentHealth is synced to everyone. A dead player stays at 0 where
+    // they fell (see PlayerRespawn.HandleDeath) until a Resurrect or a
+    // requested respawn; a dead mob is in its despawn window.
+    public bool IsAlive => CurrentHealth.Value > 0f;
+
     public event Action OnDeath;
 
     // Server-only. Fired from ReceiveHit when a direct hit actually lowered
@@ -200,6 +207,9 @@ public class CharacterStats : NetworkBehaviour
     public void ReceiveHit(in HitInfo hit)
     {
         if (!IsServer) return;
+        // A corpse takes no hits of any kind - a dead player waits where
+        // they fell for a Resurrect or a respawn, a dead mob for despawn.
+        if (!IsAlive) return;
 
         RefreshCombatState(hit.AttackerClientId, hit.Attacker);
 
@@ -208,13 +218,16 @@ public class CharacterStats : NetworkBehaviour
         if (dealtDamage)
         {
             DealDamage(hit.Damage, hit.AttackerClientId, out float healthLost, hit.Attacker);
-            // A lethal hit on a player reports no loss at all: OnDeath fires
-            // inside ApplyRawDamage and PlayerRespawn.HandleDeath's
-            // RestoreFull has already refilled health by the time healthLost
-            // is computed. And even when it does fire, it's only after
-            // DealDamage returned, so ResetCooldowns (also run from
-            // HandleDeath) has already cleared any cast state first.
+            // Fires for a lethal hit too (the drop to 0 is a real loss) -
+            // harmless: OnDeath fired inside ApplyRawDamage, so
+            // PlayerRespawn.HandleDeath's CancelCast has already cancelled
+            // any cast state before this is reached.
             if (healthLost > 0f) DamageTaken?.Invoke(healthLost);
+            // The killing hit's own heal/shield/threat/effect must not land
+            // on the fresh corpse - e.g. an Icebolt kill leaving a Slowed
+            // corpse behind, or a mob's melee effect re-adding what
+            // EnterDeadState just cleared.
+            if (!IsAlive) return;
         }
         if (hit.Heal > 0f) Heal(hit.Heal, hit.AttackerClientId);
         if (hit.ShieldAmount > 0f) GrantShield(hit.ShieldAmount);
@@ -346,7 +359,7 @@ public class CharacterStats : NetworkBehaviour
 
     // Flat percentage-of-max-health restore (e.g. a health orb pickup) - no
     // HealingMultiplier, this isn't healing. Same dead-character guard as
-    // Heal: only RestoreFull brings a character back. Server-only.
+    // Heal: only RestoreFull or Resurrect brings a character back. Server-only.
     public void RestoreHealthPercent(float fraction)
     {
         if (!IsServer || isDead) return;
@@ -361,10 +374,12 @@ public class CharacterStats : NetworkBehaviour
     }
 
     // Non-hostile application too (auras, buffs). duration <= 0 uses the
-    // effect's own Duration. Server-only.
+    // effect's own Duration. Server-only. Nothing lands on a corpse - this
+    // is also reached directly, not just via ReceiveHit (mob abilities,
+    // Team Up, self-buffs), so the dead guard lives here as well.
     public void ApplyEffect(StatusEffectData effect, float duration, ulong attackerClientId, HitSource source)
     {
-        if (!IsServer || effect == null) return;
+        if (!IsServer || effect == null || !IsAlive) return;
         if (IsImmune(effect, source)) return;
         if (effect.IsSlow && !IsStrongestSlow(effect)) return;
 
@@ -496,7 +511,10 @@ public class CharacterStats : NetworkBehaviour
         CharacterStats attacker = directAttacker != null ? directAttacker : AttackerStats(attackerClientId);
         if (attacker != null) rawDamage *= attacker.DamageMultiplier.Value;
 
-        float mitigated = rawDamage * (1f - Mathf.Clamp01(Armor.Value / 100f));
+        // Diminishing-returns armor curve (ArmorMitigation); 0 or negative
+        // armor removes nothing, so a floored Armor never inverts into
+        // bonus damage.
+        float mitigated = rawDamage * (1f - ArmorMitigation.Reduction(Armor.Value));
         mitigated *= DamageTakenMultiplier.Value;
 
         // Reflected damage is based on the full mitigated hit, independent
@@ -673,23 +691,64 @@ public class CharacterStats : NetworkBehaviour
         ActiveEffects.Add(entry);
     }
 
-    // Owner-callable (e.g. the Escape menu's Respawn button) - requests the
-    // server kill this character outright, going through the exact same
-    // OnDeath -> PlayerRespawn.HandleDeath path any other lethal hit
-    // already uses, rather than teleporting/restoring directly here.
-    public void RequestRespawn()
+    // Server-only. A player has just died (PlayerRespawn.HandleDeath) and
+    // stays dead: health is already 0 and stays there, mana is left as it
+    // was, but every status effect and any absorb shield end with the life
+    // they were on - a Resurrect brings back a clean character, not one
+    // still Burning or Slowed from the fight that killed it.
+    public void EnterDeadState()
     {
-        if (!IsOwner) return;
-        RequestRespawnServerRpc();
+        if (!IsServer) return;
+        effects.ClearAll();
+        ShieldAmount.Value = 0f;
     }
 
-    [ServerRpc]
-    private void RequestRespawnServerRpc()
+    // Server-only. The way back from the dead that ISN'T a full respawn
+    // (RestoreFull): in place, with the given fractions of max health and
+    // mana - set, not added, so a corpse's leftover mana is replaced rather
+    // than topped up - each capped at max. No-op on a living character,
+    // and on a health fraction of 0 or less: isDead must never clear with
+    // health still at 0 (alive to the UI and targeting, dead to everything
+    // that checks the flag).
+    public void Resurrect(float healthFraction, float manaFraction)
     {
-        // Lethal regardless of current health, no mitigation/attacker -
-        // ApplyRawDamage's own isDead guard makes this a safe no-op if
-        // already dead/mid-respawn (e.g. a double click).
-        ApplyRawDamage(CurrentHealth.Value);
+        if (!IsServer || !isDead || healthFraction <= 0f) return;
+        CurrentHealth.Value = Mathf.Min(MaxHealth.Value, MaxHealth.Value * healthFraction);
+        // Floored at 0 too - a negative asset value must not write
+        // negative mana (there's no early return for it the way health has).
+        CurrentMana.Value = Mathf.Min(MaxMana.Value, MaxMana.Value * Mathf.Max(0f, manaFraction));
+        isDead = false;
+    }
+
+    // Server-only. Ends every redirect bond (StatusEffectData
+    // .DamageRedirectPercent - One For All, Team Up) that casterClientId
+    // has on any OTHER character. Called on a player's death
+    // (PlayerRespawn.HandleDeath): a corpse can't soak damage for anyone -
+    // DealDamage would keep peeling the victim's share off and
+    // ApplyRawDamage would simply drop it on the 0-health caster, a free
+    // damage reduction for the victim until the bond expired. Removal goes
+    // through the tracker's normal Remove -> Expired path, so modifiers
+    // and the client-visible ActiveEffects list are cleaned exactly as on
+    // expiry.
+    public static void RemoveRedirectBondsFrom(ulong casterClientId)
+    {
+        foreach (CharacterStats character in All) character.RemoveRedirectsFrom(casterClientId);
+    }
+
+    private void RemoveRedirectsFrom(ulong casterClientId)
+    {
+        if (!IsServer) return;
+
+        List<StatusEffectTracker.ActiveEffect> bonds = null;
+        foreach (StatusEffectTracker.ActiveEffect active in effects.All)
+        {
+            if (active.Data.DamageRedirectPercent <= 0f || active.AttackerClientId != casterClientId) continue;
+            bonds ??= new List<StatusEffectTracker.ActiveEffect>();
+            bonds.Add(active); // can't call effects.Remove while still enumerating effects.All
+        }
+        if (bonds == null) return;
+
+        foreach (StatusEffectTracker.ActiveEffect bond in bonds) effects.Remove(bond.Data, bond.AttackerClientId);
     }
 
     public void RestoreFull()
@@ -724,7 +783,7 @@ public class CharacterStats : NetworkBehaviour
         // A heal landing after death (a HoT tick, a delayed mob heal) would
         // otherwise lift a dead character back above 0 health while it's
         // still flagged dead - alive to the UI and tab-targeting, dead to
-        // its own AI. Only RestoreFull brings a character back.
+        // its own AI. Only RestoreFull or Resurrect brings a character back.
         if (isDead) return;
         CharacterStats healer = AttackerStats(healerClientId);
         if (healer != null) amount *= healer.HealingMultiplier.Value;
@@ -764,6 +823,12 @@ public class CharacterStats : NetworkBehaviour
             if (table == null) continue;
             if (!table.ThreatByClientId.TryGetValue(OwnerClientId, out float existingThreat) || existingThreat <= 0f) continue;
             table.AddThreat(healerClientId, threatAmount);
+            // Healing credit for TargetingMode.MostHealing rides the same
+            // gates as healing threat (same tables, same "already fighting
+            // the healed player" rule, no aura/mob heals) but counts the
+            // full post-HealingMultiplier amount - overheal included, since
+            // Heal passes the pre-clamp value - not the 15% threat figure.
+            table.AddHealing(healerClientId, healAmount);
         }
     }
 

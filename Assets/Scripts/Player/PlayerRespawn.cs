@@ -1,10 +1,14 @@
 using Unity.Netcode;
 using UnityEngine;
 
-// Simple respawn for the open testing lobby only. Real instanced boss/mob
+// Death and respawn for the open testing lobby only. Real instanced boss/mob
 // content uses the wipe/reset model from DESIGN_IDEAS.md, not this.
-// The server decides when a respawn happens and restores stats; the owner
-// performs the actual teleport because it holds transform authority.
+// Dying leaves the player dead where they fell (HandleDeath); the two ways
+// back are a Resurrect cast by someone else (PlayerAbilities ->
+// CharacterStats.Resurrect, in place) and the Escape menu's Respawn button
+// (RequestRespawn -> ServerRespawn, at the respawn point). The server
+// restores stats; the owner performs the actual teleport because it holds
+// transform authority.
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(CharacterStats))]
 [RequireComponent(typeof(PlayerMovement))]
@@ -40,7 +44,38 @@ public class PlayerRespawn : NetworkBehaviour
         if (IsServer) stats.OnDeath -= HandleDeath;
     }
 
+    // Server-only, from CharacterStats.OnDeath. The body stays put at 0
+    // health (no restore, no teleport) - only the fight's leftovers end:
+    // effects/shield, the threat this player had built, any cast in
+    // flight, and the redirect bonds this player was soaking damage
+    // through for others. Mana and cooldowns (own and global) are left
+    // as they were - a resurrected player picks their cooldowns back up
+    // mid-count.
     private void HandleDeath()
+    {
+        stats.EnterDeadState();
+        ResetThreatGenerated();
+        abilities.CancelCast();
+        CharacterStats.RemoveRedirectBondsFrom(OwnerClientId);
+    }
+
+    // Owner-callable (the Escape menu's Respawn button): asks the server
+    // for a full respawn at the respawn point. Works dead or alive - a
+    // living player gets the same outcome (full restore, threat wiped,
+    // cooldowns reset, back at the respawn point).
+    public void RequestRespawn()
+    {
+        if (!IsOwner) return;
+        RequestRespawnServerRpc();
+    }
+
+    [ServerRpc]
+    private void RequestRespawnServerRpc()
+    {
+        ServerRespawn();
+    }
+
+    private void ServerRespawn()
     {
         stats.RestoreFull();
         ResetThreatGenerated();

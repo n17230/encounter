@@ -76,11 +76,12 @@ code needs to be structured* to support the design, not the design itself.
 - This stat system is what the gear/ability base-characteristics model
   (above) will plug into — an item/ability's "effect" is likely expressed
   as a modifier against one or more of these stats.
-- **Armor = a single % damage reduction stat** (see `DESIGN_IDEAS.md`) —
-  no physical/magic damage-type split, so the damage pipeline is simple:
-  one mitigation percentage applied to any incoming damage, regardless
-  of source. No need for a damage-type enum or per-type resistance
-  stats.
+- **Armor = a single stat** (see `DESIGN_IDEAS.md`) — no physical/magic
+  damage-type split, so the damage pipeline is simple: one pure function
+  (`ArmorMitigation.Reduction`, diminishing returns) turns it into one
+  mitigation percentage, applied at the one mitigation site to any
+  incoming damage, regardless of source. No need for a damage-type enum
+  or per-type resistance stats.
 - **Mana is the only resource** (see `DESIGN_IDEAS.md`) — no need for a
   generic "resource type" abstraction (energy/rage/etc.); abilities can
   just reference the single mana stat directly for cost.

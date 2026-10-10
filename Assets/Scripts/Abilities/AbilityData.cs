@@ -80,6 +80,15 @@ public class AbilityData : ScriptableObject
     // priority over ProjectilePrefab if both are somehow set.
     public bool RecallTarget = false;
 
+    // Unit-targeted (RequiresTarget), no damage: brings a DEAD player back
+    // to life where they fell (see CharacterStats.Resurrect) with these
+    // fractions of their max health and mana. The only ability a corpse is
+    // a valid target for, and only a dead player is a valid target for it -
+    // see TargetStateRule. E.g. Resurrect.
+    public bool ResurrectTarget = false;
+    public float ResurrectHealthPercent = 0f;
+    public float ResurrectManaPercent = 0f;
+
     // At most one currently-affected target across all of THIS caster's
     // casts of this ability (not a global limit - two different casters
     // can each have their own target). Casting it on someone new strips
@@ -152,6 +161,11 @@ public class AbilityData : ScriptableObject
     public bool IsAuraSpell = false;
     public float AuraRange = 40f;
     public MinimapReveal AuraReveals = MinimapReveal.None;
+    // While slotted, the owning player (and only them - read from the local
+    // profile by PlayerHUD, nothing synced) sees an orb above every mob,
+    // coloured by that mob's base TargetingMode (PerceptionOrbs). E.g.
+    // Perception.
+    public bool AuraShowsPerceptionOrbs = false;
 
     // Unit-targeted (RequiresTarget), no damage/heal: removes one currently
     // active negative effect (StatusEffectData.IsNegative) from the target,
@@ -159,19 +173,21 @@ public class AbilityData : ScriptableObject
     public bool RemovesNegativeEffect = false;
 
     // Ground-targeted (IsGroundTargeted should also be set), no damage: on
-    // resolve, spawns StructurePrefab (a PlacedStructure - a real,
-    // non-trigger obstacle, not a GroundPatch hazard trigger) at the aimed
-    // point, oriented so its width axis is perpendicular to the caster's
-    // facing at that moment (i.e. "across" whatever's directly ahead of
-    // them). It has no lifetime of its own - it stays until THIS caster
-    // casts this same ability again, which despawns the old one first (at
-    // most one such structure per caster per ability - see
-    // PlayerAbilities.activeStructures). E.g. Earthen Bastion.
+    // resolve, spawns StructurePrefab (a SegmentedWall - real, non-trigger
+    // obstacles, not a GroundPatch hazard trigger) at the aimed point,
+    // oriented so its width axis is perpendicular to the caster's
+    // facing at the moment of the click (i.e. "across" whatever's directly
+    // ahead of them). It has no lifetime of its own - it stays until THIS
+    // caster has cast this same ability MaxActiveStructures more times, at
+    // which point the oldest is despawned (so with 2, the third cast
+    // removes the first, the fourth the second, and so on - see
+    // PlayerAbilities.activeStructures). E.g. Summon Wall.
     public bool IsPersistentStructure = false;
     public GameObject StructurePrefab;
     public float StructureWidth = 0f;
     public float StructureHeight = 5f;
     public float StructureThickness = 2f;
+    [Min(1)] public int MaxActiveStructures = 1;
 
     // Unit-targeted (RequiresTarget), no damage: spawns FollowingZonePrefab
     // centered on the target, which then tracks the target's position for

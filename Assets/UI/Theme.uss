@@ -145,6 +145,130 @@
     font-size: 15px;
 }
 
+/* Single-line text entry (the Lobby panel's character name). UI Toolkit's
+   TextField nests its editable box in a unity-base-text-field__input child,
+   so the surface styling goes on that descendant, not the field itself. */
+.text-field {
+    flex-grow: 1;
+    margin: 0;
+}
+
+.text-field .unity-base-text-field__input {
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 6px;
+    color: var(--color-text);
+    font-size: 15px;
+    padding: 6px 10px;
+}
+
+.text-field:focus .unity-base-text-field__input {
+    border-color: var(--color-accent);
+}
+
+/* One connected player per row - shared by the Lobby and Choice panels'
+   player lists (name on the left, Ready/Waiting on the right). */
+.player-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+}
+
+.player-row--local {
+    border-color: var(--color-accent);
+}
+
+.player-row__name {
+    color: var(--color-text);
+    font-size: 14px;
+}
+
+.player-row__status {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}
+
+.player-row__status--ready {
+    color: var(--color-accent);
+}
+
+/* "Every player's picks" sections (PicksSection.cs) - shared by Skills
+   (ability icons) and Equipment (item icons): a name, then that player's
+   icons left to right, wrapping. */
+.picks-row {
+    margin-bottom: 10px;
+}
+
+.picks-row__name {
+    color: var(--color-text);
+    font-size: 13px;
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.picks-row--local .picks-row__name {
+    color: var(--color-accent);
+}
+
+.picks-row__icons {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.picks-icon {
+    flex-shrink: 0;
+    margin-right: 6px;
+    margin-bottom: 6px;
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 6px;
+}
+
+/* Sizes are border-box, so box = image + 2 x padding + 2 x 1px border.
+   Both variants render the image at the size the panels already use:
+   72 - 6 - 2 = 64, same as .kit-slot__icon / .ability-card__icon;
+   72 - 8 - 2 = 62, same as an inventory .equipment-slot (72px box, 1px
+   border, 4px button padding). */
+.picks-icon--ability {
+    width: 72px;
+    height: 72px;
+    padding: 3px;
+}
+
+.picks-icon--item {
+    width: 72px;
+    height: 72px;
+    padding: 4px;
+}
+
+.picks-icon--clickable:hover {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-accent);
+}
+
+.picks-icon__image {
+    width: 100%;
+    height: 100%;
+    background-color: var(--color-surface-alt);
+    border-radius: 4px;
+}
+
+.picks-icon__label {
+    position: absolute;
+    left: 3px;
+    top: 2px;
+    color: var(--color-text-secondary);
+    font-size: 9px;
+}
+
 .slider {
     flex-grow: 1;
 }

@@ -131,9 +131,12 @@ come up; doesn't need to be polished, just captured.
 - **Run speed is flat** — a single flat value, not a base + multiplier
   system. (Effects like Boss 1's DPS-taken speed scaling still apply as
   modifiers on top of that flat value — see `ARCHITECTURE_NOTES.md`.)
-- **Defense**: a single **armor stat = a % damage reduction**. No
-  physical vs. magic damage-type split — one flat mitigation number
-  reduces all incoming damage, regardless of source.
+- **Defense**: a single **armor stat** that converts to a % damage
+  reduction through a diminishing-returns curve (each extra point of
+  armor is worth less than the last, and reduction never reaches 100%).
+  Still no physical vs. magic damage-type split — one mitigation number
+  reduces all incoming damage, regardless of source. The exact curve
+  lives in the code (`ArmorMitigation`, see `CLAUDE.md`), not here.
 - Open questions:
   - Any other base stats expected soon (e.g. crit chance)? Called out
     now since the data model will want to be extensible for this.

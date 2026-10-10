@@ -21,9 +21,9 @@
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
-                <ui:VisualElement class="equipment-column">
-                    <ui:Label text="EQUIPMENT" class="section-label" />
-                    <ui:VisualElement name="equip-grid" class="equip-grid" />
+                <ui:VisualElement class="equipment-column equipment-column--picks">
+                    <ui:Label text="TEAM PICKS" class="section-label" />
+                    <ui:ScrollView name="picks-scroll" class="equipment-picks-scroll" />
                 </ui:VisualElement>
                 <ui:VisualElement class="equipment-column equipment-column--inventory">
                     <ui:Label text="INVENTORY" class="section-label" />

@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Theme.uss" />
+    <Style src="Lobby.uss" />
+    <ui:VisualElement name="lobby-root" class="theme-root menu-overlay">
+        <ui:VisualElement name="lobby-panel" class="panel">
+            <ui:VisualElement class="panel__header-row">
+                <ui:Label text="Lobby" class="panel__title" />
+            </ui:VisualElement>
+
+            <ui:Label name="players-count-label" text="Players: 0" class="lobby-count" />
+
+            <ui:Label text="CHARACTER NAME" class="section-label" />
+            <ui:TextField name="name-field" class="text-field" />
+            <ui:Label name="name-error-label" class="lobby-error" />
+
+            <ui:VisualElement class="lobby-actions">
+                <ui:Button name="design-button" text="Design Character" class="button lobby-action" />
+                <ui:Button name="ready-button" text="Ready" class="button lobby-action" />
+            </ui:VisualElement>
+
+            <ui:Label name="waiting-label" text="Waiting for the team" class="lobby-note" />
+            <ui:Label name="started-label" text="The game has started - reconnect to join" class="lobby-note" />
+
+            <ui:Label text="PLAYERS" class="section-label" />
+            <ui:ScrollView name="player-list" class="lobby-player-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

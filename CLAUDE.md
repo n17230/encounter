@@ -188,7 +188,13 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   replicated position/rotation for range/facing/LoS checks; every
   damage/mana/cooldown/effect decision happens only on the server.
   Chosen for a friends-only game where instant feel matters more than
-  position-cheat resistance. `PlayerRespawn` calls `RestoreFull()` then
+  position-cheat resistance. `PlayerRespawn.HandleDeath` (server, from
+  `CharacterStats.OnDeath`) leaves the body where it fell:
+  `EnterDeadState` + threat wipe + `CancelCast` (cooldowns persist
+  through death) + `CharacterStats.RemoveRedirectBondsFrom`, no restore,
+  no teleport (see Dead state + Resurrect below). The Escape menu's Respawn
+  button is `PlayerRespawn.RequestRespawn` → `ServerRespawn`, dead or
+  alive: `RestoreFull()` + threat wipe + `ResetCooldowns` + then
   `PlayerMovement.ServerTeleportTo` (server-initiated, pre-arms the
   movement validator before the owner moves); the owner executes via
   `TeleportTo` → `NetworkTransform.Teleport` (only the authority may
@@ -212,11 +218,17 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `BeginPredictedCast`, the server's `RejectIfNotReady` (one cast at a
     time → global cooldown → own cooldown) + `StartServerCast` — for
     unit-targeted and ground-targeted casts alike. **Dying cancels a cast
-    in flight**: `ResetCooldowns` (called from `PlayerRespawn.HandleDeath`)
-    stops the pending resolve coroutine and clears `serverCastEndTime`
-    along with the cooldowns, and the owner's cast bar with them —
-    otherwise the respawned player is "Already casting" until the dead
-    cast's timer runs out, and it resolves from the respawn point. The
+    in flight — and only that**: `CancelCast` (called from
+    `PlayerRespawn.HandleDeath`) stops the pending resolve coroutine,
+    nulls `activeServerCast` (and so `serverCastEndTime` and the
+    `ServerCastLockUntil` mirror), and clears the owner's cast bar via
+    `CancelCastClientRpc` — ability cooldowns and the global cooldown,
+    server-side and predicted, deliberately keep running through death.
+    Otherwise the dead player is "Already casting" until the dead cast's
+    timer runs out, and it resolves once they're back. `ResetCooldowns`
+    (= `CancelCast` + clear every cooldown and the global cooldown, both
+    sides, via `ResetCooldownsClientRpc`) is the respawn path only
+    (`PlayerRespawn.ServerRespawn`). The
     coroutine only clears `pendingCast` if `castSerial` still matches its
     own, since a new cast can be accepted in the same frame an old one
     finishes waiting. The in-flight cast's server state is one per-cast
@@ -270,6 +282,48 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     ahead of `ProjectilePrefab` in `ResolveAbility`). Re-baselines
     `MovementValidator` before the teleport lands so the server doesn't
     read its own recall as cheating.
+  - **Dead state + Resurrect**: "alive" is the one existing definition,
+    `CurrentHealth.Value > 0`, exposed as `CharacterStats.IsAlive` (the
+    older `<= 0f` checks mean the same thing). A dead player stays at 0
+    HP where they fell, mana untouched; `EnterDeadState` (server) clears
+    effects and shield. Cooldowns (own and global) persist through death
+    — only the in-flight cast is cancelled (`PlayerAbilities.CancelCast`,
+    see Client-side cast prediction) — and every redirect bond the dead
+    player had on others is removed (see Damage redirect). Owner-side
+    while dead: `PlayerMovement.Update`
+    zeroes all input (gravity/forced pulls still run in `FixedUpdate`, so
+    a mid-air death lands and an in-flight pull runs out), `PlayerCamera`
+    skips the body turn (pitch/free-look/zoom still work),
+    `PlayerAbilities.Update` returns (cancelling any ground aim),
+    `PlayerAutoAttack.Update` disarms its own auto-attack on death and
+    ignores the toggle key while dead, and `PlayerHUD` draws one centred
+    bold red "You are dead". Server-side: `ReceiveHit` returns on a dead
+    target at the top *and* again right after the damage block (the
+    killing hit's own heal/shield/threat/effect never lands on the fresh
+    corpse), `ApplyEffect` returns on a dead target (it has direct callers
+    that bypass `ReceiveHit`), `PlayerAutoAttack` disarms a dead attacker,
+    `CharacterEquipment` skips both aura pulse loops while the pulser is
+    dead (allies' aura effects lapse within 2.5s; the aura ground-ring
+    VFX is deliberately left showing), both cast ServerRpcs reject a dead
+    caster with "You are dead". The owner writes a `dead` Animator bool
+    every tick beside `speed` (gated on `SyncedMaxHealth > 0`, since
+    health defaults to 0 until the first sync) — the controller's `Death`
+    state (`KnockDown_F_Light`) is an Editor step. **`TargetStateRule`**
+    (`Scripts/Abilities/TargetStateRule.cs`, pure + tested) is the one
+    dead/alive target rule, applied at all three decision sites
+    (`ClientPrecheck`, `CastAbilityServerRpc`, and again in
+    `ResolveAbility` before `TrySpendOrFizzle`): any non-Resurrect cast on
+    a corpse is "Target is dead" (no mana — Recall can't move corpses);
+    `AbilityData.ResurrectTarget` on a mob is "Can only resurrect players",
+    on a living player "Target is not dead" (also what a respawn
+    mid-Resurrect-cast fizzles with). **Resurrect** (`resurrect`,
+    unit-targeted, HEALS category via `CategorizeAbility`) calls
+    `CharacterStats.Resurrect(h, m)` in the `ResolveAbility` chain beside
+    Recall: in place, health/mana *set* to `ResurrectHealthPercent`/
+    `ResurrectManaPercent` of max, no-op unless dead; plus the usual
+    `TargetVfxPrefab` path if wired. Tab-targeting already skips corpses;
+    left-click on the body or on the party-frame row targets a player
+    alive or dead (see Party frames).
   - **Damage redirect**: `StatusEffectData.DamageRedirectPercent` — if
     the victim has an active effect with this set, `DealDamage` peels
     that fraction off the already-mitigated damage and sends it to
@@ -282,7 +336,18 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     previous holder when recast on someone new. One For All's effect
     uses `EffectStackingMode.Override` so a different caster's cast
     takes the bond over outright instead of the two applications racing
-    on remaining duration.
+    on remaining duration. **A caster's death ends every redirect bond
+    they had on anyone** (One For All, Team Up):
+    `CharacterStats.RemoveRedirectBondsFrom(OwnerClientId)` from
+    `PlayerRespawn.HandleDeath` walks `CharacterStats.All` and removes
+    each active `DamageRedirectPercent > 0` effect attributed to that
+    clientId via `StatusEffectTracker.Remove(data, casterId)` (the keyed
+    overload of the same `Remove` → `Expired` path, so modifiers and the
+    `ActiveEffects` HUD list are cleaned exactly as on expiry) — otherwise
+    `DealDamage` would keep sending the victim's share to a corpse, where
+    `ApplyRawDamage` simply drops it. `exclusiveTargets` is left as is:
+    its strip-the-previous-holder call (`RemoveEffect` → tracker `Remove`)
+    is already a safe no-op once the effect is gone.
   - **Damage reflection**: `StatType.DamageReflectPercent` (gear-driven,
     unlike the effect-driven redirect above) — in `DealDamage`, a
     fraction of the mitigated hit is dealt straight back to the attacker
@@ -433,8 +498,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `CharacterIdle_M` controller (Shinabro humanoid clips) retargets onto
     it unchanged. The old Polysplit-rig system (`CharacterAppearanceApplier`,
     `Appearance*` profile fields, `Resources/Data/Appearance*` assets,
-    `CharacterRig_M/F` prefabs, `DrawLegacyAppearanceTabContent`) is still
-    on disk but unreferenced. `Assets/Synty/SidekickCharacters/` is the
+    `DrawLegacyAppearanceTabContent`) is still on disk but unreferenced —
+    its removal is a pending item, see "Not yet done".
+    `Assets/Synty/SidekickCharacters/` is the
     one Synty pack committed in place (`.gitignore` negation) because the
     game loads it at runtime.
     `AbilityData.TargetVfxPrefab` is the target-side counterpart to
@@ -470,16 +536,45 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     "AoE hits anyone" applying to every ability, not just damage ones.
   - **Persistent structures**: `AbilityData.IsPersistentStructure` +
     `StructurePrefab`/`StructureWidth`/`StructureHeight`/
-    `StructureThickness`, ground-targeted. On resolve,
+    `StructureThickness`/`MaxActiveStructures`, ground-targeted. On resolve,
     `PlayerAbilities.ResolvePersistentStructure` spawns `StructurePrefab`
-    at the aimed point (rotated so its width axis is perpendicular to
-    the caster's current facing), scaled by `PlacedStructure`
-    (`Scripts/Abilities/PlacedStructure.cs`, `RequireComponent(BoxCollider)`,
-    non-trigger — a real obstacle, unlike `GroundPatch`'s trigger). It
-    has no lifetime; `PlayerAbilities.activeStructures` (per-caster,
-    per-ability) despawns the previous one when the same caster casts
-    the same ability again. Earthen Bastion uses this — its prefab
-    still needs Editor setup, see "Not yet done".
+    at the aimed X/Z on the *terrain* height there (not the raycast
+    hit's Y, which can be a roof or prop; with no terrain loaded, the
+    aimed point's Y), rotated so its width axis is perpendicular to the
+    owner's flat facing at click time (the ground-cast RPC carries it;
+    `WallSegmentLayout.FacingRotation` turns it into the wall's rotation,
+    falling back to the caster's forward, and the aim preview uses the
+    same call). The prefab carries `SegmentedWall`
+    (`Scripts/Abilities/SegmentedWall.cs`): `StructureWidth` is split
+    into 1-unit segments (count clamped to 1–32), each a non-trigger
+    cube collider — real obstacles, unlike `GroundPatch`'s trigger —
+    that follows the terrain under it and extends 1 unit below it, which
+    covers small steps between neighbours (a larger step can still show a
+    gap). A segment whose ground differs from the anchor's by more than 4
+    is skipped. On the server only, each kept segment also carries a
+    carving `NavMeshObstacle` (Box, the cube's own extent,
+    `carveOnlyStationary` off so the hole is cut at the next NavMesh
+    update rather than after the default stillness delay), so mobs' path
+    queries route around the wall on every baked surface, each hole
+    inflated by that surface's agent radius; a skipped segment carves
+    nothing, clients don't carve, and the holes vanish with the segments.
+    The wall is one
+    `NetworkObject`; the server computes the skip mask once and sends
+    it with the wall's parameters in a `NetworkVariable<WallSpec>`, so
+    every peer builds the same segments locally and only samples
+    terrain for each kept segment's height (`WallSegmentLayout`, pure +
+    tested, holds the layout math). It has no lifetime;
+    `PlayerAbilities.activeStructures` (per-caster, per-ability) holds up
+    to `AbilityData.MaxActiveStructures` walls, oldest first
+    (`StructureEviction.MakeRoom`, pure + tested: dead entries are pruned
+    first without counting, then the oldest live ones are despawned to
+    make room, so with 2 the third cast removes the first); a caster's
+    walls also despawn when their `PlayerAbilities` despawns on the
+    server, but not during host shutdown. While aiming, the owner sees
+    `WallPlacementPreview` (`Scripts/Player/WallPlacementPreview.cs`, plain
+    C#, owner-local): one flat strip per *kept* segment on its own
+    ground height, built from the same `SegmentedWall.FillHeightsAndMask`
+    the server uses, so it shows exactly the segments the wall gets. Summon Wall uses this.
   - **Following zones**: `AbilityData.IsFollowingZone` +
     `FollowingZonePrefab`, unit-targeted (not ground-targeted). On
     resolve, `PlayerAbilities.ResolveFollowingZone` spawns
@@ -605,7 +700,20 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     (`AuraReveals`, no `Effect`); Aura: Replenish/Regeneration
     each pulse an `Effect` instead. The ability-slot key-press loop and
     `ResolveAbility` both explicitly skip `IsAuraSpell` abilities, since
-    they're never cast through that path at all.
+    they're never cast through that path at all. Perception (Id stays `threat_sense`)
+    (`AuraShowsPerceptionOrbs`, no `Effect`, no reveal) is purely owner-local —
+    `PlayerHUD.Update` (already `!IsOwner`-gated, never on a dedicated
+    server) reads the *local* profile loadout and drives `PerceptionOrbs`
+    (`Scripts/UI/PerceptionOrbs.cs`), which keeps one 0.6-diameter
+    sphere, bottom edge 0.3 above `EnemyAI.HeadPosition()` (capsule top),
+    over every mob in `EnemyAI.All` for as long as the mob exists (through
+    death, until despawn), coloured by `EnemyAI.BaseTargetingMode` (never
+    the Tactician override): Red HighestThreat, Blue LowestThreat, Cyan
+    FarthestPlayer, White Proximity, Yellow MostHealing. Prefabs in
+    `Assets/Resources/Prefabs/Indicators/` (`Resources.Load`, like
+    `ManaOrb`; mode → name `FurthestPlayer`/`ClosestProximity` for the two
+    renamed ones), used as authored. Not a NetworkObject; other players
+    see nothing.
   - **Global cooldown**: starting any cast locks out starting a
     different one for 1.5s, on top of that ability's own cooldown — one
     shared gate across every slot. Same predict-on-client/
@@ -653,11 +761,14 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   HitInfo)` is the *only* way anything hostile reaches a character —
   projectile impact, instant cast, mob melee, ground-patch refresh and
   DoT ticks all build a `HitInfo {Damage, ExtraThreat, AttackerClientId,
-  Effect, EffectDuration}`. Damage is armor-mitigated (`1 - Armor/100`,
+  Effect, EffectDuration}`. Damage is armor-mitigated with diminishing returns
+  (`ArmorMitigation.Reduction`: `Armor / (Armor + K)` with K = 300/7, so
+  100 armor = 70%, never 100%),
   `Armor` floored at 0 — `Stat`'s optional `minValue` constructor
   parameter, defaulting to no floor for every other stat — so stacked
-  Armor-reducing debuffs like Armorbreaker's can't push it negative and
-  invert the mitigation formula into bonus damage taken),
+  Armor-reducing debuffs like Armorbreaker's can't push it negative (a
+  negative armor would give a negative reduction, i.e. bonus damage
+  taken, and a divide-by-zero at −K),
   1 threat per point of mitigated damage goes to the target's optional
   `ThreatTable`, `ExtraThreat` is added on top (taunts), then the effect
   is applied. `HitInfo.Source` (`Melee`/`Ranged`/`Ability`/`GroundPatch`/
@@ -813,33 +924,62 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `ClampToMax()` (no free mid-fight heal). Wrong-slot items are rejected
   server-side. `CharacterStats.GetStat(StatType)` is the shared stat
   lookup.
-  - **Server-wide item uniqueness**: at most one connected player may
-    have a given item Id equipped at a time — `CharacterEquipment
-    .globalItemOwners` (`static`, server-only, keyed by item Id) is
-    claimed in `SetEquipmentServerRpc` and released whenever that item
-    leaves a slot (`Equip`) or its owner disconnects
-    (`OnNetworkDespawn`). Losing the race just silently drops that item
-    from the requester's loadout, the same way an item in the wrong
-    slot already does — there's no client-side awareness of who else
-    holds what, so the Equipment menu can't warn you before you try, and
-    if you lose the race your menu will keep showing it equipped locally
-    (from `Profile`) until you reopen the Equipment page after the
-    rejected sync. **Server-side statics start every session empty**:
-    `globalItemOwners` and `ArcaneShieldZones` would otherwise survive
-    stopping and re-hosting in the same process (or a whole Editor play
-    session with domain reload off), leaving stale item claims and stale
-    domes. `NetworkBootstrap.ResetServerSessionState` clears both on
+  - **Server-wide item and spell uniqueness**: items and spells are each
+    unique server-wide via one ownership map each, claimed at lobby
+    confirm and by the spawn-time sync (same clientId, idempotent). At
+    most one connected player may have a given item Id equipped, or a
+    given ability Id slotted (aura spells included), at a time —
+    `CharacterEquipment.globalItemOwners` and `PlayerAbilities
+    .globalAbilityOwners` (both an `OwnershipMap`, `Scripts/Data/
+    OwnershipMap.cs`, pure + tested: `static`, server-only, keyed by Id;
+    re-claiming your own Id is a no-op, a release by a non-owner is a
+    no-op). Every claim goes through one shared static core per kind —
+    `CharacterEquipment.ValidateAndClaim` (Ids resolve, ring placement,
+    two-handed forces OffHand empty, claim or drop, then release whatever
+    the client held that isn't in the result) and `PlayerAbilities
+    .ValidateAndClaimLoadout` (Ids resolve, no duplicate within the
+    client's own slots, claim or drop, release the rest) — called both by
+    `LobbyState.SetPicksRpc` for a client that has no player yet and by
+    `SetEquipmentServerRpc`/`SetLoadoutServerRpc` on the player at spawn
+    and on `MainMenu.Closed`, keyed by the same clientId, so the spawn-time
+    sync at Start simply re-claims what the lobby already granted. `Equip`
+    only applies stats; it never touches the map (a ring moving
+    Ring1→Ring2 stays claimed throughout, since the core releases only
+    what isn't in the result). `ReleaseAllClaims(clientId)` runs from the
+    player's `OnNetworkDespawn` and from `LobbyState` whenever a client
+    disconnects, in every phase (releasing twice is a no-op).
+    Losing a race silently drops that Id from the requester's loadout —
+    the lobby confirm is the one place the client gets told (its validated
+    reply trims the in-memory Profile); an in-game Escape-menu change gets
+    no feedback, and your menu keeps showing it until you reopen the page.
+    **Server-side statics start every session empty**:
+    `globalItemOwners`, `globalAbilityOwners`, `ArcaneShieldZones` and
+    `NetworkBootstrap.GameStarted` would otherwise survive stopping and
+    re-hosting in the same process (or a whole Editor play session with
+    domain reload off), leaving stale claims, stale domes, and a lobby
+    that spawns the next session's players on connect.
+    `NetworkBootstrap.ResetServerSessionState` clears all of them on
     `NetworkManager.OnServerStopped` and once at startup
     (`RuntimeInitializeOnLoadMethod`) — deliberately **not** on
-    `OnServerStarted`, because `StartHost` spawns the host's own player
-    (which claims its equipment) *before* that event fires. Any new
-    server-only static belongs in that reset too.
+    `OnServerStarted`, because `StartHost` runs the host's own connection
+    approval (which reads `GameStarted`) *before* that event fires. Any
+    new server-only static belongs in that reset too.
 - **Enemy targeting**: `TargetingMode` (`Proximity`/`HighestThreat`/
-  `LowestThreat`/`FarthestPlayer`) and the pure `TargetSelector.Select`
-  live in `Scripts/Enemy/TargetSelector.cs`; `EnemyAI` just builds
-  `TargetCandidate`s (threat, distance) from connected alive players.
-  Whether a mob participates in threat is purely "does it have a
-  `ThreatTable` component" (ogres yes, goblins no).
+  `LowestThreat`/`FarthestPlayer`/`MostHealing`) and the pure
+  `TargetSelector.Select` live in `Scripts/Enemy/TargetSelector.cs`;
+  `EnemyAI` just builds `TargetCandidate`s (threat, distance, healing)
+  from connected alive players. Whether a mob participates in threat is
+  purely "does it have a `ThreatTable` component" (ogres yes, goblins no).
+  `MostHealing` — whoever has the most healing credit on this mob's
+  `ThreatTable` (`AddHealing`/`HealingByClientId`, tie → nearer); with no
+  credit yet it is exactly `HighestThreat`; with no `ThreatTable` it is
+  nearest like the other threat modes. Credit is added in
+  `CharacterStats.GenerateHealingThreat`, so it accrues only on mobs
+  where the *healed* player already has threat > 0, counts the
+  post-`HealingMultiplier` amount including overheal, never decays,
+  excludes aura-pulsed and mob heals, and `RemoveThreatFor` wipes the
+  dying player's own credit. No mob prefab uses it yet. The Tactician
+  still hard-codes `HighestThreat`; a Healer's orb shows who it targets.
   - **Mob pathfinding**: `EnemyAI.ComputeChaseDirection` follows a
     `NavMesh.CalculatePath` result's corners instead of steering straight
     at the target, recalculating at most every `PathRecalcInterval`
@@ -857,15 +997,21 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     query's own source position) and falls back to the previous
     straight-line behavior whenever no usable path exists — no NavMesh
     baked yet (see "Not yet done"), the mob is off-mesh (e.g. airborne
-    mid-knockback), or the destination is unreachable (a `PathPartial`
-    result still walks toward the nearest reachable point, which needs no
-    special-casing). No per-corner-index tracking across ticks between
+    mid-knockback). An unreachable destination (a `PathPartial` result —
+    e.g. the target behind a carved Summon Wall) is walked to its last
+    corner, the nearest reachable point, and the mob then holds position
+    facing its target: `DirectionTowardPath` returns zero once within one
+    tick's step (`RunSpeed × fixedDeltaTime`, passed by `EnemyAI`) of that
+    corner, both chase sites treat zero as hold rather than feeding it to
+    `LookRotation`, and the Tactician's attack is range-gated so it can't
+    swing from there. No per-corner-index tracking across ticks between
     recalcs — accepted, bounded imprecision, same as any periodic-repath
     model. Only applied to "close distance to reach a target" chasing
     (the generic chase block and the Tactician's own closing-in branch) —
     deliberately **not** applied to `ServerBeginPull`/`IsPulling` (forced
     straight-line pulls — Vacuum-style abilities, Archer's
-    `TriggerReposition` — by design) or kiting. **Agent type per mob**:
+    `TriggerReposition` — by design) or kiting — carved walls don't
+    change that: a pull or kite still moves straight. **Agent type per mob**:
     `EnemyAI.ResolveNavAgentType` picks, once in `Awake`, the smallest baked
     NavMesh agent type (`NavMesh.GetSettingsByIndex`) whose radius and
     height contain the mob's *scaled* capsule (`NavAgentTypeSelector`,
@@ -926,14 +1072,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     single `ThreatTable` to credit — `GenerateHealingThreat` walks
     `ThreatTable.All` and adds threat for the healer on every
     mob that **already has the healed character in its own table** (i.e.
-    every mob currently fighting them). Gated on
+    every mob currently fighting them), and also records healing credit
+    on the same tables (`ThreatTable.AddHealing`) for `MostHealing`.
+    Gated on
     `healerClientId != NoAttacker`, which excludes aura-pulsed healing
     entirely (same reasoning `HealingMultiplier` uses), and on the healed
     character being a *player*: area heals hit mobs too, and a mob's
     `OwnerClientId` is the server's id — which on a host is also the host
     player's clientId — so healing a mob must not run that lookup at all.
-    `Heal` itself is a no-op on a dead character (only `RestoreFull`
-    brings one back), so a HoT tick or delayed heal landing in a mob's
+    `Heal` itself is a no-op on a dead character (only `RestoreFull` or
+    `Resurrect` brings one back), so a HoT tick or delayed heal landing in a mob's
     death-despawn window can't lift it back above 0 health.
   - **Mana orb drops**: every mob has a flat 5% chance
     (`EnemyAI.ManaOrbDropChance`) on death to spawn a `ManaOrb`
@@ -987,16 +1135,44 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     spawn ice ground patches the way the player version does.
 - **Menus / dev UI** (`Scripts/UI/`, one remaining IMGUI `OnGUI` panel —
   deliberately disposable, don't invest further in it; real UI is UI
-  Toolkit, see the migration paragraph below): pregame `MainMenu` (Skills /
-  Equipment / Options / Enter Testing Area) and, after
-  `TestingAreaGate.Entered`, the same panels as an **Escape menu**
-  (`MainMenu.IsOpen`). The Equipment page is a paper-doll: 3×5 grid of
-  equipment slots on the left, inventory grid (every unequipped item in the
-  game, no real inventory yet) on the right - see the UI Toolkit migration
-  paragraph below for `EquipmentPanelController`'s specifics. While open,
-  `PlayerMovement`, `PlayerCamera`, `PlayerTargeting`, `PlayerAbilities`
-  ignore gameplay input; on close `MainMenu.Closed` triggers
-  loadout/gear re-sync. Options page: UI scale and look sensitivity are
+  Toolkit, see the migration paragraph below). The game opens with the
+  lobby: connect first, Lobby panel (name, Appearance,
+  Ready), Choice screen, navigator-driven Spells/Equipment screens, Start.
+  Players do not exist until Start. Pre-connect only `NetworkBootstrap`'s
+  IMGUI connect panel shows; once connected `MainMenu.SyncWithLobby` reads
+  `LobbyState.Phase` (plus the local entry's `Admitted`) every frame and
+  drives which panel is up (`Panel.Lobby`/`Panel.Choice`/Skills/Equipment;
+  a not-admitted waiter stays on the Lobby panel whatever the phase);
+  `Phase == Started` sets `TestingAreaGate.Entered` and closes the lobby
+  UI, after which the same panels serve as the **Escape menu**
+  (`MainMenu.IsOpen`). Escape does nothing during the lobby. During the
+  lobby only the navigator has a Back on Skills/Equipment (it sends
+  everyone back to Choice via `NavigateRpc`); everyone else's screen just
+  follows the phase. **Picks sync on confirm**: `MainMenu.SetActivePanel`
+  is the one panel-change path, and whenever the previous panel was Skills
+  or Equipment during the lobby — own Back, the navigator moving everyone,
+  Start, whatever the cause — it sends that category's current `Profile`
+  contents through `LobbyState.SetPicksRpc`; the server's validated result
+  comes back via `PicksValidated` and `PlayerProfile.ApplyValidatedLoadout`/
+  `ApplyValidatedEquipment` overwrite the in-memory profile (a dropped
+  ability slot loses its key/shift too), persisted at the next normal save
+  point (Start saves). Both Skills and Equipment carry a "Team Picks"
+  section (`PicksSection`, `Scripts/UI/PicksSection.cs`, a plain C# helper
+  like `CategoryTabBar`): one row per lobby entry in ascending clientId
+  order (`PicksLayout`, pure + tested), name then that player's picks as
+  wrapping icons with the usual hover tooltips — the local row reads the
+  Profile live, every other row the entry's confirmed `Spells`/`Gear`.
+  Skills has it as a column left of the kit/available lists; Equipment
+  has it between the preview and the inventory (it is also where your own
+  equipped items are shown — there is no separate equip grid). The same
+  sections show in the in-game Escape-menu panels, where other players'
+  rows show their lobby-confirmed picks only: later in-game changes via
+  the Escape menu go through the spawn RPCs, not the entries, so they
+  don't update anyone's picks row, and a post-Start joiner shows as a row
+  with no name and no icons (see "Not yet done"). While a panel is
+  open, `PlayerMovement`, `PlayerCamera`, `PlayerTargeting`,
+  `PlayerAbilities` ignore gameplay input; on close `MainMenu.Closed`
+  triggers loadout/gear re-sync. Options page: UI scale and look sensitivity are
   both sliders (75–250% / 0.25×–3×, `UIScale`/`LookSensitivityScale` —
   same profile-backed pattern), plus movement rebinding (any non-mouse,
   non-Escape key; binding a key steals it from other movement actions
@@ -1025,17 +1201,29 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   panels**: IMGUI's native Tab focus traversal moves keyboard focus into
   any focusable control even when the Tab event is `Use()`d, and Tab is
   the tab-targeting key — the summon count is −/+ buttons for exactly
-  that reason. The only text field is the server-address box, which is
-  gone once connected.
+  that reason. The only text fields are the server-address box (gone once
+  connected) and the Lobby panel's name `TextField` (only ever shown
+  before a player exists; blurred on `Hide()`).
   **UI Toolkit migration** (in progress, panel by panel): `Assets/UI/` holds
   `Theme.uss` (shared design tokens as USS custom properties, scoped under a
   `.theme-root` class since USS has no universal `:root`, plus reusable BEM
   component classes — `.panel`, `.button`, `.field-row`, etc.) and each
   panel's own `<Panel>.uxml`/`<Panel>.uss`. Migrated so far: Options
-  (`OptionsPanelController`), the main/in-game menu shell
-  (`MenuShellController` — one UXML for both the pregame button set and the
-  in-game one, toggled via `SetMode(bool inGame)` rather than two separate
-  panels), Summon Mobs (`SummonPanelController`), and Skills
+  (`OptionsPanelController`), the in-game Escape-menu shell
+  (`MenuShellController` — in-game buttons only, a single mode: before a
+  session exists only `NetworkBootstrap`'s connect panel shows), the
+  lobby's two screens (`LobbyPanelController` — "Lobby"
+  title, "Players: N" (everyone connected, waiters included), the name
+  `TextField` with the server's rejection reason under it, "Design
+  Character", one "Ready"/"Unready" button disabled until
+  `NameRules.IsWellFormed` passes, the player list with Ready/Waiting, and
+  the "Waiting for the team" / "The game has started - reconnect to join"
+  notes for a non-admitted client; `ChoicePanelController` — "Spells" /
+  "Equipment" / "Back to main menu" enabled only for the navigator, "Start"
+  visible only to the navigator, "<navigator> is choosing" for everyone
+  else, plus the same player list; both lists render through the shared
+  `LobbyPlayerList` helper, `.player-row*` in `Theme.uss`), Summon Mobs
+  (`SummonPanelController`), and Skills
   (`SkillsPanelController` — "Your Kit" renders as a horizontal toolbar
   mirroring the real in-game ability bar's shape rather than a vertical
   list; "Available Abilities" is a tab bar, one tab per fixed category
@@ -1067,18 +1255,20 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   and computes the drop target *before* calling `ReleasePointer` -
   releasing capture can synchronously fire `PointerCaptureOutEvent`,
   whose handler resets that same drag state, so reading it afterward is
-  unsafe.), and Equipment (`EquipmentPanelController` — the same
-  paper-doll-left/inventory-grid-right layout and click-based interaction
-  the old `DrawGearPanel` had: click an inventory item to equip it into
-  `TargetSlotFor`'s resolved slot, click a filled slot to unequip it, same
-  two-handed-weapon/off-hand conflict auto-clearing. `ItemData.Icon` now
-  actually renders here (wired via `Encounter/Wire Icons`) instead of the
-  old "X" placeholder; a null `Icon` just shows an empty icon box, same
-  as an ability without one in Skills. Per-slot-category outline colors
-  (rings red, trinket green, main hand cyan, off hand purple, necklace
-  yellow, chest blue, boots black) are unchanged, just drawn as a
-  `VisualElement` border instead of `GUI.DrawTexture`. The inventory side
-  (not the equip grid) is a tab bar, one tab per equipment slot category
+  unsafe.), and Equipment (`EquipmentPanelController` — preview on the
+  left, the "Team Picks" section in the middle, the inventory grid on the
+  right: click an inventory item to equip it into `ResolveTargetSlot`'s
+  slot, click one of *your own* picks icons to pin that physical slot
+  (`EquipSlotClicked` → `pinnedEquipmentSlot`, so Ring 1 vs Ring 2 stays
+  disambiguated; cleared on a category-tab click or when the panel opens)
+  and then pick a replacement or the "None" box to unequip; other players'
+  icons are tooltip-only. An empty slot has no icon to click — the
+  auto-resolve rule (first free ring, else the category's slot) covers it.
+  Same two-handed-weapon/off-hand conflict auto-clearing as before. Each
+  picks icon carries the slot's short name as a tag. `ItemData.Icon`
+  renders here (wired via `Encounter/Wire Icons`); a null `Icon` just
+  shows an empty icon box, same as an ability without one in Skills. The
+  inventory side is a tab bar, one tab per equipment slot category
   (Head/Neck/Chest/Cape/Gloves/Legs/Boots/Rings/Trinket/Main/Off - Ring1
   and Ring2 collapse into one "Rings" tab since a ring item's own `Slot`
   is always just the `Ring1` category), same
@@ -1112,11 +1302,12 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   root; `MainMenu.Start()` (never `Awake()`) is where any one-time
   list-building against a controller happens for the same reason.
   `MainMenu.RefreshPanelVisibility()` centralizes which one of
-  {shell, Options, Summon, …} is currently visible, based on `activePanel`/
-  `IsOpen`/`TestingAreaGate.Entered`, called from every panel-transition
-  method (`OpenPanel`/`LeavePanel`/`OpenInGameMenu`/`CloseInGameMenu`/
-  `Start`) — adding a future migrated panel only needs one more line there,
-  not changes to every transition method. `UIScale.Value` (the existing
+  {shell, Options, Summon, Lobby, Choice, …} is currently visible, based
+  on `activePanel`/`IsOpen` (the shell only ever shows for the in-game
+  Escape menu), called from every panel-transition method (`OpenPanel`/
+  `LeavePanel`/`OpenInGameMenu`/`CloseInGameMenu`/`EnterGame`/
+  `ApplyLobbyPanel`/`Start`) — adding a future migrated panel only needs
+  one more line there, not changes to every transition method. `UIScale.Value` (the existing
   player-facing slider) applies to every UI Toolkit panel via
   `VisualElement.style.scale`, applied on `Show()`, instead of IMGUI's
   `GUI.matrix` — same profile-backed value either way, so sizing stays
@@ -1145,9 +1336,16 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   lobby). Ordering is identical on every client with no synced state at
   all: sort by `OwnerClientId` (server-assigned, already known
   identically everywhere via each `CharacterStats`'
-  `NetworkBehaviour.OwnerClientId`), label by that sorted position
-  ("Player 1", "Player 2", …) — that's `Slot.PartyNumber`, a *stable
-  identity* every viewer agrees on. Each viewer's own entry is skipped —
+  `NetworkBehaviour.OwnerClientId`); `Slot.PartyNumber` is that sorted
+  position, a *stable identity* every viewer agrees on. Names come from
+  `PlayerIdentity` (`Scripts/Player/PlayerIdentity.cs`, on `Player.prefab`:
+  a server-written `NetworkVariable<FixedString64Bytes> DisplayName`, copied
+  from the player's `LobbyState` entry in its server `OnNetworkSpawn`) —
+  both here and in `PlayerHUD.DrawTargetFrame`, via
+  `PlayerIdentity.NameOf`; when that's empty (a player that never went
+  through the lobby, e.g. a joiner after Start) the labels fall back to
+  "Player N" here and the `Targetable`'s own "Target" in the target
+  frame. Each viewer's own entry is skipped —
   not left as a blank row — so the remaining rows stack up from the top
   with no gap. `CurrentHealth`/`CurrentMana`/`SyncedMaxHealth`/
   `SyncedMaxMana` are already `NetworkVariable`s readable by everyone,
@@ -1162,6 +1360,15 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     P1,P2,P3,P4 — P2's screen shows rows [P1, P3, P4] labeled "Player
     1"/"Player 3"/"Player 4"; P2's `PartyTarget2` hits row 1 → P3, even
     though P3's own label says "Player 3", not "Player 2".
+  - **Click-to-target**: a left-click (not a drag) on a row targets
+    whoever is drawn in it, alive or dead — `PlayerTargeting`'s
+    left-click handler hit-tests the rows *before* the world raycast, via
+    the pure `PartyFrames.ScreenToGui` (mouse → the GUI space `Draw` lays
+    out in: Y flipped, divided by `UIScale.Value`) and
+    `PartyFrames.RowIndexAt` (the same layout constants `Draw` uses, with
+    `UIScale.Width` passed in; -1 on the gap between rows, outside the
+    column, or past the last row — both tested). Right-click on a row is
+    unchanged (no special handling).
 - **Minimap** (`Scripts/UI/Minimap.cs`, drawn from `PlayerHUD`): circular
   radar bottom-right, north-up, player at centre with a heading tick.
   Compass letters (N/E/S/W) are drawn at fixed screen positions just
@@ -1274,7 +1481,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `StatType.ThreatMultiplier` scales all threat an attacker generates
   (applied in `CharacterStats.AddThreat`) — gear can grant it.
 - **Testing lobby scope** (still placeholders, not the real designs):
-  instant respawn at map centre, `PlayerSummon` (Escape menu → Summon
+  Escape-menu Respawn at map centre (dying leaves you dead in place
+  until that or a Resurrect), `PlayerSummon` (Escape menu → Summon
   Mobs, spawning `MobGoblin`/`MobOgre` variants on a `summonRadius`
   (100) ring centered on the summoning player's own position, not the
   map), no wipe/reset encounter model, no loot, no unlocks.
@@ -1301,6 +1509,58 @@ renamed, or retuned.
   shipped build dials by default); `NetworkBootstrap`'s panel has an
   address field that defaults to `127.0.0.1` in the Editor (incl. MPPM
   virtual players) and remembers the last address in the profile.
+- **Lobby / deferred spawn**: connection approval is on; the approval
+  callback creates the player object only after the lobby is started;
+  `LobbyState` (scene NetworkObject) owns phase, navigator, entries,
+  confirmed picks. `NetworkBootstrap` sets
+  `NetworkManager.ConnectionApprovalCallback` before `StartHost`/
+  `StartServer` (`Approved = true`, `CreatePlayerObject =
+  NetworkBootstrap.GameStarted` — a plain static, never `LobbyState`: the
+  host's own approval runs inside `StartHost` before any in-scene object
+  spawns) and clears it on server stop; the scene's NetworkManager must
+  have Connection Approval ticked or NGO never invokes it (Editor step).
+  `LobbyState` (`Scripts/Lobby/LobbyState.cs`, server-authoritative):
+  `NetworkVariable<LobbyPhase> Phase` (`MainMenu`/`Choice`/`Spells`/
+  `Equipment`/`Started`, append-only), `NetworkVariable<ulong> Navigator`,
+  `NetworkList<LobbyEntry>` {ClientId, Name (FixedString64), Ready,
+  Admitted, Spells, Gear (FixedString512, ';'-joined confirmed Ids)}.
+  Server `OnNetworkSpawn` re-seeds (clear, `Phase = MainMenu`, one Admitted
+  entry per `ConnectedClientsIds` — the host included — and subscribes
+  connect/disconnect callbacks; `AddEntry` is idempotent since the host's
+  own connected callback fires after that seeding). RPCs are
+  `[Rpc(SendTo.Server)]` with the sender from
+  `RpcParams.Receive.SenderClientId` (`[ServerRpc(RequireOwnership=false)]`
+  is obsolete in NGO 2.13): `SubmitReadyRpc(name, ready)` (MainMenu phase
+  for admitted entries, any phase for a waiter — stored, not counted;
+  ready = validate via `NameRules` against the other entries' names,
+  reply `NameRejectedRpc(reason)` to that client only via
+  `[Rpc(SendTo.SpecifiedInParams)]` + `RpcTarget.Single(sender, Temp)`
+  on failure, else store the name + Ready and re-check all-ready),
+  `SetPicksRpc(kind, joinedIds)` (admitted sender, any phase but
+  MainMenu — Choice so a confirm triggered by the navigator's own phase
+  change still lands, Started so a slow confirm arriving after Start is
+  still processed normally; runs the shared claim core, stores the
+  validated string in the entry, replies `PicksValidatedRpc`),
+  `NavigateRpc(target)` (navigator only, `LobbyRules.IsLegalNavigation`:
+  Choice → Spells/Equipment/MainMenu, Spells/Equipment → Choice) and
+  `StartGameRpc()` (navigator only, Choice only: `MarkGameStarted`,
+  `Phase = Started`, then `SpawnAsPlayerObject` for every admitted
+  connected client; a non-admitted waiter stays out until they
+  reconnect). Transitions: all admitted ready (count ≥ 1, `LobbyRules
+  .AllReady`) → Choice with `Navigator = NavigatorSelector.Pick(admitted
+  ready ids, Random.value)` (solo host goes straight through); a
+  connect during Choice/Spells/Equipment is NOT admitted (`LobbyRules
+  .IsAdmittedJoin`); every entry into MainMenu admits everyone and resets
+  Ready (picks kept); a disconnect in any phase removes the entry and
+  releases the client's claims in both maps; before Start it also
+  re-picks the navigator among remaining admitted if it was them (none
+  left → MainMenu) and re-runs all-ready in MainMenu.
+  Clients reset `TestingAreaGate.Entered` on `OnClientStopped`. Name
+  rules (`NameRules`, pure): trim, non-empty, ≤ 16 code points, ≤ 61
+  UTF-8 bytes (FixedString64's real capacity), case-insensitively unique
+  vs other entries; the client only runs the shape check (to enable
+  Ready), uniqueness is server-only; `PlayerProfile.CharacterName`
+  pre-fills the field.
 - **Primary monitor on launch**: `NetworkBootstrap.Start` calls
   `Screen.MoveMainWindowTo(Display.displays[0], ...)` in every
   Standalone build (skipped in the Editor, and in batch mode since a
@@ -1321,23 +1581,11 @@ renamed, or retuned.
    machine, taunt/threat reset on combat end.
 3. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
-4. **Earthen Bastion's wall prefab** — the gameplay logic is built
-   (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
-   ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
-   so the spell currently just fizzles with "Structure not configured
-   yet". Editor steps: (1) create a Cube GameObject, (2) add a
-   `NetworkObject` component, (3) add `PlacedStructure`
-   (`Scripts/Abilities/PlacedStructure.cs` — its
-   `RequireComponent(BoxCollider)` adds the collider automatically,
-   leave it as a non-trigger), (4) save as a prefab, (5) register it in
-   `DefaultNetworkPrefabs.asset` like every other spawned prefab, (6)
-   drag it onto `AbilityEarthenBastion`'s `StructurePrefab` field. No
-   script changes needed once that's done.
-5. **Arctic Winds' zone prefab** — same situation as #4:
-   `AbilityArcticWinds.FollowingZonePrefab` is null, so the spell
-   currently fizzles with "Zone not configured yet". Editor steps: (1)
-   create a GameObject (a default Sphere primitive if you want the dome
-   visible, or empty for an invisible trigger), (2) add a `NetworkObject`
+4. **Arctic Winds' zone prefab** — `AbilityArcticWinds.FollowingZonePrefab`
+   is null, so the spell currently fizzles with "Zone not configured
+   yet". Editor steps: (1) create a GameObject (a default Sphere primitive
+   if you want the dome visible, or empty for an invisible trigger), (2)
+   add a `NetworkObject`
    component, (3) add `GroundPatch` (`Scripts/Abilities/GroundPatch.cs` —
    the same component the fire/ice patches use; its
    `RequireComponent(SphereCollider)` adds the collider automatically, and
@@ -1348,7 +1596,7 @@ renamed, or retuned.
    the fixed patches, it has no `NetworkTransform` of its own — if you
    want *clients* to see a visible dome track the target (rather than
    only the server-side trigger following it), add one.
-6. **Mana orb pickup prefab — built, just needs network registration.**
+5. **Mana orb pickup prefab — built, just needs network registration.**
    `Assets/Resources/Prefabs/ManaOrb.prefab` exists now, but it's not yet
    registered in `DefaultNetworkPrefabs.asset` like every other spawned
    prefab — without that, `ManaOrb.TrySpawn`'s `NetworkObject.Spawn()`
@@ -1356,7 +1604,7 @@ renamed, or retuned.
    `Assets/Resources/Prefabs/HealthOrb.prefab` exists but nothing in the
    scripts references "HealthOrb" at all — no drop logic spawns it, it's
    currently an orphaned prefab.
-7. **Skeleton Tactician escort — visuals and network-prefab registration**
+6. **Skeleton Tactician escort — visuals and network-prefab registration**
    (see `BOSS_DESIGN.md`). The five `MobSkeleton*.prefab` files exist
    with all their stats/weapon/effect references already wired, but
    still need: (1) each one's actual visual model parented under its
@@ -1372,11 +1620,69 @@ renamed, or retuned.
    `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
    on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
    specified in the design, see `review_with_fable.md`.
-8. **Only weapons currently render a visual model on equip** (via
+7. **Only weapons currently render a visual model on equip** (via
     `CharacterWeaponVisual`/`WeaponAttachProfile`) — no other equipment slot
     has a visual representation yet. Hunter's Cloak (Cape) has no 3D asset
     and isn't wired; this is the current scope, not a gap specific to that
     item.
+8. **Lobby — Editor wiring pending** (the code side is done, see Menus/dev
+    UI and Networking above; until wired the lobby is simply inert: no
+    `LobbyState` spawns, so `MainMenu` shows nothing after connecting and
+    no player ever spawns). (1) Hierarchy → NetworkManager → Inspector →
+    NetworkManager → Network Config: tick **Connection Approval** (leave
+    "Auto Spawn Player Prefab Client Side" as is). (2) Hierarchy →
+    Create Empty → name `Lobby` → Add Component **NetworkObject**, then
+    **LobbyState**; save the scene. (3) `Assets/Prefabs/Player/
+    Player.prefab` → Add Component **PlayerIdentity**; save. (4) Under
+    `MainMenu` create two empty children `LobbyPanelUI` and `ChoicePanelUI`
+    (siblings of the other panel objects — never a `UIDocument` on
+    `MainMenu` itself); on each add a **UIDocument** (Source Asset =
+    `Assets/UI/Lobby.uxml` / `Choice.uxml`, Panel Settings =
+    `EncounterPanelSettings`) plus **LobbyPanelController** /
+    **ChoicePanelController**, and assign both on `MainMenu`'s new `Lobby
+    Panel UI` / `Choice Panel UI` fields. (5) Redeploy the Linux server
+    (approval + `LobbyState` are server-side). Two half-wired states to
+    recognise: with Connection Approval NOT ticked, NGO never invokes the
+    approval callback (it only warns), so the host's player spawns at
+    `StartHost` while the lobby UI runs on top of it; with it ticked but
+    the `Lobby` object missing, `GameStarted` can never be set, so nobody
+    ever spawns.
+9. **Remove the legacy Polysplit-rig appearance system** (unreferenced
+    since the Sidekick switch; pending because
+    `CharacterAppearanceApplierTests`' TearDown logs "Destroy may not be
+    called from edit mode" on every full EditMode run until it's gone).
+    Delete, each with its `.meta`: `Scripts/Player/
+    CharacterAppearanceApplier.cs`; `Scripts/Data/{AppearancePieceData,
+    AppearanceHeadwearData, AppearanceAccessoryData, AppearanceColorPalette,
+    AppearanceGender, AppearanceSlot}.cs`; `Tests/EditMode/
+    CharacterAppearanceApplierTests.cs`; `Resources/Data/AppearancePieces/`,
+    `AppearanceHeadwear/`, `AppearanceAccessories/` (folders + folder
+    metas) and `AppearanceColorPalette.asset`; `Assets/External/
+    PolysplitGames/LowPolyMedievalFantasyHeroes/` (whole folder — its GUIDs
+    are referenced only by the legacy assets; mob visuals use the
+    BipedCreatures pack); optionally `Prefabs/Player/CharacterIdle_F
+    .controller` (unreferenced; `CharacterIdle_M` stays). Must edit so it
+    compiles: `GameDatabase.cs` (the `Appearance*` catalogs, `Get*`
+    helpers, `Palette`, the three `LoadAll` calls), `PlayerProfile.cs` (the
+    12 `Appearance*` fields, `Gender`/`GetAppearance*`/`HasAccessory`/
+    `ToggleAccessory`, the legacy block in `Normalize` and
+    `NormalizeRequiredSlot`/`NormalizeOptionalSlot`), `MainMenu.cs`
+    (`SetBottom`, `DrawLegacyAppearanceTabContent`,
+    `DrawSelectableChecklist`, `DrawColorStepper` — keep
+    `DrawSelectableList`, which `DrawPresetList` uses),
+    `PlayerProfileTests.cs` (the 14 legacy Normalize/ToggleAccessory
+    tests). Comment-only mentions to tidy: `CharacterWeaponVisual.cs`,
+    `WeaponAttachProfile.cs`. Old `profile.json` files keep loading
+    (`JsonUtility` ignores unknown keys). Afterwards update the "old
+    Polysplit-rig system … still on disk" sentence in the Character
+    appearance section and the `Assets/External` file count in Tech
+    baseline.
+10. **Live-update the in-game picks sections** from Escape-menu
+    loadout/gear changes and post-Start joiners — today the Skills/
+    Equipment "Team Picks" rows for other players only ever show what
+    `LobbyState.Entries` holds (lobby-confirmed picks; a post-Start joiner's
+    entry has no name and no picks), since the in-game sync RPCs on the
+    player don't write back to the entries.
 
 ## Notes for future sessions
 

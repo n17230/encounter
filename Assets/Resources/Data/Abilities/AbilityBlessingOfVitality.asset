@@ -67,5 +67,5 @@ MonoBehaviour:
   IsFollowingZone: 0
   FollowingZonePrefab: {fileID: 0}
   SelfBuff: 0
-  Icon: {fileID: 21300000, guid: ba154716d34e75849a26a1f77272bd14, type: 3}
+  Icon: {fileID: 21300000, guid: b116f473367a21946b4f829018699348, type: 3}
   PlaysCastHealAnimation: 1

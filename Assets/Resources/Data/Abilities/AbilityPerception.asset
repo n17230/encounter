@@ -10,15 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8b4b9a737d3d1224d8fd3bf4a5e73ac8, type: 3}
-  m_Name: AbilityEarthenBastion
+  m_Name: AbilityPerception
   m_EditorClassIdentifier:
-  Id: earthen_bastion
-  AbilityName: Earthen Bastion
+  Id: threat_sense
+  AbilityName: Perception
   RequiresTarget: 0
-  Range: 30
-  Cooldown: 10
+  Range: 0
+  Cooldown: 0
   CastTime: 0
-  ManaCost: 175
+  ManaCost: 0
   ThreatValue: 0
   Damage: 0
   HealAmount: 0
@@ -26,6 +26,9 @@ MonoBehaviour:
   MissileSpeed: 15
   ProjectilePrefab: {fileID: 0}
   CastVfxPrefab: {fileID: 0}
+  CastVfxScale: 1
+  TargetVfxPrefab: {fileID: 0}
+  TargetVfxScale: 1
   GroundPatchPrefab: {fileID: 0}
   MinPatchCount: 0
   MaxPatchCount: 0
@@ -34,8 +37,8 @@ MonoBehaviour:
   PatchDuration: 6
   Effect: {fileID: 0}
   DirectHitEffectDuration: 0
-  IsGroundTargeted: 1
-  GroundEffectRadius: 12.5
+  IsGroundTargeted: 0
+  GroundEffectRadius: 0
   ForceSpeed: 0
   PushAway: 0
   RecallTarget: 0
@@ -45,16 +48,22 @@ MonoBehaviour:
   ConeAroundCaster: 0
   ConeAngle: 90
   RequiresMeleeWeapon: 0
+  RequiresShield: 0
   WeaponDamagePercent: 0
   ChargeForwardDistance: 0
   ChargeToTarget: 0
   ChargeSpeed: 20
-  IsAuraSpell: 0
-  AuraRange: 40
+  IsAuraSpell: 1
+  AuraRange: 0
   AuraReveals: 0
+  AuraShowsPerceptionOrbs: 1
   RemovesNegativeEffect: 0
-  IsPersistentStructure: 1
+  IsPersistentStructure: 0
   StructurePrefab: {fileID: 0}
-  StructureWidth: 25
+  StructureWidth: 0
   StructureHeight: 5
   StructureThickness: 2
+  IsFollowingZone: 0
+  FollowingZonePrefab: {fileID: 0}
+  SelfBuff: 0
+  Icon: {fileID: 0}

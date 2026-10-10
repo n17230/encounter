@@ -2,11 +2,13 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// UI Toolkit presentation for the top-level menu shell (replaces MainMenu's
-// old DrawMainPanel/DrawInGamePanel). Purely a view, same discipline as
-// OptionsPanelController - MainMenu.cs owns activePanel/IsOpen/
-// TestingAreaGate.Entered and decides when to Show()/Hide() this and call
-// SetMode(); this class only reflects that and reports clicks via events.
+// UI Toolkit presentation for the in-game Escape menu's shell (replaces
+// MainMenu's old DrawInGamePanel). Purely a view, same discipline as
+// OptionsPanelController - MainMenu.cs owns activePanel/IsOpen and decides
+// when to Show()/Hide() this; this class only reflects that and reports
+// clicks via events. There is no pregame mode any more: before a session
+// exists only NetworkBootstrap's connect panel shows, and the lobby
+// (LobbyPanelController/ChoicePanelController) takes over from there.
 [RequireComponent(typeof(UIDocument))]
 public class MenuShellController : MonoBehaviour
 {
@@ -16,7 +18,6 @@ public class MenuShellController : MonoBehaviour
     public event Action SummonClicked;
     public event Action OptionsClicked;
     public event Action RespawnClicked;
-    public event Action EnterTestingAreaClicked;
     public event Action ResumeClicked;
     public event Action ExitClicked;
 
@@ -28,7 +29,6 @@ public class MenuShellController : MonoBehaviour
     private Button summonButton;
     private Button optionsButton;
     private Button respawnButton;
-    private Button enterButton;
     private Button resumeButton;
     private Button exitButton;
 
@@ -51,7 +51,6 @@ public class MenuShellController : MonoBehaviour
         summonButton = root.Q<Button>("summon-button");
         optionsButton = root.Q<Button>("options-button");
         respawnButton = root.Q<Button>("respawn-button");
-        enterButton = root.Q<Button>("enter-button");
         resumeButton = root.Q<Button>("resume-button");
         exitButton = root.Q<Button>("exit-button");
 
@@ -61,7 +60,6 @@ public class MenuShellController : MonoBehaviour
         summonButton.clicked += () => SummonClicked?.Invoke();
         optionsButton.clicked += () => OptionsClicked?.Invoke();
         respawnButton.clicked += () => RespawnClicked?.Invoke();
-        enterButton.clicked += () => EnterTestingAreaClicked?.Invoke();
         resumeButton.clicked += () => ResumeClicked?.Invoke();
         exitButton.clicked += () => ExitClicked?.Invoke();
 
@@ -79,19 +77,5 @@ public class MenuShellController : MonoBehaviour
     {
         EnsureInitialized();
         root.style.display = DisplayStyle.None;
-    }
-
-    // Pregame vs the in-game Escape menu - only which extra buttons show
-    // differs now (Summon Mobs/Respawn/Resume vs. Enter Testing Area);
-    // Skills/Equipment/Character Creation/Options are the same either way.
-    public void SetMode(bool inGame)
-    {
-        EnsureInitialized();
-
-        DisplayStyle inGameOnly = inGame ? DisplayStyle.Flex : DisplayStyle.None;
-        summonButton.style.display = inGameOnly;
-        respawnButton.style.display = inGameOnly;
-        resumeButton.style.display = inGameOnly;
-        enterButton.style.display = inGame ? DisplayStyle.None : DisplayStyle.Flex;
     }
 }

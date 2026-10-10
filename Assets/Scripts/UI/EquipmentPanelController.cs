@@ -3,13 +3,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// Display data for one paper-doll equip slot - MainMenu computes this (it
-// owns Profile reads), the controller only renders it.
-public struct EquipmentSlotDisplay
+// One equipped item in a player's "Team Picks" row - MainMenu computes
+// these (it owns Profile reads and the lobby entries), the controller only
+// renders them.
+public struct EquipmentPickDisplay
 {
     public EquipmentSlot Slot;
-    public string Label;      // e.g. "Main" - matches the old IMGUI panel's SlotShortNames
-    public ItemData Equipped; // null = empty
+    public string SlotLabel; // e.g. "Ring 1" - matches the old IMGUI panel's SlotShortNames
+    public ItemData Item;
+}
+
+public struct EquipmentPicksRow
+{
+    public string Name;
+    public bool IsLocal;
+    public List<EquipmentPickDisplay> Items;
 }
 
 // One tab's worth of the inventory grid - one per equipment slot category
@@ -25,16 +33,19 @@ public struct InventoryCategoryDisplay
 
 // UI Toolkit presentation for the Equipment panel. Purely a view, same
 // discipline as every other migrated panel - MainMenu.cs owns all real
-// state (Profile.EquipmentIds); this class only displays what it's told via
-// Rebuild() and reports clicks back up via events. Clicking a paper-doll
-// slot (filled or empty) jumps the inventory tab bar to that slot's
-// category rather than unequipping it directly - MainMenu pins the exact
-// physical slot clicked (see EquipSlotClicked) so Ring1 vs Ring2 stays
-// disambiguated even though they share one "Rings" tab. Equipping/
-// unequipping always happens from the inventory grid from there: a real
-// item (InventoryItemClicked), or the always-present "None" pseudo-entry
-// (UnequipClicked). Drag-and-drop equip is a deliberately separate future
-// pass, not this one.
+// state (Profile.EquipmentIds, the lobby's synced picks); this class only
+// displays what it's told via Rebuild() and reports clicks back up via
+// events. Between the preview and the inventory sits the "Team Picks"
+// section (PicksSection): every player's equipped items as icons. Clicking
+// one of YOUR OWN icons jumps the inventory tab bar to that slot's category
+// rather than unequipping it directly - MainMenu pins the exact physical
+// slot clicked (see EquipSlotClicked) so Ring1 vs Ring2 stays disambiguated
+// even though they share one "Rings" tab; other players' icons are tooltip
+// only. Equipping/unequipping always happens from the inventory grid from
+// there: a real item (InventoryItemClicked), or the always-present "None"
+// pseudo-entry (UnequipClicked). An empty slot has no icon to click; the
+// auto-resolve rule (first free ring, else the category's slot) covers it.
+// Drag-and-drop equip is a deliberately separate future pass, not this one.
 [RequireComponent(typeof(UIDocument))]
 public class EquipmentPanelController : MonoBehaviour
 {
@@ -58,7 +69,7 @@ public class EquipmentPanelController : MonoBehaviour
     private UIDocument document;
     private VisualElement root;
     private Button backButton;
-    private VisualElement equipGrid;
+    private PicksSection picksSection;
     // Owns which inventory tab is showing - view state, see CategoryTabBar.
     private CategoryTabBar categoryTabs;
     private VisualElement inventoryGrid;
@@ -73,23 +84,10 @@ public class EquipmentPanelController : MonoBehaviour
     [SerializeField] private RenderTexture previewRenderTexture;
 
     private readonly List<string> categoryNameScratch = new List<string>();
+    private readonly List<PicksRowDisplay> picksRowScratch = new List<PicksRowDisplay>();
     private IReadOnlyList<InventoryCategoryDisplay> lastCategories = Array.Empty<InventoryCategoryDisplay>();
 
     private bool initialized;
-
-    // The paper-doll's rows, shaped like a character: helmet centered on
-    // its own row, then torso/arms, then the two rings either side of legs
-    // and boots, then the necklace, then main/off hand centered at the
-    // bottom. A row shorter than 3 is centered (see Rebuild) rather than
-    // padded with placeholder cells.
-    private static readonly EquipmentSlot[][] PaperDollLayout =
-    {
-        new[] { EquipmentSlot.Helmet },
-        new[] { EquipmentSlot.Gloves, EquipmentSlot.Chest, EquipmentSlot.Cape },
-        new[] { EquipmentSlot.Ring1, EquipmentSlot.Legs, EquipmentSlot.Trinket },
-        new[] { EquipmentSlot.Ring2, EquipmentSlot.Boots, EquipmentSlot.Necklace },
-        new[] { EquipmentSlot.MainHand, EquipmentSlot.OffHand },
-    };
 
     private void EnsureInitialized()
     {
@@ -100,7 +98,6 @@ public class EquipmentPanelController : MonoBehaviour
         root = document.rootVisualElement;
 
         backButton = root.Q<Button>("back-button");
-        equipGrid = root.Q<VisualElement>("equip-grid");
         categoryTabs = new CategoryTabBar(root.Q<VisualElement>("category-tabs"));
         categoryTabs.SelectionChanged += OnCategoryTabSelectionChanged;
         inventoryGrid = root.Q<VisualElement>("inventory-grid");
@@ -112,6 +109,7 @@ public class EquipmentPanelController : MonoBehaviour
         // with unthemed defaults (black text, no background). See CLAUDE.md.
         root.AddToClassList("theme-root");
         hoverTooltip = new HoverTooltip(root);
+        picksSection = new PicksSection(root.Q<ScrollView>("picks-scroll"), hoverTooltip, "picks-icon--item");
 
         VisualElement previewImage = root.Q<VisualElement>("preview-image");
         if (previewImage != null && previewRenderTexture != null)
@@ -142,7 +140,15 @@ public class EquipmentPanelController : MonoBehaviour
         root.style.display = DisplayStyle.None;
     }
 
-    // Jumps to a category in response to a paper-doll click - silent
+    // Same rule as SkillsPanelController.SetBackVisible: navigator-only
+    // during the lobby, always in-game.
+    public void SetBackVisible(bool visible)
+    {
+        EnsureInitialized();
+        backButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    // Jumps to a category in response to a picks-icon click - silent
     // (does not raise CategoryTabClicked), so MainMenu's pinned-slot state
     // isn't cleared by its own programmatic switch.
     public void SelectCategory(int index)
@@ -160,33 +166,34 @@ public class EquipmentPanelController : MonoBehaviour
         CategoryTabClicked?.Invoke(index);
     }
 
-    // Rebuilds the equip grid and the inventory tab bar from scratch -
+    // Rebuilds the picks section and the inventory tab bar from scratch -
     // called whenever the underlying data might have changed (panel opened,
-    // an equip/unequip happened), not every frame.
-    public void Rebuild(IReadOnlyList<EquipmentSlotDisplay> slots, IReadOnlyList<InventoryCategoryDisplay> inventoryCategories)
+    // an equip/unequip happened, another player's picks synced), not every
+    // frame.
+    public void Rebuild(IReadOnlyList<EquipmentPicksRow> picks, IReadOnlyList<InventoryCategoryDisplay> inventoryCategories)
     {
         EnsureInitialized();
 
-        equipGrid.Clear();
-        foreach (EquipmentSlot[] row in PaperDollLayout)
+        picksRowScratch.Clear();
+        foreach (EquipmentPicksRow row in picks)
         {
-            VisualElement rowElement = new VisualElement();
-            rowElement.AddToClassList("equip-grid-row");
-            if (row.Length < 3) rowElement.AddToClassList("equip-grid-row--centered");
-
-            foreach (EquipmentSlot slot in row)
+            List<PicksIcon> icons = new List<PicksIcon>();
+            foreach (EquipmentPickDisplay pick in row.Items)
             {
-                EquipmentSlot capturedSlot = slot;
-                EquipmentSlotDisplay display = FindSlotDisplay(slots, capturedSlot);
-                string tooltip = display.Equipped != null
-                    ? TooltipText.BuildItemTooltip(display.Equipped) + "\n(click to change)"
-                    : $"{display.Label} (empty)\n(click to equip)";
-                rowElement.Add(BuildSlotBox(display.Label, display.Equipped, tooltip,
-                    () => EquipSlotClicked?.Invoke(capturedSlot)));
+                EquipmentPickDisplay captured = pick;
+                string tooltip = TooltipText.BuildItemTooltip(captured.Item);
+                if (row.IsLocal) tooltip += "\n(click to change)";
+                icons.Add(new PicksIcon
+                {
+                    Sprite = captured.Item.Icon,
+                    Label = captured.SlotLabel,
+                    Tooltip = () => tooltip,
+                    OnClick = row.IsLocal ? () => EquipSlotClicked?.Invoke(captured.Slot) : (Action)null,
+                });
             }
-
-            equipGrid.Add(rowElement);
+            picksRowScratch.Add(new PicksRowDisplay { Name = row.Name, IsLocal = row.IsLocal, Icons = icons });
         }
+        picksSection.Render(picksRowScratch);
 
         lastCategories = inventoryCategories;
 
@@ -227,15 +234,6 @@ public class EquipmentPanelController : MonoBehaviour
         element.RegisterCallback<PointerCaptureOutEvent>(_ => RotateDirectionChanged?.Invoke(0f));
     }
 
-    private static EquipmentSlotDisplay FindSlotDisplay(IReadOnlyList<EquipmentSlotDisplay> slots, EquipmentSlot slot)
-    {
-        foreach (EquipmentSlotDisplay display in slots)
-        {
-            if (display.Slot == slot) return display;
-        }
-        return default;
-    }
-
     // Rebuilds only the inventory grid for whichever tab is currently
     // selected - called on every Rebuild() and whenever the tab selection
     // changes.
@@ -255,8 +253,7 @@ public class EquipmentPanelController : MonoBehaviour
             {
                 ItemData capturedItem = item;
                 string tooltip = TooltipText.BuildItemTooltip(item) + "\n(click to equip)";
-                inventoryGrid.Add(BuildSlotBox(null, item, tooltip,
-                    () => InventoryItemClicked?.Invoke(capturedItem)));
+                inventoryGrid.Add(BuildSlotBox(item, tooltip, () => InventoryItemClicked?.Invoke(capturedItem)));
             }
         }
         inventoryEmptyLabel.style.display = items == null || items.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
@@ -282,12 +279,9 @@ public class EquipmentPanelController : MonoBehaviour
         return box;
     }
 
-    // Shared box builder for both the paper-doll and the inventory grid - an
-    // icon-filling square with an optional top-left slot-name tag.
-    // label == null means "no slot-name tag" - inventory items don't need
-    // one (the item's own name is in the tooltip, and every physical equip
-    // slot already gets one).
-    private VisualElement BuildSlotBox(string label, ItemData item, string tooltip, Action onClick)
+    // One inventory-grid entry: an icon-filling square. The item's own name
+    // is in the tooltip, so no slot-name tag is needed here.
+    private VisualElement BuildSlotBox(ItemData item, string tooltip, Action onClick)
     {
         VisualElement box = new VisualElement();
         box.AddToClassList("equipment-slot");
@@ -295,21 +289,11 @@ public class EquipmentPanelController : MonoBehaviour
         Button clickable = new Button(onClick);
         clickable.AddToClassList("equipment-slot__button");
 
-        if (item != null)
-        {
-            Image icon = new Image { sprite = item.Icon, scaleMode = ScaleMode.ScaleToFit };
-            icon.AddToClassList("equipment-slot__icon");
-            clickable.Add(icon);
-        }
+        Image icon = new Image { sprite = item.Icon, scaleMode = ScaleMode.ScaleToFit };
+        icon.AddToClassList("equipment-slot__icon");
+        clickable.Add(icon);
 
         box.Add(clickable);
-
-        if (!string.IsNullOrEmpty(label))
-        {
-            Label tag = new Label(label);
-            tag.AddToClassList("equipment-slot__label");
-            box.Add(tag);
-        }
 
         hoverTooltip.Attach(clickable, () => tooltip);
         return box;

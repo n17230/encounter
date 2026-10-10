@@ -6,12 +6,17 @@ using System.Collections.Generic;
 // LowestThreat: inverse aggro - whoever has contributed LEAST (an
 //   untouched player counts as 0), tie-break nearest.
 // FarthestPlayer: whichever player is farthest away, ignoring threat.
+// MostHealing: whoever has the most healing credit on this mob's table
+//   (ThreatTable.AddHealing), tie-break nearest; with no credit yet it is
+//   exactly HighestThreat, so an unhealed pull still behaves normally.
+// New values are always appended - the int is serialized on mob prefabs.
 public enum TargetingMode
 {
     Proximity,
     HighestThreat,
     LowestThreat,
-    FarthestPlayer
+    FarthestPlayer,
+    MostHealing
 }
 
 public struct TargetCandidate<T>
@@ -19,6 +24,8 @@ public struct TargetCandidate<T>
     public T Subject;
     public float Threat;
     public float Distance;
+    // Healing credit on the mob's table (0 for every mode but MostHealing).
+    public float Healing;
 }
 
 // Pure target-selection rules for EnemyAI, kept free of scene/network
@@ -39,9 +46,34 @@ public static class TargetSelector
                 return hasThreatTable ? ByThreat(candidates, highest: false) : ByDistance(candidates, nearest: true);
             case TargetingMode.FarthestPlayer:
                 return ByDistance(candidates, nearest: false);
+            case TargetingMode.MostHealing:
+                if (!hasThreatTable) return ByDistance(candidates, nearest: true);
+                return AnyHealing(candidates) ? ByHealing(candidates) : ByThreat(candidates, highest: true);
             default:
                 return ByDistance(candidates, nearest: true);
         }
+    }
+
+    private static bool AnyHealing<T>(IReadOnlyList<TargetCandidate<T>> candidates)
+    {
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].Healing > 0f) return true;
+        }
+        return false;
+    }
+
+    private static T ByHealing<T>(IReadOnlyList<TargetCandidate<T>> candidates)
+    {
+        TargetCandidate<T> best = candidates[0];
+        for (int i = 1; i < candidates.Count; i++)
+        {
+            TargetCandidate<T> candidate = candidates[i];
+            bool better = candidate.Healing > best.Healing;
+            bool tieButCloser = candidate.Healing == best.Healing && candidate.Distance < best.Distance;
+            if (better || tieButCloser) best = candidate;
+        }
+        return best.Subject;
     }
 
     private static T ByThreat<T>(IReadOnlyList<TargetCandidate<T>> candidates, bool highest)

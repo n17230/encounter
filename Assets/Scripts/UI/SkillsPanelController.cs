@@ -22,6 +22,16 @@ public struct AbilityCategoryDisplay
     public List<AbilityData> Abilities;
 }
 
+// One player's row in the "Team Picks" column - MainMenu builds these
+// (the local player's from the Profile, everyone else's from the lobby's
+// synced entries); the controller only renders them.
+public struct SkillsPicksRow
+{
+    public string Name;
+    public bool IsLocal;
+    public List<AbilityData> Abilities;
+}
+
 // UI Toolkit presentation for the Skills panel. Purely a view, same
 // discipline as OptionsPanelController - MainMenu.cs owns all real state
 // (Profile.SlotAbilityIds/SlotKeys, selectedSlot, awaitingKeyForSlot); this
@@ -51,8 +61,10 @@ public class SkillsPanelController : MonoBehaviour
     private CategoryTabBar categoryTabs;
     private ScrollView availableScroll;
     private HoverTooltip hoverTooltip;
+    private PicksSection picksSection;
 
     private readonly List<VisualElement> kitSlotBoxes = new List<VisualElement>();
+    private readonly List<PicksRowDisplay> picksRowScratch = new List<PicksRowDisplay>();
     private readonly List<string> categoryNameScratch = new List<string>();
     private IReadOnlyList<SkillSlotDisplay> lastSlots = Array.Empty<SkillSlotDisplay>();
     private IReadOnlyList<AbilityCategoryDisplay> lastCategories = Array.Empty<AbilityCategoryDisplay>();
@@ -91,6 +103,7 @@ public class SkillsPanelController : MonoBehaviour
         // with unthemed defaults (black text, no background). See CLAUDE.md.
         root.AddToClassList("theme-root");
         hoverTooltip = new HoverTooltip(root);
+        picksSection = new PicksSection(root.Q<ScrollView>("picks-scroll"), hoverTooltip, "picks-icon--ability");
 
         backButton.clicked += () => BackRequested?.Invoke();
         // Remove/Set Key Binding are single shared buttons (not one pair per
@@ -118,6 +131,36 @@ public class SkillsPanelController : MonoBehaviour
     {
         EnsureInitialized();
         root.style.display = DisplayStyle.None;
+    }
+
+    // During the lobby only the navigator may leave this screen (their Back
+    // takes everyone back to the Choice screen); everyone else's screen
+    // follows the phase and has no Back at all. In-game it's always shown.
+    public void SetBackVisible(bool visible)
+    {
+        EnsureInitialized();
+        backButton.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    // The picks column: every player's name with their picked abilities as
+    // icons, each with the same tooltip as a kit slot. Rebuilt whenever the
+    // synced picks change, not every frame.
+    public void RebuildPicks(IReadOnlyList<SkillsPicksRow> rows)
+    {
+        EnsureInitialized();
+
+        picksRowScratch.Clear();
+        foreach (SkillsPicksRow row in rows)
+        {
+            List<PicksIcon> icons = new List<PicksIcon>();
+            foreach (AbilityData ability in row.Abilities)
+            {
+                AbilityData captured = ability;
+                icons.Add(new PicksIcon { Sprite = captured.Icon, Tooltip = () => BuildKitSlotTooltipText(captured) });
+            }
+            picksRowScratch.Add(new PicksRowDisplay { Name = row.Name, IsLocal = row.IsLocal, Icons = icons });
+        }
+        picksSection.Render(picksRowScratch);
     }
 
     // Rebuilds both the kit toolbar and the available list from scratch -

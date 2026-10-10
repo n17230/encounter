@@ -239,6 +239,39 @@ public class StatusEffectTrackerTests
     }
 
     [Test]
+    public void RemoveByCasterOnlyEndsThatCastersStackPerCasterInstance()
+    {
+        StatusEffectTracker tracker = new StatusEffectTracker();
+        StatusEffectData hot = Effect("rejuv", duration: 10f, stackingMode: EffectStackingMode.StackPerCaster);
+        int expired = 0;
+        tracker.Expired += _ => expired++;
+
+        tracker.Apply(hot, 10f, attackerClientId: 1, now: 0f);
+        tracker.Apply(hot, 10f, attackerClientId: 2, now: 0f);
+        Assert.IsTrue(tracker.Remove(hot, attackerClientId: 1));
+
+        Assert.AreEqual(1, tracker.Count);
+        Assert.AreEqual(1, expired);
+        foreach (StatusEffectTracker.ActiveEffect active in tracker.All) Assert.AreEqual(2UL, active.AttackerClientId); // caster 2's copy untouched
+        Assert.IsFalse(tracker.Remove(hot, attackerClientId: 1)); // already gone - safe no-op
+    }
+
+    // For a non-StackPerCaster effect the caster isn't part of the key, so
+    // the keyed Remove finds the one shared instance whatever caster id is
+    // passed - same as Remove(data).
+    [Test]
+    public void RemoveByCasterOnSharedInstanceIgnoresTheCasterId()
+    {
+        StatusEffectTracker tracker = new StatusEffectTracker();
+        StatusEffectData bond = Effect("one_for_all", stackingMode: EffectStackingMode.Override);
+
+        tracker.Apply(bond, 1800f, attackerClientId: 1, now: 0f);
+        Assert.IsTrue(tracker.Remove(bond, attackerClientId: 1));
+
+        Assert.AreEqual(0, tracker.Count);
+    }
+
+    [Test]
     public void ClearAllRaisesExpiredForEveryEffect()
     {
         StatusEffectTracker tracker = new StatusEffectTracker();

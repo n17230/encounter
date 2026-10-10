@@ -27,6 +27,11 @@ public class PlayerHUD : NetworkBehaviour
     private float lastMobPingTime = float.NegativeInfinity;
     private float mobPingAlpha;
 
+    // Perception's orbs - owner-local, driven from the local profile's
+    // loadout (not CharacterEquipment's synced aura state) since nobody
+    // else ever needs to know this player has them.
+    private readonly PerceptionOrbs perceptionOrbs = new PerceptionOrbs();
+
     private void Awake()
     {
         stats = GetComponent<CharacterStats>();
@@ -48,6 +53,21 @@ public class PlayerHUD : NetworkBehaviour
         if (equipment.CastAuraRevealsMobs.Value) minimapReveals |= MinimapReveal.Mobs;
 
         UpdateMobPings();
+
+        bool showPerceptionOrbs = false;
+        for (int i = 0; i < PlayerProfile.AbilitySlots; i++)
+        {
+            AbilityData ability = ProfileStore.Current.GetSlotAbility(i);
+            showPerceptionOrbs |= ability != null && ability.AuraShowsPerceptionOrbs;
+        }
+        perceptionOrbs.Update(showPerceptionOrbs);
+    }
+
+    // The orbs are plain unparented scene objects, so they'd outlive this
+    // player (disconnect, re-host) unless torn down with it.
+    public override void OnNetworkDespawn()
+    {
+        perceptionOrbs.Clear();
     }
 
     private void UpdateMobPings()
@@ -92,6 +112,24 @@ public class PlayerHUD : NetworkBehaviour
         DrawEffects(stats, 10, UIScale.Height - 84);
 
         DrawTargetFrame();
+
+        // The one thing a dead player's own screen says about it (see
+        // CharacterStats.IsAlive) - everything else draws as usual. Gated
+        // on SyncedMaxHealth: health defaults to 0 until the server's first
+        // sync lands, which is a spawn in flight, not a death.
+        if (stats.SyncedMaxHealth.Value > 0f && !stats.IsAlive) DrawDeadLabel();
+    }
+
+    private static void DrawDeadLabel()
+    {
+        GUIStyle deadStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 28,
+            fontStyle = FontStyle.Bold,
+        };
+        deadStyle.normal.textColor = Color.red;
+        GUI.Label(new Rect(0f, UIScale.Height * 0.5f - 20f, UIScale.Width, 40f), "You are dead", deadStyle);
     }
 
     private void DrawTargetFrame()
@@ -99,7 +137,10 @@ public class PlayerHUD : NetworkBehaviour
         Targetable target = targeting.CurrentTarget;
 
         Rect nameRect = new Rect(10, 10, 200, 20);
-        GUI.Box(nameRect, target != null ? target.DisplayName : "No target");
+        // A targeted player shows their lobby name; a mob (or a nameless
+        // player) keeps the Targetable's own label - see PlayerIdentity.
+        string targetName = target != null ? PlayerIdentity.NameOf(target) ?? target.DisplayName : "No target";
+        GUI.Box(nameRect, targetName);
 
         if (target != null && target.Stats != null)
         {

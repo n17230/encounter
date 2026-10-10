@@ -73,6 +73,99 @@ public class PlayerProfileTests
     }
 
     [Test]
+    public void NormalizeTurnsAMissingCharacterNameIntoEmpty()
+    {
+        PlayerProfile profile = new PlayerProfile { CharacterName = null };
+        profile.Normalize();
+
+        Assert.AreEqual("", profile.CharacterName);
+    }
+
+    [Test]
+    public void ApplyValidatedLoadoutKeepsAcceptedSlotsAndClearsDroppedOnesWithTheirKeys()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.SlotAbilityIds[0] = "a";
+        profile.SlotAbilityIds[1] = "b";
+        profile.SlotAbilityIds[2] = "c";
+        profile.SetSlotKey(0, new KeyBindingOption(KeyCode.Q, false));
+        profile.SetSlotKey(1, new KeyBindingOption(KeyCode.E, true));
+        profile.SetSlotKey(2, new KeyBindingOption(KeyCode.R, false));
+
+        profile.ApplyValidatedLoadout(new[] { "a", "", "c" });
+
+        Assert.AreEqual("a", profile.SlotAbilityIds[0]);
+        Assert.IsNull(profile.SlotAbilityIds[1]);
+        Assert.AreEqual("c", profile.SlotAbilityIds[2]);
+        Assert.AreEqual(KeyCode.Q, profile.SlotKeys[0]);
+        Assert.AreEqual(KeyCode.None, profile.SlotKeys[1]);
+        Assert.IsFalse(profile.SlotKeyShift[1]);
+        Assert.AreEqual(KeyCode.R, profile.SlotKeys[2]);
+    }
+
+    [Test]
+    public void ApplyValidatedLoadoutIgnoresADuplicateIdAfterTheFirst()
+    {
+        PlayerProfile profile = new PlayerProfile();
+
+        profile.ApplyValidatedLoadout(new[] { "a", "a", "b" });
+
+        Assert.AreEqual("a", profile.SlotAbilityIds[0]);
+        Assert.IsNull(profile.SlotAbilityIds[1]);
+        Assert.AreEqual("b", profile.SlotAbilityIds[2]);
+    }
+
+    [Test]
+    public void ApplyValidatedEquipmentOverwritesEveryPhysicalSlot()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.EquipmentIds[(int)EquipmentSlot.Helmet] = "old_helmet";
+        string[] validated = new string[PlayerProfile.EquipmentSlotCount];
+        validated[(int)EquipmentSlot.MainHand] = "sword";
+
+        profile.ApplyValidatedEquipment(validated);
+
+        Assert.IsNull(profile.EquipmentIds[(int)EquipmentSlot.Helmet]);
+        Assert.AreEqual("sword", profile.EquipmentIds[(int)EquipmentSlot.MainHand]);
+    }
+
+    // A reply shorter than the slot count (a malformed/truncated joined
+    // string) clears the tail rather than throwing, and an empty segment
+    // becomes null, the same "empty" every other reader of EquipmentIds expects.
+    [Test]
+    public void ApplyValidatedEquipmentWithAShortArrayClearsTheTailAndTurnsEmptyIntoNull()
+    {
+        PlayerProfile profile = new PlayerProfile();
+        profile.EquipmentIds[(int)EquipmentSlot.OffHand] = "old_shield";
+
+        profile.ApplyValidatedEquipment(new[] { "helmet", "" });
+
+        Assert.AreEqual("helmet", profile.EquipmentIds[(int)EquipmentSlot.Helmet]);
+        Assert.IsNull(profile.EquipmentIds[(int)EquipmentSlot.Necklace]);
+        Assert.IsNull(profile.EquipmentIds[(int)EquipmentSlot.OffHand]);
+    }
+
+    [Test]
+    public void ApplyValidatedLoadoutIgnoresEntriesPastTheSlotCount()
+    {
+        PlayerProfile profile = new PlayerProfile();
+
+        profile.ApplyValidatedLoadout(new[] { "a", "b", "c", "d", "e", "f", "g" });
+
+        Assert.AreEqual(PlayerProfile.AbilitySlots, profile.SlotAbilityIds.Length);
+        Assert.AreEqual("e", profile.SlotAbilityIds[PlayerProfile.AbilitySlots - 1]);
+    }
+
+    [Test]
+    public void NormalizeKeepsASetCharacterName()
+    {
+        PlayerProfile profile = new PlayerProfile { CharacterName = "Bob" };
+        profile.Normalize();
+
+        Assert.AreEqual("Bob", profile.CharacterName);
+    }
+
+    [Test]
     public void OnlyRing1AndRing2AreRingSlots()
     {
         Assert.IsTrue(EquipmentSlot.Ring1.IsRing());

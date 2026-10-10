@@ -170,10 +170,19 @@ public class StatusEffectTracker
     // finds the shared (non-StackPerCaster) instance; there's no single
     // "the" instance to remove for a StackPerCaster effect, since several
     // casters' copies could be active at once.
-    public bool Remove(StatusEffectData data)
+    public bool Remove(StatusEffectData data) => data != null && RemoveKey(SharedKey(data));
+
+    // Same, for one specific caster's instance - the only way to reach a
+    // StackPerCaster effect's per-caster copy (for every other mode the
+    // caster is not part of the key, so this finds the shared instance
+    // whatever attackerClientId is passed, exactly like Remove(data)).
+    // E.g. ending a dead caster's redirect bonds - see
+    // CharacterStats.RemoveRedirectBondsFrom.
+    public bool Remove(StatusEffectData data, ulong attackerClientId) => data != null && RemoveKey(KeyOf(data, attackerClientId));
+
+    private bool RemoveKey(Key key)
     {
-        Key key = SharedKey(data);
-        if (data == null || !active.TryGetValue(key, out ActiveEffect effect)) return false;
+        if (!active.TryGetValue(key, out ActiveEffect effect)) return false;
         active.Remove(key);
         Expired?.Invoke(effect);
         return true;
