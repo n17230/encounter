@@ -36,6 +36,34 @@ has no gate/mutation/review stage to run).
    placement) and get sign-off *before* writing code — don't improvise
    architecture mid-implementation. Skip this for genuinely small asks
    (rename, one-line fix, add a test) — proportional, not ceremonial.
+   **Plan challenge — three agents finalize the plan before any code is
+   written** (runs whenever step 2 produces a plan; skipped with it):
+   1. *Devil's advocate* — once the plan is written, and before
+      execution, start a fresh, non-fork subagent (`Agent`) given only the
+      user's instruction and the plan, not the reasoning behind it. Its job
+      is to find problems with the instruction and the plan, and better
+      ways to do any part of it.
+   2. *Response* — the planning agent reads the devil's advocate's
+      findings and answers each one (accept, reject, or modify, with why),
+      producing a revised plan alongside the original.
+   3. *Neutral agent* — a second fresh, non-fork subagent given the
+      instruction, both plans, the critique, and the responses. For each
+      specific disputed detail it votes which side is right or wrong, with
+      a reason. **It may ask the planning agent and the devil's advocate
+      questions whenever it needs to** (`SendMessage`) — both stay
+      reachable until it's done — and keeps going back and forth until
+      each disputed detail is settled, rather than voting on a guess.
+   4. *Finalize — one cohesive plan, written by the neutral agent.* After
+      all the discussion, back-and-forth, and Q&A, the neutral agent takes
+      everything together and returns a single plan. **Cohesive is the
+      requirement**: it is not the original plan with the accepted points
+      pasted in. Independently-correct ideas can conflict or break each
+      other when combined, so the neutral agent re-reads the whole result
+      as one change — checking that the accepted points fit together, that
+      nothing a rejected point depended on is left dangling, and that the
+      files/structure/tests still make sense as a unit. A point that's
+      really the user's call goes to `AskUserQuestion`. Only then present
+      that final plan for sign-off (`ExitPlanMode`).
 3. **Act (generate).** Implement the minimal diff. Any new pure-C# logic
    (the kind that lives in `Scripts/**` and is unit-testable, per the
    existing `Assets/Tests/EditMode` pattern) gets its test written in the
@@ -60,7 +88,10 @@ has no gate/mutation/review stage to run).
    the diff to a fresh, non-fork subagent for review rather than treating
    "I wrote it carefully" as the review. Give it the diff and the ask, not
    my reasoning for why it's correct. Report its findings before declaring
-   the change done.
+   the change done. **The user waits for this review to finish and then
+   reviews the code themselves** — so don't hand the change back as
+   "done" before it completes, and don't paste code into the CLI for them
+   to read (see below).
 7. **Manual verification — enumerated, targeted.** Since Play Mode /
    multi-client runs can't be driven from here, hand back a short concrete
    checklist of what to click/test in the Editor for the golden path plus
@@ -74,6 +105,12 @@ has no gate/mutation/review stage to run).
    items need the user's own judgment and haven't been (and can't be)
    verified by anything upstream in this pipeline. Never claim "it works"
    without that caveat attached.
+
+**Don't output code changes to the CLI.** Make edits to the files and
+report in prose (which files, what changed, why) — no diffs, code blocks
+or snippets of the new code in the reply. The user reviews the changes
+themselves in their own diff/editor, after the independent review in
+step 6 has completed.
 
 Infrastructure/ops concerns (server provisioning, MCP tooling, monitoring/
 logging setup) are out of this loop entirely — not part of any request's
