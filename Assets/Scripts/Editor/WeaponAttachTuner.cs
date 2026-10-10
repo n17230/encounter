@@ -1,16 +1,16 @@
 using UnityEditor;
 using UnityEngine;
 
-// Edit-mode tuning for WeaponAttachProfiles - no Play mode needed. Spawns a
-// throwaway copy of the player rig, attaches the picked item's model to the
-// same equip socket (and through the same CharacterWeaponVisual
+// Edit-mode tuning for WeaponAttachProfiles - no Play mode needed. Builds a
+// throwaway Sidekick character (the catalog's default presets, through the
+// same SidekickCharacterBuilder the game uses), attaches the picked item's
+// model to the same equip socket (and through the same CharacterWeaponVisual
 // .ApplyAttachment math) the game uses, lets you position it with the normal
 // Scene-view Move/Rotate/Scale gizmos, then writes the result back into the
 // item's profile asset. Profiles are shared per weapon category, so saving
 // once fixes every item that points at that profile.
 public class WeaponAttachTuner : EditorWindow
 {
-    private const string RigPrefabPath = "Assets/Prefabs/Player/CharacterRig_M.prefab";
     private const string PreviewName = "__WeaponAttachPreview";
 
     private ItemData item;
@@ -20,6 +20,7 @@ public class WeaponAttachTuner : EditorWindow
     // preview into another item's (shared) profile.
     private ItemData previewItem;
     private GameObject previewRig;
+    private BuiltSidekickCharacter previewCharacter;
     private GameObject previewModel;
     private Transform previewSocket;
     // Which socket the live preview is actually attached to right now - starts
@@ -113,18 +114,26 @@ public class WeaponAttachTuner : EditorWindow
     {
         ClearPreview();
 
-        GameObject rigPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RigPrefabPath);
-        if (rigPrefab == null)
+        SidekickCharacterBuilder builder = SidekickCharacterBuilder.Shared;
+        if (!builder.IsReady)
         {
-            Debug.LogWarning($"[WeaponAttachTuner] Could not load the rig prefab at {RigPrefabPath}.");
+            Debug.LogWarning("[WeaponAttachTuner] Sidekick character data isn't available - see the Console.");
             return;
         }
 
-        previewRig = (GameObject)PrefabUtility.InstantiatePrefab(rigPrefab);
-        previewRig.name = PreviewName;
+        previewRig = new GameObject(PreviewName);
         // Never written into the open scene - this is a scratch object.
         previewRig.hideFlags = HideFlags.DontSave;
         if (SceneView.lastActiveSceneView != null) previewRig.transform.position = SceneView.lastActiveSceneView.pivot;
+
+        previewCharacter = builder.Build(default, previewRig.transform, null, "SidekickPreview");
+        if (previewCharacter == null)
+        {
+            Debug.LogWarning("[WeaponAttachTuner] Could not build a Sidekick character to attach to.");
+            ClearPreview();
+            return;
+        }
+        previewCharacter.Root.hideFlags = HideFlags.DontSave;
 
         bool slotIsRightHand = item.Slot != EquipmentSlot.OffHand;
         bool rightHand = CharacterWeaponVisual.ResolveRightHand(item.AttachProfile, slotIsRightHand);
@@ -150,8 +159,12 @@ public class WeaponAttachTuner : EditorWindow
     private void ApplyProfileToPreview()
     {
         if (previewModel == null || previewItem == null) return;
-        CharacterWeaponVisual.ApplyAttachment(previewModel.transform, previewItem.WeaponModelPrefab, previewItem.AttachProfile, previewSocket, previewRig.transform);
+        CharacterWeaponVisual.ApplyAttachment(previewModel.transform, previewItem.WeaponModelPrefab, previewItem.AttachProfile, previewSocket, PreviewRigRoot);
     }
+
+    // What the game passes as the rig root (CharacterAppearance.ActiveRigRoot
+    // = the built character's own root), so scale compensation matches.
+    private Transform PreviewRigRoot => previewCharacter != null && previewCharacter.Root != null ? previewCharacter.Root.transform : previewRig.transform;
 
     // Re-parents the live preview onto the opposite equip socket for this
     // session, without touching the profile asset - lets you compare both
@@ -190,7 +203,7 @@ public class WeaponAttachTuner : EditorWindow
         Transform model = previewModel.transform;
 
         float authoredScale = previewItem.WeaponModelPrefab.transform.localScale.x
-            * CharacterWeaponVisual.InternalScaleCompensation(previewSocket, previewRig.transform);
+            * CharacterWeaponVisual.InternalScaleCompensation(previewSocket, PreviewRigRoot);
 
         Undo.RecordObject(profile, "Save Weapon Attach Profile");
         profile.Position = model.localPosition;
@@ -211,6 +224,8 @@ public class WeaponAttachTuner : EditorWindow
         // By name as well as by reference - a script reload drops this
         // window's fields but not the DontSave object itself.
         GameObject stale = previewRig != null ? previewRig : GameObject.Find(PreviewName);
+        previewCharacter?.Destroy(immediate: true);
+        previewCharacter = null;
         if (stale != null) DestroyImmediate(stale);
         previewRig = null;
         previewModel = null;

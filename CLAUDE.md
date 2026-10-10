@@ -282,10 +282,10 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     `CharacterWeaponVisual` (`Scripts/Player/CharacterWeaponVisual.cs`) is
     the same everyone-sees-it pattern applied to equipped weapons/shields:
     shows `ItemData.WeaponModelPrefab` in the wearer's equip socket
-    (`CharacterAppearance.GetEquipSocket` - the rig's own purpose-built
-    `R_equip_joint`/`L_equip_joint`, children of the wrist joints, looked
-    up by name and cached per active rig; falls back to the Humanoid hand
-    bone for a rig without them) for as long as it's equipped in
+    (`CharacterAppearance.GetEquipSocket` - the Sidekick rig's own
+    `prop_r`/`prop_l` joints, children of the hand joints, looked up by
+    name and cached per rig root; falls back to the Humanoid hand bone
+    for a rig without them) for as long as it's equipped in
     MainHand/OffHand, reacting to
     `CharacterEquipment.MainHandItemId`/`OffHandItemId` (two more
     `NetworkVariable<FixedString32Bytes>`, Server-written like
@@ -297,9 +297,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     state is only recorded once the attach actually happens, with no
     explicit ordering needed against `CharacterAppearance`'s own
     `OnNetworkSpawn`. It rebuilds when the item Id *or the resolved
-    socket* changes (`NeedsRebuild`, pure + tested) — a gender switch
-    swaps which rig is live, same case `HeadwearNeedsRebuild` covers for
-    headwear. A two-handed MainHand weapon leaves `OffHandItemId` empty
+    socket* changes (`NeedsRebuild`, pure + tested) — an appearance
+    rebuild replaces the whole rig, so the socket changes with it. A
+    two-handed MainHand weapon leaves `OffHandItemId` empty
     (already true of `equippedItems[OffHand]`), so only one model ever
     shows, never a second one on the off hand.
     **Alignment is per weapon *category*, not per item**:
@@ -307,8 +307,7 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     asset (`Assets/Data/WeaponAttachProfiles/` — Sword/Staff/Axe2H/Bow/
     Mace/Shield/Wand; socket-local `Position`/`Rotation`/`Scale` plus an
     `AttachHand` override, since models from the same pack/type share a
-    pivot convention — the same reasoning as the single shared headwear
-    offset in `CharacterAppearanceApplier`). A new weapon of an existing
+    pivot convention). A new weapon of an existing
     category just points at that category's profile and needs no tuning;
     an outlier gets its own profile asset rather than a per-item override
     layer. The Bow profile is `Hand = Left` (the rig pack parents its own
@@ -319,8 +318,9 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     socket.lossyScale`) so a model renders at its authored size with no
     fudge factor, while still following a scale applied to the whole
     character. Profiles are tuned visually, not typed:
-    `Encounter → Weapon Attach Tuner` (`WeaponAttachTuner.cs`) spawns a
-    throwaway `CharacterRig_M` in edit mode, attaches the item's model
+    `Encounter → Weapon Attach Tuner` (`WeaponAttachTuner.cs`) builds a
+    throwaway Sidekick character (the catalog's default presets, through
+    `SidekickCharacterBuilder`) in edit mode, attaches the item's model
     through that same `ApplyAttachment`, and **Save To Profile** writes the
     gizmo-adjusted local transform back (its exact inverse); in the Editor
     the component also re-applies the profile every frame, so editing a
@@ -331,8 +331,49 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
     each client instantiates its own local copy, same approach
     `PlayCastVfxClientRpc` already uses for cast VFX, just persistent
     instead of timed. The Character Creation preview (`CharacterPreview`)
-    deliberately does **not** show weapons — see the Appearance panel notes
-    below; this is gameplay-only.
+    does **not** show weapons (only the Equipment panel's preview does,
+    via `CharacterPreview.RefreshWeapons`).
+  - **Character appearance = Synty Sidekick presets** (`Scripts/Player/
+    Sidekick/`): a player's look is a `SidekickSelection` — nine preset
+    *names* (Head / Upper Body / Lower Body part presets, a Body Shape
+    preset, and one color preset per Sidekick `ColorGroup`), exactly what
+    Sidekick's own Presets tab offers, nothing finer-grained. Stored as
+    `PlayerProfile.Sidekick*` strings, synced as one owner-written
+    `NetworkVariable<FixedString512Bytes>` (`CharacterAppearance.Selection`,
+    `;`-joined via `SidekickSelection.ToJoined/Parse`), and every peer
+    builds its own local copy through `SidekickCharacterBuilder.Shared`
+    (one `SidekickRuntime` + `DatabaseManager` per process) under the
+    player's pre-placed `CharacterRoot` child. `SidekickPresetCatalog`
+    lists what's offered: Head presets are Human + Unrestricted species
+    only (the base character stays human), Upper/Lower Body presets come
+    from **every** installed species (other packs' outfits on the human
+    body — all parts share the `SK_BaseModel` skeleton), colors are
+    Human + Unrestricted; `Resolve` swaps an empty/unknown part or body
+    shape name for the group's first entry so a character can always be
+    built, and drops an unknown color name to "" (base material).
+    **Each build clones `M_BaseMaterial` and its six maps**
+    (`SidekickRuntime.UpdateColor` paints preset colors into the
+    material's textures with `SetPixel` — shared, every player would
+    recolor every other player); `BuiltSidekickCharacter.Destroy` frees
+    them with the character. **The server never builds** (`Apply` returns
+    on `!IsClient`; the DB only exists as `Resources/Database/
+    Side_Kick_Data.bytes` in a player build, written by the package's
+    pre-build hook — run the Sidekick tool's *Sync Runtime Database* once
+    and commit it): `CharacterRoot` carries a placeholder `Animator`
+    (controller `CharacterIdle_M`, no avatar) so `NetworkAnimator.Animator`
+    is non-null at `Awake` on every peer (its parameter caches are only
+    built then — see the EnemyAI notes), and on the server that
+    placeholder simply *is* `ActiveRigRoot`/`ActiveAnimator`. On clients a
+    rebuild re-points `NetworkAnimator.Animator` at the built character's
+    Animator. Animation needs no Sidekick-specific controller: the built
+    character is Humanoid (`SK_BaseModel`'s avatar), so the existing
+    `CharacterIdle_M` controller (Shinabro humanoid clips) retargets onto
+    it unchanged. The old Polysplit-rig system (`CharacterAppearanceApplier`,
+    `Appearance*` profile fields, `Resources/Data/Appearance*` assets,
+    `CharacterRig_M/F` prefabs, `DrawLegacyAppearanceTabContent`) is still
+    on disk but unreferenced. `Assets/Synty/SidekickCharacters/` is the
+    one Synty pack committed in place (`.gitignore` negation) because the
+    game loads it at runtime.
     `AbilityData.TargetVfxPrefab` is the target-side counterpart to
     `CastVfxPrefab` (which plays on the *caster*, for the cast-time
     window) — a purely cosmetic one-shot VFX played once at the
@@ -976,7 +1017,8 @@ Third-party scripts under `Assets/External` remain in `Assembly-CSharp`.
   `.category-tab`/`.category-tab--selected` live in `Theme.uss`, shared
   between Skills and Equipment rather than duplicated per panel. Drag-and-
   drop equip is a deliberate future follow-up, not this pass.) —
-  `Appearance` is still IMGUI (`DrawAppearancePanel`), unaffected. Each `*Controller`
+  `Appearance` is still IMGUI (`DrawAppearancePanel` — one `DrawSelectableList`
+  of Sidekick preset names per tab, see Character appearance above). Each `*Controller`
   (`Scripts/UI/*Controller.cs`, on its own child GameObject under `MainMenu`,
   each driving its own sibling `UIDocument`, all sharing the same
   `EncounterPanelSettings.asset` — **`MainMenu` itself must never carry a
@@ -1279,6 +1321,27 @@ renamed, or retuned.
     has a visual representation yet. Hunter's Cloak (Cape) has no 3D asset
     and isn't wired; this is the current scope, not a gap specific to that
     item.
+11. **Sidekick appearance — Editor wiring still pending** (the code side
+    is done, see Character appearance above): (1) `Player.prefab` needs an
+    empty child `CharacterRoot` (local identity) with an `Animator`
+    (Controller `CharacterIdle_M`, Avatar none), assigned to
+    `CharacterAppearance.Character Root` (+ `Animator Controller` =
+    `CharacterIdle_M`) and to `NetworkAnimator.Animator`; the old
+    `CharacterRig_M/F` instances removed or disabled. The placeholder's
+    controller must be the same `CharacterIdle_M` the built character
+    gets: `NetworkAnimator` sizes its parameter/layer caches from its
+    Animator once at `Awake`, and the later re-point is a bare field
+    write. (2) The scene's `CharacterPreviewStage` likewise needs a
+    `CharacterRoot` child assigned to `CharacterPreview.Stage Root` (+
+    `Animator Controller` = `CharacterIdle_M`), the old rig instances
+    removed, and the preview camera reframed for the Sidekick height.
+    (3) Run the
+    Sidekick tool's *Sync Runtime Database* once so
+    `Assets/Synty/SidekickCharacters/Resources/Database/Side_Kick_Data.bytes`
+    exists (player builds read only that), and commit it. (4) Re-tune the
+    seven `WeaponAttachProfile`s with the Weapon Attach Tuner — the
+    sockets are now `prop_r`/`prop_l` with a different pivot. (5) Redeploy
+    the dedicated server afterwards.
 
 ## Notes for future sessions
 

@@ -46,6 +46,14 @@ public class EquipmentPanelController : MonoBehaviour
     // SelectCategory() switches tabs programmatically (see its own doc
     // comment). MainMenu uses this to know when to drop its pinned slot.
     public event Action<int> CategoryTabClicked;
+    // -1/0/1 = holding rotate-left/released/holding rotate-right - mirrors
+    // the Appearance panel's GUI.RepeatButton hold-to-spin behavior, just
+    // via pointer down/up/leave since UI Toolkit's Button has no repeat
+    // button equivalent. MainMenu applies the actual rotation per-frame
+    // (scaled by Time.deltaTime) since this controller has no reference to
+    // CharacterPreview itself - same "raise, don't own state" rule every
+    // other event here follows.
+    public event Action<float> RotateDirectionChanged;
 
     private UIDocument document;
     private VisualElement root;
@@ -57,28 +65,31 @@ public class EquipmentPanelController : MonoBehaviour
     private Label inventoryEmptyLabel;
     private HoverTooltip hoverTooltip;
 
+    // Same RenderTexture asset as MainMenu's own previewRenderTexture field -
+    // CharacterPreview's camera is the single source of truth for both; a
+    // second Editor-wiring since this is a different GameObject/component.
+    // Optional like every other Editor-wired reference here: null just
+    // leaves the box empty.
+    [SerializeField] private RenderTexture previewRenderTexture;
+
     private readonly List<string> categoryNameScratch = new List<string>();
     private IReadOnlyList<InventoryCategoryDisplay> lastCategories = Array.Empty<InventoryCategoryDisplay>();
 
     private bool initialized;
 
-    // Per-slot-category outline color, matching the old IMGUI panel's
-    // GetSlotOutlineColor exactly - moved here unchanged since it's pure
-    // presentation with no Profile access. Null = no outline.
-    private static Color? GetSlotOutlineColor(EquipmentSlot slot)
+    // The paper-doll's rows, shaped like a character: helmet centered on
+    // its own row, then torso/arms, then the two rings either side of legs
+    // and boots, then the necklace, then main/off hand centered at the
+    // bottom. null = an empty placeholder cell (keeps the 3-column
+    // alignment without a real slot there).
+    private static readonly EquipmentSlot?[][] PaperDollLayout =
     {
-        if (slot.IsRing()) return Color.red;
-        switch (slot)
-        {
-            case EquipmentSlot.Trinket: return Color.green;
-            case EquipmentSlot.MainHand: return Color.cyan;
-            case EquipmentSlot.OffHand: return new Color(0.6f, 0f, 1f);
-            case EquipmentSlot.Necklace: return Color.yellow;
-            case EquipmentSlot.Chest: return Color.blue;
-            case EquipmentSlot.Boots: return Color.black;
-            default: return null;
-        }
-    }
+        new EquipmentSlot?[] { EquipmentSlot.Helmet },
+        new EquipmentSlot?[] { EquipmentSlot.Gloves, EquipmentSlot.Chest, EquipmentSlot.Cape },
+        new EquipmentSlot?[] { EquipmentSlot.Ring1, EquipmentSlot.Legs, EquipmentSlot.Trinket },
+        new EquipmentSlot?[] { EquipmentSlot.Ring2, EquipmentSlot.Boots, EquipmentSlot.Necklace },
+        new EquipmentSlot?[] { EquipmentSlot.MainHand, EquipmentSlot.OffHand },
+    };
 
     private void EnsureInitialized()
     {
@@ -101,6 +112,17 @@ public class EquipmentPanelController : MonoBehaviour
         // with unthemed defaults (black text, no background). See CLAUDE.md.
         root.AddToClassList("theme-root");
         hoverTooltip = new HoverTooltip(root);
+
+        VisualElement previewImage = root.Q<VisualElement>("preview-image");
+        if (previewImage != null && previewRenderTexture != null)
+        {
+            previewImage.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(previewRenderTexture));
+        }
+
+        VisualElement rotateLeftButton = root.Q<VisualElement>("rotate-left-button");
+        VisualElement rotateRightButton = root.Q<VisualElement>("rotate-right-button");
+        AttachRotateHold(rotateLeftButton, -1f);
+        AttachRotateHold(rotateRightButton, 1f);
 
         backButton.clicked += () => BackRequested?.Invoke();
 
@@ -146,14 +168,33 @@ public class EquipmentPanelController : MonoBehaviour
         EnsureInitialized();
 
         equipGrid.Clear();
-        foreach (EquipmentSlotDisplay slot in slots)
+        foreach (EquipmentSlot?[] row in PaperDollLayout)
         {
-            EquipmentSlot capturedSlot = slot.Slot;
-            string tooltip = slot.Equipped != null
-                ? TooltipText.BuildItemTooltip(slot.Equipped) + "\n(click to change)"
-                : $"{slot.Label} (empty)\n(click to equip)";
-            equipGrid.Add(BuildSlotBox(slot.Label, slot.Equipped, GetSlotOutlineColor(slot.Slot), tooltip,
-                () => EquipSlotClicked?.Invoke(capturedSlot)));
+            VisualElement rowElement = new VisualElement();
+            rowElement.AddToClassList("equip-grid-row");
+            if (row.Length < 3) rowElement.AddToClassList("equip-grid-row--centered");
+
+            foreach (EquipmentSlot? slotValue in row)
+            {
+                if (slotValue == null)
+                {
+                    VisualElement blank = new VisualElement();
+                    blank.AddToClassList("equipment-slot");
+                    blank.AddToClassList("equipment-slot--blank");
+                    rowElement.Add(blank);
+                    continue;
+                }
+
+                EquipmentSlot capturedSlot = slotValue.Value;
+                EquipmentSlotDisplay display = FindSlotDisplay(slots, capturedSlot);
+                string tooltip = display.Equipped != null
+                    ? TooltipText.BuildItemTooltip(display.Equipped) + "\n(click to change)"
+                    : $"{display.Label} (empty)\n(click to equip)";
+                rowElement.Add(BuildSlotBox(display.Label, display.Equipped, tooltip,
+                    () => EquipSlotClicked?.Invoke(capturedSlot)));
+            }
+
+            equipGrid.Add(rowElement);
         }
 
         lastCategories = inventoryCategories;
@@ -163,6 +204,44 @@ public class EquipmentPanelController : MonoBehaviour
         categoryTabs.Rebuild(categoryNameScratch);
 
         RenderSelectedCategory();
+    }
+
+    // A plain VisualElement, not a Button - same reasoning
+    // SkillsPanelController.RegisterDragHandlers already documents: Unity's
+    // Button carries its own built-in Clickable manipulator that competes
+    // with custom pointer handling in ways that are hard to fully rely on.
+    // Pointer down captures the pointer and starts rotating, up releases
+    // and stops it (capture keeps this element receiving events even once
+    // the cursor strays outside its bounds while held, so release is never
+    // missed). PointerCaptureOutEvent is the defensive fallback for capture
+    // being lost some other way (e.g. the panel closing mid-hold).
+    private void AttachRotateHold(VisualElement element, float direction)
+    {
+        if (element == null) return;
+
+        element.RegisterCallback<PointerDownEvent>(evt =>
+        {
+            element.CapturePointer(evt.pointerId);
+            RotateDirectionChanged?.Invoke(direction);
+        });
+
+        element.RegisterCallback<PointerUpEvent>(evt =>
+        {
+            if (!element.HasPointerCapture(evt.pointerId)) return;
+            element.ReleasePointer(evt.pointerId);
+            RotateDirectionChanged?.Invoke(0f);
+        });
+
+        element.RegisterCallback<PointerCaptureOutEvent>(_ => RotateDirectionChanged?.Invoke(0f));
+    }
+
+    private static EquipmentSlotDisplay FindSlotDisplay(IReadOnlyList<EquipmentSlotDisplay> slots, EquipmentSlot slot)
+    {
+        foreach (EquipmentSlotDisplay display in slots)
+        {
+            if (display.Slot == slot) return display;
+        }
+        return default;
     }
 
     // Rebuilds only the inventory grid for whichever tab is currently
@@ -184,7 +263,7 @@ public class EquipmentPanelController : MonoBehaviour
             {
                 ItemData capturedItem = item;
                 string tooltip = TooltipText.BuildItemTooltip(item) + "\n(click to equip)";
-                inventoryGrid.Add(BuildSlotBox(null, item, GetSlotOutlineColor(item.Slot), tooltip,
+                inventoryGrid.Add(BuildSlotBox(null, item, tooltip,
                     () => InventoryItemClicked?.Invoke(capturedItem)));
             }
         }
@@ -212,15 +291,14 @@ public class EquipmentPanelController : MonoBehaviour
     }
 
     // Shared box builder for both the paper-doll and the inventory grid - an
-    // icon-filling square with an optional top-left slot-name tag and a
-    // category outline color. label == null means "no slot-name tag" -
-    // inventory items don't need one (the item's own name is in the
-    // tooltip, and every physical equip slot already gets one).
-    private VisualElement BuildSlotBox(string label, ItemData item, Color? outlineColor, string tooltip, Action onClick)
+    // icon-filling square with an optional top-left slot-name tag.
+    // label == null means "no slot-name tag" - inventory items don't need
+    // one (the item's own name is in the tooltip, and every physical equip
+    // slot already gets one).
+    private VisualElement BuildSlotBox(string label, ItemData item, string tooltip, Action onClick)
     {
         VisualElement box = new VisualElement();
         box.AddToClassList("equipment-slot");
-        ApplyOutline(box, outlineColor);
 
         Button clickable = new Button(onClick);
         clickable.AddToClassList("equipment-slot__button");
@@ -243,18 +321,5 @@ public class EquipmentPanelController : MonoBehaviour
 
         hoverTooltip.Attach(clickable, () => tooltip);
         return box;
-    }
-
-    private static void ApplyOutline(VisualElement box, Color? color)
-    {
-        if (!color.HasValue) return;
-        box.style.borderTopWidth = 2f;
-        box.style.borderBottomWidth = 2f;
-        box.style.borderLeftWidth = 2f;
-        box.style.borderRightWidth = 2f;
-        box.style.borderTopColor = color.Value;
-        box.style.borderBottomColor = color.Value;
-        box.style.borderLeftColor = color.Value;
-        box.style.borderRightColor = color.Value;
     }
 }

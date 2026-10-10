@@ -74,8 +74,12 @@ Thumbs.db
 /Assets/6000FantasyIcons.meta
 /Assets/Blink/
 /Assets/Blink.meta
-/Assets/Synty/
-/Assets/Synty.meta
+# Synty packs stay local too, EXCEPT Sidekick Characters: the game builds
+# player characters from it at runtime (scripts, database, part meshes),
+# so that one package is committed in place.
+/Assets/Synty/*
+!/Assets/Synty/SidekickCharacters/
+!/Assets/Synty/SidekickCharacters.meta
 /Assets/DownloadCache/
 /Assets/DownloadCache.meta
 

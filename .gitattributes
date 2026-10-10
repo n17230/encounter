@@ -42,6 +42,9 @@
 *.otf filter=lfs diff=lfs merge=lfs -text
 
 *.unitypackage filter=lfs diff=lfs merge=lfs -text
+# Sidekick Characters' SQLite database (and its Resources .bytes copy for player builds)
+*.db filter=lfs diff=lfs merge=lfs -text
+*.bytes filter=lfs diff=lfs merge=lfs -text
 
 # TerrainData .assets are multi-MB heightmap blobs, not hand-editable YAML
 **/Terrain[[:space:]]Data/*.asset filter=lfs diff=lfs merge=lfs -text

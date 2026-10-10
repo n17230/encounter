@@ -120,6 +120,7 @@ public class MainMenu : MonoBehaviour
             equipmentPanelUI.InventoryItemClicked += EquipInventoryItem;
             equipmentPanelUI.UnequipClicked += OnUnequipClicked;
             equipmentPanelUI.CategoryTabClicked += _ => pinnedEquipmentSlot = null;
+            equipmentPanelUI.RotateDirectionChanged += direction => equipmentPreviewRotateDirection = direction;
         }
         else
         {
@@ -185,6 +186,23 @@ public class MainMenu : MonoBehaviour
         if (skillsPanelUI != null && activePanel == Panel.Skills)
         {
             skillsPanelUI.RefreshSelection(selectedSlot, awaitingKeyForSlot);
+        }
+
+        if (characterPreview != null)
+        {
+            // Fed null whenever Equipment isn't the active panel, which
+            // tears down any leftover weapon instance before Character
+            // Creation's own Refresh() (weapon-free, by design) could
+            // otherwise render a frame with it still attached - Update()
+            // always runs before OnGUI() in the same frame.
+            bool equipmentOpen = activePanel == Panel.Equipment;
+            if (equipmentOpen) characterPreview.Refresh(Profile);
+            characterPreview.RefreshWeapons(equipmentOpen ? Profile : null);
+
+            if (equipmentOpen && equipmentPreviewRotateDirection != 0f)
+            {
+                characterPreview.Rotate(equipmentPreviewRotateDirection * 90f * Time.deltaTime);
+            }
         }
     }
 
@@ -437,7 +455,7 @@ public class MainMenu : MonoBehaviour
     private void OpenInGameMenu()
     {
         IsOpen = true;
-        activePanel = Panel.None;
+        SetActivePanel(Panel.None);
         selectedSlot = -1;
         scrollPosition = Vector2.zero;
         RefreshPanelVisibility();
@@ -446,7 +464,7 @@ public class MainMenu : MonoBehaviour
     private void CloseInGameMenu()
     {
         IsOpen = false;
-        activePanel = Panel.None;
+        SetActivePanel(Panel.None);
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
@@ -457,12 +475,27 @@ public class MainMenu : MonoBehaviour
 
     private void LeavePanel()
     {
-        activePanel = Panel.None;
+        SetActivePanel(Panel.None);
         selectedSlot = -1;
         awaitingKeyForSlot = -1;
         awaitingKeyForMovement = -1;
         RefreshPanelVisibility();
         ProfileStore.Save();
+    }
+
+    // Centralizes every activePanel change so leaving Equipment clears its
+    // preview weapon instances synchronously, at the moment of the switch -
+    // not on next frame's Update(), which could run before an IMGUI panel
+    // switch (handled in OnGUI(), later the same frame) takes effect and
+    // let a weapon leak into another panel's preview for one frame.
+    private void SetActivePanel(Panel panel)
+    {
+        if (activePanel == Panel.Equipment && panel != Panel.Equipment)
+        {
+            characterPreview?.RefreshWeapons(null);
+            equipmentPreviewRotateDirection = 0f;
+        }
+        activePanel = panel;
     }
 
     // Any non-mouse key is allowed, same pool CaptureMovementKey already
@@ -580,7 +613,7 @@ public class MainMenu : MonoBehaviour
 
     private void OpenPanel(Panel panel)
     {
-        activePanel = panel;
+        SetActivePanel(panel);
         scrollPosition = Vector2.zero;
         appearanceTabIndex = 0;
         appearanceTabScrollPosition = Vector2.zero;
@@ -606,7 +639,7 @@ public class MainMenu : MonoBehaviour
     private static readonly string[] SlotShortNames =
     {
         "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots",
-        "Ring 1", "Ring 2", "Trinket", "Main", "Off",
+        "Ring 1", "Ring 2", "Trinket", "Main Hand", "Off Hand",
     };
 
     // Inventory tab categories - one per distinct value an item's own Slot
@@ -622,7 +655,7 @@ public class MainMenu : MonoBehaviour
     };
     private static readonly string[] InventoryCategoryNames =
     {
-        "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots", "Rings", "Trinket", "Main", "Off",
+        "Head", "Neck", "Chest", "Cape", "Gloves", "Legs", "Boots", "Rings", "Trinket", "Main Hand", "Off Hand",
     };
 
     private void RebuildEquipmentLists()
@@ -662,6 +695,11 @@ public class MainMenu : MonoBehaviour
     // cleared whenever the user clicks a tab button directly or the panel
     // is freshly opened. See ResolveTargetSlot.
     private EquipmentSlot? pinnedEquipmentSlot;
+    // -1/0/1 while the Equipment panel's rotate-left/none/rotate-right
+    // button is held - see EquipmentPanelController.RotateDirectionChanged.
+    // Applied in Update() each frame, same hold-to-spin shape as the
+    // Appearance panel's GUI.RepeatButton rotate buttons.
+    private float equipmentPreviewRotateDirection;
 
     // Paper-doll click: browse that slot's category instead of unequipping
     // directly. SelectCategory is the silent path (doesn't raise
@@ -741,9 +779,11 @@ public class MainMenu : MonoBehaviour
     // scale - a category-tab list replaces it, one list/checklist visible
     // at a time, per the game-ui-design skill's guidance to group by
     // purpose rather than cram everything into view at once.
+    // Mirrors Synty Sidekick's own Presets tab, one list per tab - see
+    // SidekickPresetCatalog for what each list contains.
     private static readonly string[] AppearanceTabLabels =
     {
-        "Top", "Bottom", "Headwear", "Hair", "Facial Hair", "Eyebrows", "Eyes", "Mouth", "Accessories"
+        "Head", "Upper Body", "Lower Body", "Body Shape", "Skin Color", "Outfit Color", "Attachment Color", "Material Color", "Element Color"
     };
 
     private void DrawAppearancePanel()
@@ -788,27 +828,8 @@ public class MainMenu : MonoBehaviour
         }
 
         // +30f matches previewRect's own header clearance above, so the
-        // Gender row doesn't draw on top of the "Character Creation" title.
+        // tab column doesn't draw on top of the "Character Creation" title.
         GUILayout.BeginArea(new Rect(panelX + contentX, panelY + 30f, panelWidth - contentX, panelHeight - 30f));
-
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("Gender:", GUILayout.Width(60));
-        string maleLabel = (!Profile.AppearanceIsFemale ? "> " : "") + "Male";
-        if (GUILayout.Button(maleLabel, GUILayout.Width(90)) && Profile.AppearanceIsFemale)
-        {
-            Profile.AppearanceIsFemale = false;
-            Profile.Normalize();
-        }
-        string femaleLabel = (Profile.AppearanceIsFemale ? "> " : "") + "Female";
-        if (GUILayout.Button(femaleLabel, GUILayout.Width(90)) && !Profile.AppearanceIsFemale)
-        {
-            Profile.AppearanceIsFemale = true;
-            Profile.Normalize();
-        }
-        GUILayout.EndHorizontal();
-        GUILayout.Space(6);
-
-        AppearanceGender gender = Profile.Gender;
 
         GUILayout.BeginHorizontal();
 
@@ -825,22 +846,66 @@ public class MainMenu : MonoBehaviour
         GUILayout.EndVertical();
 
         GUILayout.BeginVertical();
-        DrawAppearanceTabContent(gender, listHeight);
+        DrawAppearanceTabContent(listHeight);
         GUILayout.EndVertical();
 
         GUILayout.EndHorizontal();
         GUILayout.Space(10);
 
-        AppearanceColorPalette palette = GameDatabase.Palette;
-        int bodyCount = palette != null && palette.BodyColors != null ? palette.BodyColors.Length : 0;
-        int objectCount = palette != null && palette.ObjectColors != null ? palette.ObjectColors.Length : 0;
-
-        DrawColorStepper("Body Color", ref Profile.AppearanceBodyColorIndex, bodyCount);
-        DrawColorStepper("Equipment Color", ref Profile.AppearanceObjectColorIndex, objectCount);
-
-        GUILayout.Space(10);
         if (GUILayout.Button("Back")) LeavePanel();
         GUILayout.EndArea();
+    }
+
+    // One Sidekick preset list per tab. A part/body-shape tab has no "None"
+    // (a character always needs one of each); a color tab does, meaning
+    // "leave the base material's color for that group".
+    private void DrawAppearanceTabContent(float listHeight)
+    {
+        SidekickCharacterBuilder builder = SidekickCharacterBuilder.Shared;
+        if (!builder.IsReady)
+        {
+            GUILayout.Label("Sidekick character data isn't available - see the Console.");
+            return;
+        }
+        SidekickPresetCatalog catalog = builder.Catalog;
+
+        switch (appearanceTabIndex)
+        {
+            case 0:
+                DrawPresetList("Head", catalog.PartPresetNames(Synty.SidekickCharacters.Enums.PartGroup.Head), false, Profile.SidekickHeadPreset, name => Profile.SidekickHeadPreset = name, listHeight);
+                break;
+            case 1:
+                DrawPresetList("Upper Body", catalog.PartPresetNames(Synty.SidekickCharacters.Enums.PartGroup.UpperBody), false, Profile.SidekickUpperBodyPreset, name => Profile.SidekickUpperBodyPreset = name, listHeight);
+                break;
+            case 2:
+                DrawPresetList("Lower Body", catalog.PartPresetNames(Synty.SidekickCharacters.Enums.PartGroup.LowerBody), false, Profile.SidekickLowerBodyPreset, name => Profile.SidekickLowerBodyPreset = name, listHeight);
+                break;
+            case 3:
+                DrawPresetList("Body Shape", catalog.BodyShapeNames, false, Profile.SidekickBodyShapePreset, name => Profile.SidekickBodyShapePreset = name, listHeight);
+                break;
+            case 4:
+                DrawPresetList("Skin Color", catalog.ColorPresetNames(Synty.SidekickCharacters.Enums.ColorGroup.Species), true, Profile.SidekickColorSpecies, name => Profile.SidekickColorSpecies = name, listHeight);
+                break;
+            case 5:
+                DrawPresetList("Outfit Color", catalog.ColorPresetNames(Synty.SidekickCharacters.Enums.ColorGroup.Outfits), true, Profile.SidekickColorOutfits, name => Profile.SidekickColorOutfits = name, listHeight);
+                break;
+            case 6:
+                DrawPresetList("Attachment Color", catalog.ColorPresetNames(Synty.SidekickCharacters.Enums.ColorGroup.Attachments), true, Profile.SidekickColorAttachments, name => Profile.SidekickColorAttachments = name, listHeight);
+                break;
+            case 7:
+                DrawPresetList("Material Color", catalog.ColorPresetNames(Synty.SidekickCharacters.Enums.ColorGroup.Materials), true, Profile.SidekickColorMaterials, name => Profile.SidekickColorMaterials = name, listHeight);
+                break;
+            case 8:
+                DrawPresetList("Element Color", catalog.ColorPresetNames(Synty.SidekickCharacters.Enums.ColorGroup.Elements), true, Profile.SidekickColorElements, name => Profile.SidekickColorElements = name, listHeight);
+                break;
+        }
+    }
+
+    private void DrawPresetList(string label, IReadOnlyList<string> names, bool allowNone, string current, System.Action<string> set, float listHeight)
+    {
+        IEnumerable<(string Id, string DisplayName)> options = names.Select(name => (name, name));
+        if (allowNone) options = new[] { ("", "None") }.Concat(options);
+        DrawSelectableList(label, ref appearanceTabScrollPosition, listHeight, current, set, options);
     }
 
     // Picking a Bottom that was designed to be worn with a specific
@@ -858,7 +923,9 @@ public class MainMenu : MonoBehaviour
         }
     }
 
-    private void DrawAppearanceTabContent(AppearanceGender gender, float listHeight)
+    // The pre-Sidekick (Polysplit rig) tab content - kept around, no longer
+    // drawn; DrawAppearanceTabContent(float) above is the live one.
+    private void DrawLegacyAppearanceTabContent(AppearanceGender gender, float listHeight)
     {
         switch (appearanceTabIndex)
         {

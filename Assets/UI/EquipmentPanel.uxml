@@ -10,6 +10,17 @@
             </ui:VisualElement>
 
             <ui:VisualElement class="equipment-columns">
+                <ui:VisualElement class="equipment-column equipment-column--preview">
+                    <ui:VisualElement name="preview-image" class="equipment-preview-image" />
+                    <ui:VisualElement class="equipment-preview-rotate-row">
+                        <ui:VisualElement name="rotate-left-button" class="button equipment-preview-rotate-button">
+                            <ui:Label text="&#8592; Rotate" class="equipment-preview-rotate-button__label" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="rotate-right-button" class="button equipment-preview-rotate-button">
+                            <ui:Label text="Rotate &#8594;" class="equipment-preview-rotate-button__label" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
                 <ui:VisualElement class="equipment-column">
                     <ui:Label text="EQUIPMENT" class="section-label" />
                     <ui:VisualElement name="equip-grid" class="equip-grid" />

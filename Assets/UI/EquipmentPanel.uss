@@ -1,7 +1,7 @@
 /* Panel-specific layout for the Equipment screen. Shared look lives in Theme.uss. */
 
 #equipment-panel {
-    width: 720px;
+    width: 944px;
 }
 
 .equipment-columns {
@@ -13,18 +13,65 @@
     flex-direction: column;
 }
 
+.equipment-column--preview {
+    margin-right: 24px;
+}
+
+.equipment-preview-image {
+    width: 200px;
+    height: 380px;
+    background-color: var(--color-surface);
+    border-width: 1px;
+    border-color: var(--color-panel-border);
+    border-radius: 6px;
+}
+
+.equipment-preview-rotate-row {
+    flex-direction: row;
+    margin-top: 6px;
+}
+
+.equipment-preview-rotate-button {
+    flex-grow: 1;
+    padding: 4px 0;
+}
+
+.equipment-preview-rotate-button:first-child {
+    margin-right: 6px;
+}
+
+.equipment-preview-rotate-button__label {
+    font-size: 11px;
+    -unity-text-align: middle-center;
+}
+
 .equipment-column--inventory {
     flex-grow: 1;
     margin-left: 24px;
 }
 
 .equip-grid {
-    flex-direction: row;
-    flex-wrap: wrap;
-    /* 3 columns * (72px box + 6px gap) - wraps to exactly 3 across, 4 rows
-       for the 12 EquipmentSlot values, matching the old paper-doll's
-       3-column layout. */
+    flex-direction: column;
+    /* 3 columns * (72px box + 6px gap) - matches EquipmentPanelController's
+       explicit PaperDollLayout rows (body-shaped, not a plain wrap). */
     width: 234px;
+}
+
+.equip-grid-row {
+    flex-direction: row;
+}
+
+/* The main/off-hand row has only 2 slots, not 3 - centered under the rest
+   of the body-shaped layout instead of sitting flush left. */
+.equip-grid-row--centered {
+    justify-content: center;
+}
+
+/* A layout placeholder (e.g. either side of the helmet) - same footprint
+   as a real slot so columns stay aligned, but invisible. */
+.equipment-slot--blank {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
 }
 
 .inventory-scroll {

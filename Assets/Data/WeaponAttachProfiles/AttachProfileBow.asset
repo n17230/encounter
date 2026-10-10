@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: AttachProfileBow
   m_EditorClassIdentifier: 
   Position: {x: 0, y: 0, z: 0}
-  Rotation: {x: 290, y: 180, z: 83.00001}
+  Rotation: {x: -0, y: 10.000004, z: 180}
   Scale: 1.9999995
   Hand: 2

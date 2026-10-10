@@ -3,7 +3,8 @@
     "rootNamespace": "",
     "references": [
         "Encounter",
-        "Unity.Netcode.Runtime"
+        "Unity.Netcode.Runtime",
+        "SidekickCharacters"
     ],
     "includePlatforms": [
         "Editor"

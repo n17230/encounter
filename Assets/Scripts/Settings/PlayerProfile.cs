@@ -64,6 +64,22 @@ public class PlayerProfile
     public int AppearanceBodyColorIndex = 0;
     public int AppearanceObjectColorIndex = 0;
 
+    // Sidekick preset names (the live appearance system - see
+    // SidekickSelection/CharacterAppearance). "" = not chosen: parts and
+    // body shape fall back to the catalog's first entry when built, a color
+    // leaves the base material untouched. Not validated here - the Sidekick
+    // database is client-only, so unknown names are resolved at build time
+    // (SidekickPresetCatalog.Resolve), never on the server.
+    public string SidekickHeadPreset = "";
+    public string SidekickUpperBodyPreset = "";
+    public string SidekickLowerBodyPreset = "";
+    public string SidekickBodyShapePreset = "";
+    public string SidekickColorSpecies = "";
+    public string SidekickColorOutfits = "";
+    public string SidekickColorAttachments = "";
+    public string SidekickColorMaterials = "";
+    public string SidekickColorElements = "";
+
     public AbilityData GetSlotAbility(int slot) => GameDatabase.GetAbility(SlotAbilityIds[slot]);
 
     public void SetSlotAbility(int slot, AbilityData ability)

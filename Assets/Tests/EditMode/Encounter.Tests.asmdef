@@ -4,6 +4,7 @@
     "references": [
         "Encounter",
         "Unity.Netcode.Runtime",
+        "SidekickCharacters",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

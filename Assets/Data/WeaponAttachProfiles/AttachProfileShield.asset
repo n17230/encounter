@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 401eac0152611aacab34c85109b950cf, type: 3}
   m_Name: AttachProfileShield
   m_EditorClassIdentifier: 
-  Position: {x: 0, y: 0.1, z: 0}
-  Rotation: {x: 285, y: 0, z: 270}
+  Position: {x: -0.0859, y: -0.009, z: 0.1035}
+  Rotation: {x: 0, y: 336, z: 0}
   Scale: 1
   Hand: 0

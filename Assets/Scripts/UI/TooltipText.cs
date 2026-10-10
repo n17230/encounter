@@ -93,6 +93,20 @@ public static class TooltipText
         }
 
         foreach (StatBonus bonus in item.Bonuses) sb.AppendLine(DescribeBonus(bonus));
+        foreach (HpThresholdEffect threshold in item.HpThresholdEffects)
+        {
+            string pct = $"{threshold.HealthPercentThreshold * 100f:0}%";
+            if (threshold.AboveThresholdBonuses.Count > 0)
+            {
+                sb.AppendLine($"Above {pct} health: {string.Join(", ", threshold.AboveThresholdBonuses.ConvertAll(DescribeBonus))}");
+            }
+            if (threshold.BelowThresholdBonuses.Count > 0)
+            {
+                sb.AppendLine($"At or below {pct} health: {string.Join(", ", threshold.BelowThresholdBonuses.ConvertAll(DescribeBonus))}");
+            }
+        }
+        if (item.TwoHanded) sb.AppendLine("Two-handed: occupies Main Hand and Off Hand");
+        if (item.GrantsAirHover) sb.AppendLine("While airborne, press Jump again to hover in place for 2s");
         if (item.SingleTargetBonuses.Count > 0)
         {
             string conditionBonuses = string.Join(", ", item.SingleTargetBonuses.ConvertAll(DescribeBonus));
@@ -138,6 +152,17 @@ public static class TooltipText
         if (bonus.Stat == StatType.HealingMultiplier)
         {
             return $"Healing done {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
+        if (bonus.Stat == StatType.DamageTakenMultiplier)
+        {
+            return $"Damage taken {displayValue:+0.#;-0.#}{(isPercent ? "%" : "")}";
+        }
+        if (bonus.Stat == StatType.BlockChancePercent)
+        {
+            // Flat 0-1 fraction (e.g. 0.05 = 5%), same as every other
+            // ...Percent stat - not scaled by ModifierType/isPercent like
+            // the multiplier stats above, which are already 1.0-based.
+            return $"Block Chance +{bonus.Value * 100f:0.#}%";
         }
         string sign = displayValue >= 0f ? "+" : "";
         return $"{sign}{displayValue}{(isPercent ? "%" : "")} {bonus.Stat}";

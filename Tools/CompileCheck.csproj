@@ -42,6 +42,11 @@
     <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Mathematics.dll" />
     <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Unity.Networking.Transport.dll" />
     <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\UnityEngine.TestRunner.dll" />
+    <!-- Synty Sidekick Characters (Assets/Synty/SidekickCharacters, its own
+         runtime asmdef) - referenced as the Editor's compiled assembly
+         rather than re-compiling its sources here. -->
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\SidekickCharacters.dll" />
+    <Reference Include="$(ProjectRoot)Library\ScriptAssemblies\Gilzoide.SqliteNet.dll" />
     <Reference Include="$(ProjectRoot)Library\PackageCache\com.unity.ext.nunit@*\net40\unity-custom\nunit.framework.dll" />
   </ItemGroup>
 </Project>

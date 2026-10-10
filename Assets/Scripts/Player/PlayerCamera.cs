@@ -22,6 +22,14 @@ public class PlayerCamera : NetworkBehaviour
     // flagged in review_with_fable.md.
     [SerializeField] private float zoomSpeed = 8f;
 
+    // Small gap kept between the camera and whatever it collided with, so
+    // the near clip plane doesn't poke through the surface it's pressed
+    // against. Not specified by the user - a small reasonable default,
+    // flagged for later tuning like zoomSpeed above.
+    [SerializeField] private float cameraCollisionPadding = 0.2f;
+
+    private static readonly RaycastHit[] cameraCollisionHits = new RaycastHit[8];
+
     private float pitch;
     private float freeLookYaw;
     private float zoomDistance;
@@ -123,15 +131,58 @@ public class PlayerCamera : NetworkBehaviour
     // back into the profile's in-memory copy on every change; an existing
     // Save() trigger (menu close, entering the testing area) is what
     // actually persists it to disk, same as UiScale/LookSensitivity.
+    // ApplyCollisionAwarePosition runs every call (not just while a zoom
+    // key is held) so the camera also pulls in from plain movement/pitch
+    // changes pushing it into the ground or a wall, not just zooming.
     private void UpdateZoom()
     {
         if (MovementInput.IsHeld(MovementAction.ZoomIn)) zoomDistance -= zoomSpeed * Time.deltaTime;
         else if (MovementInput.IsHeld(MovementAction.ZoomOut)) zoomDistance += zoomSpeed * Time.deltaTime;
-        else return;
+        else
+        {
+            ApplyCollisionAwarePosition();
+            return;
+        }
 
         zoomDistance = Mathf.Clamp(zoomDistance, CameraZoomScale.Min, CameraZoomScale.Max);
-        playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance);
         CameraZoomScale.Value = zoomDistance;
+        ApplyCollisionAwarePosition();
+    }
+
+    // Pulls the camera in along the pivot-to-camera line when something
+    // solid (terrain, a wall, a prop) is in the way, so it can never clip
+    // through the environment - same "real geometry only" rule
+    // CombatPhysics.HasLineOfSight uses: Physics.DefaultRaycastLayers +
+    // QueryTriggerInteraction.Ignore (ground patches, pickups, etc. aren't
+    // walls) + skipping anything under a Targetable (a mob/player standing
+    // between the pivot and the camera shouldn't yank the camera in).
+    // zoomDistance itself (the player's chosen zoom level) is never
+    // mutated here - only this frame's actual camera placement is, so
+    // backing away from the obstruction smoothly restores full zoom.
+    private void ApplyCollisionAwarePosition()
+    {
+        Vector3 origin = cameraPivot.position;
+        Vector3 desiredWorld = cameraPivot.TransformPoint(new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -zoomDistance));
+        Vector3 delta = desiredWorld - origin;
+        float desiredDistance = delta.magnitude;
+        float distance = zoomDistance;
+
+        if (desiredDistance > 0.001f)
+        {
+            Vector3 direction = delta / desiredDistance;
+            int count = Physics.RaycastNonAlloc(origin, direction, cameraCollisionHits, desiredDistance,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float closest = desiredDistance;
+            for (int i = 0; i < count; i++)
+            {
+                if (cameraCollisionHits[i].collider.GetComponentInParent<Targetable>() != null) continue;
+                if (cameraCollisionHits[i].distance < closest) closest = cameraCollisionHits[i].distance;
+            }
+
+            if (closest < desiredDistance) distance = Mathf.Max(0f, closest - cameraCollisionPadding);
+        }
+
+        playerCamera.transform.localPosition = new Vector3(baseCameraLocalOffset.x, baseCameraLocalOffset.y, -distance);
     }
 
     // The smallest VisionRange among this player's own currently active
