@@ -1290,34 +1290,12 @@ renamed, or retuned.
    server build was shipped to the VPS mid-session; it's since fallen
    behind again (the Skeleton Tactician work and everything after it),
    so another redeploy is needed once that's ready to test live.
-2. Fire/ice ground patches as URP Decal Projectors (visual only; needs
-   the Decal renderer feature added to the three URP renderer assets in
-   the Editor first) and real particle VFX instead of coloured discs.
-3. The designed systems in `DESIGN_IDEAS.md` / `ARCHITECTURE_NOTES.md`:
+2. The designed systems in `DESIGN_IDEAS.md` / `ARCHITECTURE_NOTES.md`:
    loot, account-backed unlock-gated profile, encounter wipe/reset state
    machine, taunt/threat reset on combat end.
-4. Consider downsizing the largest TriForge textures in `Assets/External`
+3. Consider downsizing the largest TriForge textures in `Assets/External`
    (several 50–100 MB 4K PNGs) — LFS is ~1.1 GB, near GitHub's free tier.
-5. **Mob pathfinding via NavMesh — Editor setup done, partially working.**
-   `EnemyAI.ComputeChaseDirection` (see Enemy targeting below) follows a
-   NavMesh path when chasing. `com.unity.ai.navigation` is installed, a
-   `NavMeshSurface` is on the Terrain (`CollectObjects: All`) and baked,
-   and the scene has been saved with it. Confirmed working: mobs path
-   around trees correctly. **Still an open issue**: mobs have a hard
-   time pathing around the TriForge ruins props and "other objects" —
-   symptom not yet fully diagnosed (last checked: need to confirm whether
-   the baked NavMesh actually has a hole around a ruin at all, and
-   whether the mob walks straight through it vs. gets stuck vs. takes an
-   odd detour, to tell a bake/geometry-collection gap apart from a
-   pathing/connectivity issue like a too-narrow gap). Rebake after any
-   terrain/prop layout changes. **Leading suspect, now addressed but not
-   yet confirmed in play**: the 2×-scaled mobs were pathing on the
-   Humanoid-sized (r 0.5 / h 2) mesh while physically being r 1 / h 4,
-   and querying from a point 2 m above it — a second NavMeshSurface for a
-   larger agent type was baked and `EnemyAI` now picks it per mob (see
-   Mob pathfinding above). Retest ogres around the ruins before closing
-   this out.
-6. **Earthen Bastion's wall prefab** — the gameplay logic is built
+4. **Earthen Bastion's wall prefab** — the gameplay logic is built
    (`PlayerAbilities.ResolvePersistentStructure`, `PlacedStructure`, the
    ability asset) but `AbilityEarthenBastion.StructurePrefab` is null,
    so the spell currently just fizzles with "Structure not configured
@@ -1329,7 +1307,7 @@ renamed, or retuned.
    `DefaultNetworkPrefabs.asset` like every other spawned prefab, (6)
    drag it onto `AbilityEarthenBastion`'s `StructurePrefab` field. No
    script changes needed once that's done.
-7. **Arctic Winds' zone prefab** — same situation as #6:
+5. **Arctic Winds' zone prefab** — same situation as #4:
    `AbilityArcticWinds.FollowingZonePrefab` is null, so the spell
    currently fizzles with "Zone not configured yet". Editor steps: (1)
    create a GameObject (a default Sphere primitive if you want the dome
@@ -1344,7 +1322,7 @@ renamed, or retuned.
    the fixed patches, it has no `NetworkTransform` of its own — if you
    want *clients* to see a visible dome track the target (rather than
    only the server-side trigger following it), add one.
-8. **Mana orb pickup prefab — built, just needs network registration.**
+6. **Mana orb pickup prefab — built, just needs network registration.**
    `Assets/Resources/Prefabs/ManaOrb.prefab` exists now, but it's not yet
    registered in `DefaultNetworkPrefabs.asset` like every other spawned
    prefab — without that, `ManaOrb.TrySpawn`'s `NetworkObject.Spawn()`
@@ -1352,7 +1330,7 @@ renamed, or retuned.
    `Assets/Resources/Prefabs/HealthOrb.prefab` exists but nothing in the
    scripts references "HealthOrb" at all — no drop logic spawns it, it's
    currently an orphaned prefab.
-9. **Skeleton Tactician escort — visuals and network-prefab registration**
+7. **Skeleton Tactician escort — visuals and network-prefab registration**
    (see `BOSS_DESIGN.md`). The five `MobSkeleton*.prefab` files exist
    with all their stats/weapon/effect references already wired, but
    still need: (1) each one's actual visual model parented under its
@@ -1368,32 +1346,11 @@ renamed, or retuned.
    `Player.prefab`. **Arcane Shield's cooldown (`arcaneShieldCooldown`
    on the Mage's `EnemyAI`) is a flagged placeholder (30s)** — never
    specified in the design, see `review_with_fable.md`.
-10. **Only weapons currently render a visual model on equip** (via
+8. **Only weapons currently render a visual model on equip** (via
     `CharacterWeaponVisual`/`WeaponAttachProfile`) — no other equipment slot
     has a visual representation yet. Hunter's Cloak (Cape) has no 3D asset
     and isn't wired; this is the current scope, not a gap specific to that
     item.
-11. **Sidekick appearance — Editor wiring still pending** (the code side
-    is done, see Character appearance above): (1) `Player.prefab` needs an
-    empty child `CharacterRoot` (local identity) with an `Animator`
-    (Controller `CharacterIdle_M`, Avatar none), assigned to
-    `CharacterAppearance.Character Root` (+ `Animator Controller` =
-    `CharacterIdle_M`) and to `NetworkAnimator.Animator`; the old
-    `CharacterRig_M/F` instances removed or disabled. The placeholder's
-    controller must be the same `CharacterIdle_M` the built character
-    gets: `NetworkAnimator` sizes its parameter/layer caches from its
-    Animator once at `Awake`, and the later re-point is a bare field
-    write. (2) The scene's `CharacterPreviewStage` likewise needs a
-    `CharacterRoot` child assigned to `CharacterPreview.Stage Root` (+
-    `Animator Controller` = `CharacterIdle_M`), the old rig instances
-    removed, and the preview camera reframed for the Sidekick height.
-    (3) Run the
-    Sidekick tool's *Sync Runtime Database* once so
-    `Assets/Synty/SidekickCharacters/Resources/Database/Side_Kick_Data.bytes`
-    exists (player builds read only that), and commit it. (4) Re-tune the
-    seven `WeaponAttachProfile`s with the Weapon Attach Tuner — the
-    sockets are now `prop_r`/`prop_l` with a different pivot. (5) Redeploy
-    the dedicated server afterwards.
 
 ## Notes for future sessions
 

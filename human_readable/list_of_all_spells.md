@@ -21,7 +21,7 @@ retuned — it's a snapshot, not auto-generated.
 | Reaper's Wheel | Yes | 25 | 8s | Instant | Weapon damage to every enemy in an 8-unit circle around you, + Bleed (10 dmg/sec, 8s) |
 | Cleave | Yes | 8 | 2s | Instant | Weapon damage to every enemy in a 120° cone in front of you (8-unit reach) |
 | Trample | No | 38 | 30s | Instant | Charge forward 10 units: 30 damage + 3s Stun to everything near the path |
-| Seismic Slam | Yes | 38 | 30s | 1s | 10% weapon damage + 3s Stun to every enemy in an 8-unit circle around you |
+| Seismic Slam | Yes | 25 | 30s | 1s | 10% weapon damage + 3s Stun to every enemy in an 8-unit circle around you |
 | Crippling Blow | Yes | 8 | 0s | Instant | 25% weapon damage + −50% run speed on the target for 10s |
 | Team Up | No | 75 | 30s | Instant | Charge to an ally (25 range) and redirect all damage *they* take to you instead, for 3s |
 
@@ -29,11 +29,11 @@ retuned — it's a snapshot, not auto-generated.
 
 | Spell | Mana | Cooldown | Cast | Range | Effect |
 |---|---|---|---|---|---|
-| Radiant Embrace | 75 | 0s | 1.5s | 30 | Heals target for 438 |
+| Radiant Embrace | 75 | 0s | 1.5s | 30 | Heals target for 356.25 |
 | Blessing of Vitality | 100 | 8s | 2s | 30 | Heals target for 438, + Vitality Ward (+10 Armor, 16s) |
 | Everliving Touch | 125 | 0s | Instant | 30 | Heal over time: 125 every 3s for 18s |
-| Aegis of Arcane | 88 | 18s | Instant | 30 | Shields target for 350 |
-| Seraph's Grace | 225 | 0s | 3s | self (50-unit radius) | Heals everyone within 50 units of you, yourself included, for 438 |
+| Aegis of Arcane | 88 | 18s | Instant | 30 | Shields target for 440 |
+| Seraph's Grace | 175 | 0s | 3s | self (50-unit radius) | Heals everyone within 50 units of you, yourself included, for 438 |
 | Cleanse | 50 | 6s | Instant | 30 | Removes one active negative effect from the target |
 
 ## Buffs

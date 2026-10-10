@@ -22,7 +22,7 @@ MonoBehaviour:
   ThreatValue: 0
   Damage: 0
   HealAmount: 0
-  ShieldAmount: 350
+  ShieldAmount: 440
   MissileSpeed: 15
   ProjectilePrefab: {fileID: 0}
   CastVfxPrefab: {fileID: 0}
